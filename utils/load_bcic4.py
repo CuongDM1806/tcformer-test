@@ -5,8 +5,11 @@ from braindecode.preprocessing import (
     Preprocessor,
     create_windows_from_events,
     preprocess,
-    scale,
 )
+
+
+def scale(data, factor):
+    return data * factor
 
 
 def load_bcic4(subject_ids: list, dataset: str = "2a", preprocessing_dict: Dict = None,
