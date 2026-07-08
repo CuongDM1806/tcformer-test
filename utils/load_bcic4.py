@@ -11,8 +11,18 @@ from braindecode.preprocessing import (
 
 def load_bcic4(subject_ids: list, dataset: str = "2a", preprocessing_dict: Dict = None,
               verbose: str = "WARNING"):
-    dataset_name = "BNCI2014001" if dataset == "2a" else "BNCI2014004"
-    dataset = MOABBDataset(dataset_name, subject_ids=subject_ids)
+    dataset_names = ("BNCI2014_001", "BNCI2014001") if dataset == "2a" else (
+        "BNCI2014_004", "BNCI2014004"
+    )
+    last_error = None
+    for dataset_name in dataset_names:
+        try:
+            dataset = MOABBDataset(dataset_name, subject_ids=subject_ids)
+            break
+        except ValueError as exc:
+            last_error = exc
+    else:
+        raise last_error
 
     preprocessors = [
         Preprocessor("pick_types", eeg=True, meg=False, stim=False, verbose=verbose),
