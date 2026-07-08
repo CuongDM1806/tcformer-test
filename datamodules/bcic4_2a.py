@@ -10,6 +10,35 @@ from sklearn.model_selection import train_test_split
 import os
 
 
+def _ordered_session_items(splitted_ds):
+    def sort_key(item):
+        key, _ = item
+        digits = "".join(ch for ch in str(key) if ch.isdigit())
+        return (int(digits) if digits else 999, str(key))
+
+    return sorted(splitted_ds.items(), key=sort_key)
+
+
+def _get_2a_train_test_sessions(windows_dataset):
+    splitted_ds = windows_dataset.split("session")
+    if "session_T" in splitted_ds and "session_E" in splitted_ds:
+        return splitted_ds["session_T"], splitted_ds["session_E"]
+
+    keys = list(splitted_ds.keys())
+    train_keys = [key for key in keys if "train" in str(key).lower()]
+    test_keys = [
+        key for key in keys
+        if "test" in str(key).lower() or "eval" in str(key).lower()
+    ]
+    if train_keys and test_keys:
+        return splitted_ds[train_keys[0]], splitted_ds[test_keys[0]]
+
+    ordered_sessions = [dataset for _, dataset in _ordered_session_items(splitted_ds)]
+    if len(ordered_sessions) < 2:
+        raise KeyError(f"Expected at least 2 BCIC IV-2a sessions, got {keys}")
+    return ordered_sessions[0], ordered_sessions[1]
+
+
 class BCICIV2a(BaseDataModule):
     all_subject_ids = list(range(1, 10))
     class_names = ["feet", "hand(L)", "hand(R)", "tongue"]
@@ -27,8 +56,7 @@ class BCICIV2a(BaseDataModule):
         if self.dataset is None:
             self.prepare_data()
         # split the data
-        splitted_ds = self.dataset.split("session")
-        train_dataset, test_dataset = splitted_ds["session_T"], splitted_ds["session_E"]
+        train_dataset, test_dataset = _get_2a_train_test_sessions(self.dataset)
 
         # load the data
         X = np.concatenate(
@@ -70,9 +98,7 @@ class BCICIV2aTVT(BaseDataModule):
             self.prepare_data()
 
         # Split by session
-        splitted_ds = self.dataset.split("session")
-        session1 = splitted_ds["session_T"]  # training + validation
-        session2 = splitted_ds["session_E"]  # testing only
+        session1, session2 = _get_2a_train_test_sessions(self.dataset)
         
         # Load session 1 data
         X = np.concatenate([run.windows.load_data()._data for run in session1.datasets], axis=0)
@@ -128,11 +154,15 @@ class BCICIV2aLOSO(BCICIV2a):
         splitted_ds = self.dataset.split("subject")
         train_subjects = [
             subj_id for subj_id in self.all_subject_ids if subj_id != self.subject_id]
-        train_datasets = [splitted_ds[str(subj_id)].split("session")["session_T"]
-                            for subj_id in train_subjects]
-        val_datasets = [splitted_ds[str(subj_id)].split("session")["session_E"]
-                        for subj_id in train_subjects]
-        test_dataset = splitted_ds[str(self.subject_id)].split("session")["session_E"]
+        train_datasets = [
+            _get_2a_train_test_sessions(splitted_ds[str(subj_id)])[0]
+            for subj_id in train_subjects
+        ]
+        val_datasets = [
+            _get_2a_train_test_sessions(splitted_ds[str(subj_id)])[1]
+            for subj_id in train_subjects
+        ]
+        test_dataset = _get_2a_train_test_sessions(splitted_ds[str(self.subject_id)])[1]
 
         # load the data
         X = np.concatenate([run.windows.load_data()._data for train_dataset in

@@ -8,6 +8,27 @@ from .base import BaseDataModule
 from utils.load_bcic4 import load_bcic4
 
 
+def _ordered_session_items(splitted_ds):
+    def sort_key(item):
+        key, _ = item
+        digits = "".join(ch for ch in str(key) if ch.isdigit())
+        return (int(digits) if digits else 999, str(key))
+
+    return sorted(splitted_ds.items(), key=sort_key)
+
+
+def _get_ordered_sessions(windows_dataset):
+    splitted_ds = windows_dataset.split("session")
+    preferred = [f"session_{idx}" for idx in range(5)]
+    if all(key in splitted_ds for key in preferred):
+        return [splitted_ds[key] for key in preferred]
+
+    sessions = [dataset for _, dataset in _ordered_session_items(splitted_ds)]
+    if len(sessions) < 5:
+        raise KeyError(f"Expected at least 5 BCIC IV-2b sessions, got {list(splitted_ds.keys())}")
+    return sessions[:5]
+
+
 class BCICIV2b(BaseDataModule):
     all_subject_ids = list(range(1, 10))
     class_names = ["hand(L)", "hand(R)"]
@@ -25,9 +46,9 @@ class BCICIV2b(BaseDataModule):
         if self.dataset is None:
             self.prepare_data()
         # split the data
-        splitted_ds = self.dataset.split("session")
-        train_datasets = [splitted_ds[f"session_{session}"] for session in [0, 1, 2]]
-        test_datasets = [splitted_ds[f"session_{session}"] for session in [3, 4]]
+        sessions = _get_ordered_sessions(self.dataset)
+        train_datasets = [sessions[session] for session in [0, 1, 2]]
+        test_datasets = [sessions[session] for session in [3, 4]]
 
         # load the data
         X = np.concatenate(
@@ -69,13 +90,13 @@ class BCICIV2bLOSO(BCICIV2b):
         train_subjects = [
             subj_id for subj_id in self.all_subject_ids if subj_id != self.subject_id]
         train_datasets = [
-            splitted_ds[str(subj_id)].split("session")[f"session_{session}"] for
-            subj_id in train_subjects for session in [0, 1, 2]]
+            _get_ordered_sessions(splitted_ds[str(subj_id)])[session]
+            for subj_id in train_subjects for session in [0, 1, 2]]
         val_datasets = [
-            splitted_ds[str(subj_id)].split("session")[f"session_{session}"] for
-            subj_id in train_subjects for session in [3, 4]]
+            _get_ordered_sessions(splitted_ds[str(subj_id)])[session]
+            for subj_id in train_subjects for session in [3, 4]]
         test_datasets = [
-            splitted_ds[str(self.subject_id)].split("session")[f"session_{session}"]
+            _get_ordered_sessions(splitted_ds[str(self.subject_id)])[session]
             for session in [3, 4]]
 
         # load the data
