@@ -51,16 +51,12 @@ class BCICIV2b(BaseDataModule):
         test_datasets = [sessions[session] for session in [3, 4]]
 
         # load the data
-        X = np.concatenate(
-            [run.windows.load_data()._data for train_dataset in train_datasets for run
-             in train_dataset.datasets], axis=0)
-        y = np.concatenate([run.y for train_dataset in train_datasets for run in
-                            train_dataset.datasets], axis=0)
-        X_test = np.concatenate(
-            [run.windows.load_data()._data for test_dataset in test_datasets for run in
-             test_dataset.datasets], axis=0)
-        y_test = np.concatenate([run.y for test_dataset in test_datasets for run in
-                                 test_dataset.datasets], axis=0)
+        train_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in train_datasets]
+        test_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in test_datasets]
+        X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
+        y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
+        X_test = np.concatenate([arr[0] for arr in test_arrays], axis=0)
+        y_test = np.concatenate([arr[1] for arr in test_arrays], axis=0)
 
         # scale data
         if self.preprocessing_dict["z_scale"]:
@@ -100,18 +96,15 @@ class BCICIV2bLOSO(BCICIV2b):
             for session in [3, 4]]
 
         # load the data
-        X = np.concatenate([run.windows.load_data()._data for train_dataset in
-                            train_datasets for run in train_dataset.datasets], axis=0)
-        y = np.concatenate([run.y for train_dataset in train_datasets for run in
-                            train_dataset.datasets], axis=0)
-        X_val = np.concatenate([run.windows.load_data()._data for val_dataset in
-                            val_datasets for run in val_dataset.datasets], axis=0)
-        y_val = np.concatenate([run.y for val_dataset in val_datasets for run in
-                            val_dataset.datasets], axis=0)
-        X_test = np.concatenate([run.windows.load_data()._data for test_dataset in test_datasets
-                                 for run in test_dataset.datasets], axis=0)
-        y_test = np.concatenate([run.y for test_dataset in test_datasets for run in
-                                 test_dataset.datasets], axis=0)
+        train_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in train_datasets]
+        val_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in val_datasets]
+        test_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in test_datasets]
+        X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
+        y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
+        X_val = np.concatenate([arr[0] for arr in val_arrays], axis=0)
+        y_val = np.concatenate([arr[1] for arr in val_arrays], axis=0)
+        X_test = np.concatenate([arr[0] for arr in test_arrays], axis=0)
+        y_test = np.concatenate([arr[1] for arr in test_arrays], axis=0)
 
         # scale data
         if self.preprocessing_dict["z_scale"]:

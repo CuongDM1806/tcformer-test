@@ -1,5 +1,6 @@
 from typing import Dict, Optional
 
+import numpy as np
 import pytorch_lightning as pl
 from sklearn.preprocessing import StandardScaler
 import torch
@@ -115,6 +116,35 @@ class BaseDataModule(pl.LightningDataModule):
     def _make_tensor_dataset(X, y):
         return TensorDataset(torch.Tensor(X), torch.Tensor(y).type(torch.LongTensor))
         # return TensorDataset(torch.tensor(X), torch.tensor(y).long())
+
+    @staticmethod
+    def _dataset_to_arrays(dataset):
+        if hasattr(dataset, "datasets"):
+            arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in dataset.datasets]
+            X = np.concatenate([arr[0] for arr in arrays], axis=0)
+            y = np.concatenate([arr[1] for arr in arrays], axis=0)
+            return X, y
+
+        if hasattr(dataset, "windows"):
+            return dataset.windows.load_data()._data, np.array(dataset.y)
+
+        X, y = [], []
+        for idx in range(len(dataset)):
+            item = dataset[idx]
+            if isinstance(item, dict):
+                x_item = item.get("X", item.get("x", item.get("data")))
+                y_item = item.get("y", item.get("target", item.get("label")))
+            else:
+                x_item, y_item = item[0], item[1]
+
+            if torch.is_tensor(x_item):
+                x_item = x_item.detach().cpu().numpy()
+            if torch.is_tensor(y_item):
+                y_item = y_item.detach().cpu().numpy()
+            X.append(x_item)
+            y.append(y_item)
+
+        return np.stack(X, axis=0), np.asarray(y)
         
     # @staticmethod
     # def _make_tensor_dataset(X, y, preprocessing_dict=None, mode="train"):
