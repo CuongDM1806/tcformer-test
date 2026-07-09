@@ -1,7 +1,7 @@
 # general
 dataset_name: ""   # options: "bcic2a", "bcic2b", "bcic3", "reh_mi", or "hgd".
 subject_ids: "all"
-max_epochs: 1000
+max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
 max_epochs_loso_hgd: 77
