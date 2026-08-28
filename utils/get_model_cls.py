@@ -1,6 +1,6 @@
 from models import (
     TCFormer,
-    SubjectAdaptiveTCFormer,
+    HADATCFormer,
     ATCNet,
     BaseNet,
     # SST_DPN,
@@ -18,7 +18,7 @@ from models import (
 model_dict = dict(
     # SST_DPN=SST_DPN,
     TCFormer=TCFormer,
-    SubjectAdaptiveTCFormer=SubjectAdaptiveTCFormer,
+    HADATCFormer=HADATCFormer,
     ATCNet=ATCNet,
     BaseNet=BaseNet,
     EEGConformer=EEGConformer,

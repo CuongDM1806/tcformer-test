@@ -63,13 +63,17 @@ class BCICIII_IVaLOSO(BaseDataModule):
 
         X_test = self.dataset["data"][str(self.subject_id)]["test"]
         y_test = self.dataset["labels"][str(self.subject_id)]["test"]
+        X_target = self.dataset["data"][str(self.subject_id)]["train"]
 
         # scale data
         if self.preprocessing_dict["z_scale"]:
-            X, X_val, X_test = BaseDataModule._z_scale_tvt(X, X_val, X_test)
+            X, X_val, X_target, X_test = BaseDataModule._z_scale_many(
+                X, X_val, X_target, X_test
+            )
 
         self.train_dataset = BaseDataModule._make_tensor_dataset(X, y)
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
+        self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
 
     def val_dataloader(self) -> DataLoader:

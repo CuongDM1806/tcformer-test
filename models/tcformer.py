@@ -249,17 +249,17 @@ class TCNHead(nn.Module):
             n_groups=n_groups,
             n_classes=n_classes,
         )     
-    def forward(self, x):
+    def extract_features(self, x):
         x = self.tcn(x)
-        x = x[:, :, -1:]
+        return x[:, :, -1]
 
-        x = self.classifier(x)   # (B, n_classes)
-        # tcn_out = self.linear(tcn_out).squeeze(-1)
+    def classify_features(self, x):
+        if x.ndim == 2:
+            x = x.unsqueeze(-1)
+        return self.classifier(x)
 
-        # tcn_out = tcn_out.view(x.shape[0], self.n_groups, self.n_classes)
-        # tcn_out = tcn_out.mean(dim=1) 
-
-        return x
+    def forward(self, x):
+        return self.classify_features(self.extract_features(x))
 # ------------------------------------------------------------------------------- #
     
 # ------------------------------------------------------------------------------- #
@@ -407,6 +407,7 @@ class TCFormerModule(nn.Module):
         self.n_classes = n_classes
         self.n_groups = len(temp_kernel_lengths)
         self.d_model = d_group*self.n_groups
+        self.feature_dim = d_group * (self.n_groups + 1)
 
         self.rearrange = Rearrange("b c seq -> b seq c")
 
@@ -446,15 +447,15 @@ class TCFormerModule(nn.Module):
             nn.SiLU(),
         )
 
-        self.tcn_head = TCNHead(d_group*(self.n_groups+1), (self.n_groups+1), tcn_depth, 
+        self.tcn_head = TCNHead(self.feature_dim, (self.n_groups+1), tcn_depth,
                                 kernel_length_tcn, dropout_tcn, n_classes)
 
         # # Kaiming (He) init is recommended for Conv layers that precede SiLU / ReLU
         # nn.init.kaiming_normal_(self.reduce[0].weight, nonlinearity="linear") 
 
-    def forward(self, x):      # x: [B, C_electrodes, T]
+    def extract_features(self, x):      # x: [B, C_electrodes, T]
         conv_features = self.conv_block(x)         
-        B, C, T = conv_features.shape
+        _, _, T = conv_features.shape
 
         tokens = self.rearrange(self.mix(conv_features)) 
         cos, sin = self._rotary_cache(T , tokens.device)
@@ -463,10 +464,13 @@ class TCFormerModule(nn.Module):
         tran_features = self.reduce(tokens)
 
         features = torch.cat((conv_features, tran_features), dim=1) 
-        out = self.tcn_head(features)
-        
-        # return features, out
-        return out
+        return self.tcn_head.extract_features(features)
+
+    def classify_features(self, features):
+        return self.tcn_head.classify_features(features)
+
+    def forward(self, x):
+        return self.classify_features(self.extract_features(x))
         
     def _rotary_cache(self, seq_len: int, device: torch.device):
         """Build (or reuse) RoPE caches for the current sequence length."""

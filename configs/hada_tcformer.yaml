@@ -1,15 +1,16 @@
-# general
-dataset_name: ""   # options: "bcic2a", "bcic2b", "bcic3", "reh_mi", or "hgd".
+# Run with: python train_pipeline.py --model hada_tcformer --dataset bcic2a --loso
+dataset_name: ""
 subject_ids: "all"
 max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
 max_epochs_loso_hgd: 77
 seed: 0
+requires_loso: true
+domain_adaptation: true
 
-# preprocessing
-z_scale: True
-interaug: True
+z_scale: true
+interaug: true
 preprocessing:
   bcic2a:
     sfreq: 250
@@ -32,14 +33,7 @@ preprocessing:
     start: 0.0
     stop: 0.0
     batch_size: 28
-    channel_selection: True
-  reh_mi:
-    sfreq: 128
-    low_cut: 4
-    high_cut: 50
-    start: 0.0
-    stop: 0.0
-    batch_size: 48
+    channel_selection: true
   hgd:
     sfreq: 250
     low_cut: 4
@@ -47,10 +41,9 @@ preprocessing:
     start: 0.0
     stop: 0.0
     batch_size: 48
-    remove_artifacts: True
+    remove_artifacts: true
 
-# model
-model: "SubjectAdaptiveTCFormer"
+model: "HADATCFormer"
 model_kwargs:
   F1: 32
   temp_kernel_lengths: [20, 32, 64]
@@ -59,28 +52,25 @@ model_kwargs:
   pool_length_1: 8
   pool_length_2: 7
   dropout_conv: 0.4
-  use_group_attn: True
-
-  # Transformer parameters
+  use_group_attn: true
   q_heads: 4
   kv_heads: 2
   trans_depth: 5
   trans_dropout: 0.4
-
-  # Subject-conditioned HyperAdapter parameters
-  subject_emb_dim: 32
-  adapter_bottleneck_ratio: 4
-  adapter_dropout: 0.1
-
-  # TCN head parameters
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3
+
+  aligner_hidden_dim: 128
+  domain_hidden_dim: 128
+  adaptation_dropout: 0.3
+  adversarial_weight: 1.0
+  mmd_weight: 0.5
 
   lr: 0.0009
   beta_1: 0.5
   weight_decay: 0.001
   optimizer: "adam"
-  scheduler: True
+  scheduler: true
   warmup_epochs: 20
   warmup_epochs_loso: 3

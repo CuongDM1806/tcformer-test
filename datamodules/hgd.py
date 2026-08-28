@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 import torch
 from torch.utils.data.dataloader import DataLoader
 
-from .base import BaseDataModule
+from .base import BaseDataModule, UnlabeledDataset
 from utils.load_hgd import load_hgd
 
 
@@ -66,6 +66,7 @@ class HighGammaLOSO(HighGamma):
         train_dataset = BaseConcatDataset([self.dataset.split("run")["train"].split("subject")[str(subj)] for subj in train_subjects])
         val_dataset = BaseConcatDataset([self.dataset.split("run")["test"].split("subject")[str(subj)] for subj in train_subjects])
         test_dataset = self.dataset.split("subject")[str(self.subject_id)].split("run")["test"]
+        target_dataset = self.dataset.split("subject")[str(self.subject_id)].split("run")["train"]
 
         # load the test data
         X_test = test_dataset.datasets[0].windows.load_data()._data
@@ -79,9 +80,10 @@ class HighGammaLOSO(HighGamma):
         # make datasets
         self.train_dataset = CustomDataset(train_dataset)
         self.val_dataset = CustomDataset(val_dataset)
+        self.target_dataset = CustomUnlabeledDataset(target_dataset)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
 
-    def train_dataloader(self) -> DataLoader:
+    def _source_train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.train_dataset, 
             batch_size=self.preprocessing_dict["batch_size"],
@@ -92,6 +94,19 @@ class HighGammaLOSO(HighGamma):
             prefetch_factor=4,                 # ↩︎ each worker preloads 4 future batches                          
             collate_fn=make_collate_fn(self.preprocessing_dict)    
             # collate_fn=z_scale_collate_fn if self.preprocessing_dict.get("z_scale", False) else None
+        )
+
+    def _target_train_dataloader(self) -> DataLoader:
+        return DataLoader(
+            UnlabeledDataset(self.target_dataset),
+            batch_size=self.preprocessing_dict["batch_size"],
+            shuffle=True,
+            num_workers=self.preprocessing_dict.get("num_workers", os.cpu_count() // 4),
+            pin_memory=True,
+            persistent_workers=True,
+            prefetch_factor=4,
+            collate_fn=z_scale_unlabeled_collate_fn
+            if self.preprocessing_dict.get("z_scale", False) else None,
         )
     
     def val_dataloader(self) -> DataLoader:
@@ -118,11 +133,33 @@ class CustomDataset(torch.utils.data.Dataset):
         return torch.tensor(X, dtype=torch.float32), torch.tensor(y).type(torch.LongTensor)
 
 
+class CustomUnlabeledDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
+
+    def __len__(self):
+        return self.dataset.cumulative_sizes[-1]
+
+    def __getitem__(self, idx):
+        dataset_idx = [idx < size for size in self.dataset.cumulative_sizes].index(True)
+        if dataset_idx > 0:
+            idx -= self.dataset.cumulative_sizes[dataset_idx - 1]
+        X = self.dataset.datasets[dataset_idx].windows.load_data()._data[idx]
+        return torch.tensor(X, dtype=torch.float32)
+
+
 def z_scale_collate_fn(batch):
     data, labels = zip(*batch)
     x = torch.stack(data)
     x_scaled = (x - x.mean(0, keepdim=True)) / x.std(0, unbiased=True, keepdim=True)
     return x_scaled, torch.stack(labels)
+
+
+def z_scale_unlabeled_collate_fn(batch):
+    x = torch.stack(batch)
+    return (x - x.mean(0, keepdim=True)) / x.std(
+        0, unbiased=False, keepdim=True
+    ).clamp_min(1e-6)
 
 from utils.interaug import interaug
 

@@ -157,6 +157,7 @@ class BCICIV2aLOSO(BCICIV2a):
             for subj_id in train_subjects
         ]
         test_dataset = _get_2a_train_test_sessions(splitted_ds[str(self.subject_id)])[1]
+        target_dataset = _get_2a_train_test_sessions(splitted_ds[str(self.subject_id)])[0]
 
         # load the data
         train_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in train_datasets]
@@ -166,13 +167,17 @@ class BCICIV2aLOSO(BCICIV2a):
         X_val = np.concatenate([arr[0] for arr in val_arrays], axis=0)
         y_val = np.concatenate([arr[1] for arr in val_arrays], axis=0)
         X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
+        X_target, _ = BaseDataModule._dataset_to_arrays(target_dataset)
 
         # scale data
         if self.preprocessing_dict["z_scale"]:
-            X, X_val, X_test = BaseDataModule._z_scale_tvt(X, X_val, X_test)
+            X, X_val, X_target, X_test = BaseDataModule._z_scale_many(
+                X, X_val, X_target, X_test
+            )
 
         self.train_dataset = BaseDataModule._make_tensor_dataset(X, y)
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
+        self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
 
         # self.train_dataset = BaseDataModule._make_tensor_dataset(X, y, 

@@ -199,11 +199,16 @@ def run():
         config["max_epochs"] = config["max_epochs_loso_hgd"] if args.dataset == "hgd" else config["max_epochs_loso"]
         config["model_kwargs"]["warmup_epochs"] = config["model_kwargs"]["warmup_epochs_loso"]
     else:
+        if config.get("requires_loso", False):
+            raise ValueError(
+                f"{config['model']} requires --loso to provide an unlabeled target domain."
+            )
         config["dataset_name"] = args.dataset
         config["max_epochs"] = config["max_epochs_2b"] if args.dataset == "bcic2b" else config["max_epochs"]
 
     config["preprocessing"] = config["preprocessing"][args.dataset]
     config["preprocessing"]["z_scale"] = config["z_scale"]
+    config["preprocessing"]["domain_adaptation"] = config.get("domain_adaptation", False)
     # Override interaug if specified
     if args.interaug:
         config["preprocessing"]["interaug"] = True

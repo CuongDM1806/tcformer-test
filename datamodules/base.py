@@ -33,6 +33,7 @@ class BaseDataModule(pl.LightningDataModule):
     dataset = None
     train_dataset = None
     test_dataset = None
+    target_dataset = None
 
     def __init__(self, preprocessing_dict: Dict, subject_id: int):
         super(BaseDataModule, self).__init__()
@@ -45,7 +46,7 @@ class BaseDataModule(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> None:
         raise NotImplementedError
 
-    def train_dataloader(self) -> DataLoader:
+    def _source_train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_dataset,
                           batch_size=self.preprocessing_dict["batch_size"],
                           shuffle=True,
@@ -55,6 +56,27 @@ class BaseDataModule(pl.LightningDataModule):
                           prefetch_factor=4,                 # ↩︎ each worker preloads 4 future batches                          
                           collate_fn=make_collate_fn(self.preprocessing_dict)  # 👈 new
                     )
+
+    def _target_train_dataloader(self) -> DataLoader:
+        return DataLoader(
+            UnlabeledDataset(self.target_dataset),
+            batch_size=self.preprocessing_dict["batch_size"],
+            shuffle=True,
+            num_workers=self.preprocessing_dict.get("num_workers", os.cpu_count() // 2),
+            pin_memory=True,
+            persistent_workers=True,
+            prefetch_factor=4,
+        )
+
+    def train_dataloader(self):
+        source_loader = self._source_train_dataloader()
+        if not self.preprocessing_dict.get("domain_adaptation", False):
+            return source_loader
+        if self.target_dataset is None:
+            raise RuntimeError(
+                "Domain adaptation is enabled, but no unlabeled target split is available."
+            )
+        return {"source": source_loader, "target": self._target_train_dataloader()}
 
     def val_dataloader(self) -> DataLoader:
         return self.test_dataloader()
@@ -78,15 +100,7 @@ class BaseDataModule(pl.LightningDataModule):
     #     return X, X_test
     # Method 2 Per-channel across all samples and timepoints
     def _z_scale(X, X_test):
-        # reshape to (samples*time, channels)
-        s, c, t = X.shape
-        X_2d      = X.transpose(1, 0, 2).reshape(c, -1).T
-        X_test_2d = X_test.transpose(1, 0, 2).reshape(c, -1).T
-
-        sc = StandardScaler().fit(X_2d)
-        X      = sc.transform(X_2d).T.reshape(c, s, t).transpose(1, 0, 2)
-        X_test = sc.transform(X_test_2d).T.reshape(c, X_test.shape[0], t).transpose(1, 0, 2)
-        return X, X_test
+        return BaseDataModule._z_scale_many(X, X_test)
 
     # @staticmethod
     # # Method 1 (per-channel & per-timepoint) across samples
@@ -100,22 +114,32 @@ class BaseDataModule(pl.LightningDataModule):
 
     # Method 2 Per-channel across all samples and timepoints
     def _z_scale_tvt(X, X_val, X_test):
-        # reshape to (samples*time, channels)
-        s, c, t = X.shape
-        X_2d      = X.transpose(1, 0, 2).reshape(c, -1).T
-        X_val_2d = X_val.transpose(1, 0, 2).reshape(c, -1).T
-        X_test_2d = X_test.transpose(1, 0, 2).reshape(c, -1).T
+        return BaseDataModule._z_scale_many(X, X_val, X_test)
 
-        sc = StandardScaler().fit(X_2d)
-        X      = sc.transform(X_2d).T.reshape(c, s, t).transpose(1, 0, 2)
-        X_val = sc.transform(X_val_2d).T.reshape(c, X_val.shape[0], t).transpose(1, 0, 2)
-        X_test = sc.transform(X_test_2d).T.reshape(c, X_test.shape[0], t).transpose(1, 0, 2)
-        return X, X_val, X_test
+    @staticmethod
+    def _z_scale_many(X_train, *other_arrays):
+        """Fit on labeled source training data and transform every other split."""
+        _, channels, timepoints = X_train.shape
+        train_2d = X_train.transpose(1, 0, 2).reshape(channels, -1).T
+        scaler = StandardScaler().fit(train_2d)
+
+        def transform(array):
+            samples = array.shape[0]
+            array_2d = array.transpose(1, 0, 2).reshape(channels, -1).T
+            return scaler.transform(array_2d).T.reshape(
+                channels, samples, timepoints
+            ).transpose(1, 0, 2)
+
+        return (transform(X_train), *(transform(array) for array in other_arrays))
     
     @staticmethod
     def _make_tensor_dataset(X, y):
         return TensorDataset(torch.Tensor(X), torch.Tensor(y).type(torch.LongTensor))
         # return TensorDataset(torch.tensor(X), torch.tensor(y).long())
+
+    @staticmethod
+    def _make_unlabeled_dataset(X):
+        return TensorDataset(torch.Tensor(X))
 
     @staticmethod
     def _dataset_to_arrays(dataset):
@@ -145,6 +169,20 @@ class BaseDataModule(pl.LightningDataModule):
             y.append(y_item)
 
         return np.stack(X, axis=0), np.asarray(y)
+
+
+class UnlabeledDataset(torch.utils.data.Dataset):
+    """Expose EEG only, so target labels cannot enter the training step."""
+
+    def __init__(self, dataset):
+        self.dataset = dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        item = self.dataset[index]
+        return item[0] if isinstance(item, (tuple, list)) else item
         
     # @staticmethod
     # def _make_tensor_dataset(X, y, preprocessing_dict=None, mode="train"):

@@ -1,6 +1,6 @@
 from .atcnet import ATCNet
 from .tcformer import TCFormer
-from .subject_adaptive_tcformer import SubjectAdaptiveTCFormer
+from .hada_tcformer import HADATCFormer
 from .basenet import BaseNet
 from .eegconformer import EEGConformer
 from .eegnet import EEGNet
