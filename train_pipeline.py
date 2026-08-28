@@ -1,4 +1,10 @@
 import os, time, yaml
+
+# Colab exports its notebook-only matplotlib backend to subprocesses. The
+# isolated Python 3.10 environment does not contain that backend, so use a
+# headless backend before PyTorch Lightning/TorchMetrics imports matplotlib.
+if os.environ.get("MPLBACKEND", "").startswith("module://matplotlib_inline"):
+    os.environ["MPLBACKEND"] = "Agg"
 import numpy as np
 from pathlib import Path
 from datetime import datetime
