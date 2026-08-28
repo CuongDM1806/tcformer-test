@@ -5,6 +5,7 @@ samples only and are used by the adversarial and MK-MMD alignment objectives.
 """
 
 import math
+import time
 
 import torch
 from torch import Tensor, nn
@@ -135,6 +136,7 @@ class HADATCFormer(ClassificationModule):
         adaptation_dropout: float = 0.3,
         adversarial_weight: float = 1.0,
         mmd_weight: float = 0.5,
+        log_every_n_batches: int = 5,
         **kwargs,
     ):
         model = TCFormerModule(
@@ -167,6 +169,8 @@ class HADATCFormer(ClassificationModule):
         self.mmd_loss = MultiKernelMMDLoss()
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
+        self.log_every_n_batches = max(1, int(log_every_n_batches))
+        self._epoch_started_at = None
 
     def forward(self, x: Tensor) -> Tensor:
         features = self.aligner(self.model.extract_features(x))
@@ -175,6 +179,9 @@ class HADATCFormer(ClassificationModule):
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
         return 2.0 / (1.0 + math.exp(-10.0 * progress)) - 1.0
+
+    def on_train_epoch_start(self):
+        self._epoch_started_at = time.perf_counter()
 
     def training_step(self, batch, batch_idx):
         if not isinstance(batch, dict) or "source" not in batch or "target" not in batch:
@@ -226,6 +233,36 @@ class HADATCFormer(ClassificationModule):
         self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
+
+        total_batches = self.trainer.num_training_batches
+        current_batch = batch_idx + 1
+        should_print = (
+            current_batch == 1
+            or current_batch % self.log_every_n_batches == 0
+            or current_batch == total_batches
+        )
+        if should_print:
+            if self._epoch_started_at is None:
+                self._epoch_started_at = time.perf_counter()
+            elapsed = time.perf_counter() - self._epoch_started_at
+            seconds_per_batch = elapsed / current_batch
+            if isinstance(total_batches, int):
+                eta_seconds = seconds_per_batch * max(total_batches - current_batch, 0)
+                batch_progress = f"{current_batch}/{total_batches}"
+                eta_text = f"{eta_seconds / 60:.1f}m"
+            else:
+                batch_progress = f"{current_batch}/?"
+                eta_text = "?"
+            self.print(
+                f"Epoch {self.current_epoch + 1}/{self.hparams.max_epochs} | "
+                f"Batch {batch_progress} | "
+                f"loss={loss.detach().item():.4f} | "
+                f"cls={classification_loss.detach().item():.4f} | "
+                f"domain={adversarial_loss.detach().item():.4f} | "
+                f"mmd={mmd_loss.detach().item():.4f} | "
+                f"acc={acc.detach().item() * 100:.2f}% | "
+                f"elapsed={elapsed / 60:.1f}m | ETA={eta_text}"
+            )
         return loss
 
     @staticmethod
