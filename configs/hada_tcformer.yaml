@@ -67,6 +67,16 @@ model_kwargs:
   adversarial_weight: 1.0
   mmd_weight: 0.5
   temporal_mmd_weight: 0.1
+
+  # GPL-style local class alignment. Target labels are never used: target
+  # prototypes are updated only from entropy-filtered pseudo-labels.
+  source_prototype_weight: 0.1
+  interactive_prototype_weight: 0.1
+  prototype_momentum: 0.9
+  prototype_temperature: 0.1
+  prototype_warmup_epochs: 5
+  target_entropy_threshold_start: 0.2
+  target_entropy_threshold_end: 0.6
   log_every_n_batches: 5
 
   lr: 0.0009

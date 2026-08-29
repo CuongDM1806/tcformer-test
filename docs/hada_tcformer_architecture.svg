@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1260" viewBox="0 0 1800 1260" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1420" viewBox="0 0 1800 1420" role="img" aria-labelledby="title desc">
   <title id="title">Kiến trúc HADA-TCFormer hiện tại</title>
   <desc id="desc">Sơ đồ chi tiết luồng source có nhãn và target không nhãn qua TCFormer, residual feature aligner, classifier, gradient reversal, domain discriminator và MK-MMD.</desc>
   <defs>
@@ -190,12 +190,20 @@
   <text x="1200" y="1077" class="box-text">MLP: 64→128→64→1 · source=0, target=1</text>
   <text x="1200" y="1103" class="shape">L_domain = BCEWithLogits(domain)</text>
 
+  <!-- GPL prototype class alignment -->
+  <path d="M900 934 V1142" class="gold-arrow"/>
+  <rect x="650" y="1142" width="500" height="126" fill="#4c3b12" stroke="#facc15" class="card"/>
+  <text x="675" y="1173" class="box-title">GPL local class alignment · 2 prototype banks</text>
+  <text x="675" y="1198" class="box-text">Source bank: EMA prototypes from true source labels</text>
+  <text x="675" y="1222" class="box-text">Target bank: pseudo-labels selected and weighted by entropy</text>
+  <text x="675" y="1247" class="shape">0.1 · L_source_proto + 0.1 · L_interactive_proto</text>
+
   <!-- Total loss -->
-  <path d="M430 1125 V1158 H900 V1180" class="arrow"/>
-  <path d="M900 1125 V1180" class="gold-arrow"/>
-  <path d="M1365 1125 V1158 H900 V1180" class="red-arrow"/>
-  <rect x="610" y="1180" width="580" height="58" fill="url(#loss)" class="card"/>
-  <text x="625" y="1216" class="box-title">TOTAL: L = L_cls + L_domain + 0.5·L_mmd + 0.1·L_temporal_mmd</text>
+  <path d="M430 1125 V1300 H900 V1322" class="arrow"/>
+  <path d="M900 1268 V1322" class="gold-arrow"/>
+  <path d="M1365 1125 V1300 H900 V1322" class="red-arrow"/>
+  <rect x="500" y="1322" width="800" height="62" fill="url(#loss)" class="card"/>
+  <text x="525" y="1360" class="box-title">TOTAL: classification + adversarial + global/temporal MMD + source/interactive prototype contrast</text>
 
   <!-- Side notes -->
   <rect x="70" y="445" width="500" height="277" fill="#111f34" stroke="#38506e" rx="14"/>
@@ -208,5 +216,5 @@
   <text x="94" y="660" class="small">• Khi test: target EEG → backbone → aligner → classifier.</text>
   <text x="94" y="690" class="small">• GRL, discriminator và MMD không dùng khi inference.</text>
 
-  <text x="70" y="1242" class="tiny">Nguồn: TCFormer/models/tcformer.py + hada_tcformer.py + configs/hada_tcformer.yaml · Code hiện tại dùng last+mean pooling, temporal MMD và learnable group weighting.</text>
+  <text x="70" y="1402" class="tiny">Nguồn: tcformer.py + hada_tcformer.py + hada_tcformer.yaml · Global MMD và GPL prototype class alignment có entropy gate.</text>
 </svg>

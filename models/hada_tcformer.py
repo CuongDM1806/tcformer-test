@@ -1,7 +1,8 @@
-"""TCFormer with HADANet-style unsupervised domain adaptation.
+"""TCFormer with HADANet-style and GPL-style domain adaptation.
 
 Only source labels contribute to classification. Target batches contain EEG
-samples only and are used by the adversarial and MK-MMD alignment objectives.
+samples only. MK-MMD aligns both domains globally, while two prototype memory
+banks add entropy-aware, class-conditional alignment without target labels.
 """
 
 import math
@@ -109,6 +110,85 @@ class MultiKernelMMDLoss(nn.Module):
         return source_term + target_term - 2.0 * k_st.mean()
 
 
+class PrototypeMemoryBank(nn.Module):
+    """EMA class prototypes for the source and unlabeled target domains.
+
+    The banks are buffers rather than parameters. Target entries are updated
+    only with entropy-filtered pseudo-labels, so ground-truth target labels are
+    never required or consumed during adaptation.
+    """
+
+    def __init__(self, n_classes: int, feature_dim: int, momentum: float = 0.9):
+        super().__init__()
+        if not 0.0 <= momentum < 1.0:
+            raise ValueError("prototype_momentum must be in [0, 1)")
+        self.n_classes = n_classes
+        self.momentum = momentum
+        self.register_buffer("source_prototypes", torch.zeros(n_classes, feature_dim))
+        self.register_buffer("target_prototypes", torch.zeros(n_classes, feature_dim))
+        self.register_buffer("source_initialized", torch.zeros(n_classes, dtype=torch.bool))
+        self.register_buffer("target_initialized", torch.zeros(n_classes, dtype=torch.bool))
+
+    @torch.no_grad()
+    def update(
+        self,
+        domain: str,
+        features: Tensor,
+        labels: Tensor,
+        weights: Tensor | None = None,
+    ) -> None:
+        if domain not in {"source", "target"}:
+            raise ValueError("domain must be 'source' or 'target'")
+        prototypes = getattr(self, f"{domain}_prototypes")
+        initialized = getattr(self, f"{domain}_initialized")
+        features = F.normalize(features.detach(), p=2, dim=1)
+
+        for class_idx in labels.unique():
+            class_id = int(class_idx.item())
+            mask = labels == class_id
+            class_features = features[mask]
+            if class_features.numel() == 0:
+                continue
+            if weights is None:
+                class_mean = class_features.mean(dim=0)
+            else:
+                class_weights = weights[mask].detach().clamp_min(1e-6)
+                class_mean = (class_features * class_weights[:, None]).sum(dim=0)
+                class_mean = class_mean / class_weights.sum()
+            class_mean = F.normalize(class_mean, p=2, dim=0)
+            if initialized[class_id]:
+                class_mean = self.momentum * prototypes[class_id] + (
+                    1.0 - self.momentum
+                ) * class_mean
+                class_mean = F.normalize(class_mean, p=2, dim=0)
+            prototypes[class_id].copy_(class_mean)
+            initialized[class_id] = True
+
+    @staticmethod
+    def contrastive_loss(
+        features: Tensor,
+        labels: Tensor,
+        prototypes: Tensor,
+        initialized: Tensor,
+        temperature: float,
+        sample_weights: Tensor | None = None,
+    ) -> Tensor:
+        """Classify normalized features against the available prototypes."""
+        valid_samples = initialized[labels]
+        if initialized.sum() < 2 or not valid_samples.any():
+            return features.new_zeros(())
+
+        features = F.normalize(features[valid_samples], p=2, dim=1)
+        logits = features @ F.normalize(prototypes, p=2, dim=1).T
+        logits = logits / temperature
+        logits = logits.masked_fill(~initialized.unsqueeze(0), -1e4)
+        per_sample = F.cross_entropy(logits, labels[valid_samples], reduction="none")
+        if sample_weights is None:
+            return per_sample.mean()
+        selected_weights = sample_weights[valid_samples].clamp_min(1e-6)
+        return (per_sample * selected_weights).sum() / selected_weights.sum()
+
+
 class HADATCFormer(ClassificationModule):
     """HADANet-style UDA applied to the TCFormer representation."""
 
@@ -137,6 +217,13 @@ class HADATCFormer(ClassificationModule):
         adversarial_weight: float = 1.0,
         mmd_weight: float = 0.5,
         temporal_mmd_weight: float = 0.1,
+        source_prototype_weight: float = 0.1,
+        interactive_prototype_weight: float = 0.1,
+        prototype_momentum: float = 0.9,
+        prototype_temperature: float = 0.1,
+        prototype_warmup_epochs: int = 5,
+        target_entropy_threshold_start: float = 0.2,
+        target_entropy_threshold_end: float = 0.6,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -168,9 +255,24 @@ class HADATCFormer(ClassificationModule):
             model.feature_dim, domain_hidden_dim, adaptation_dropout
         )
         self.mmd_loss = MultiKernelMMDLoss()
+        self.prototype_bank = PrototypeMemoryBank(
+            n_classes, model.feature_dim, prototype_momentum
+        )
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
         self.temporal_mmd_weight = temporal_mmd_weight
+        self.source_prototype_weight = source_prototype_weight
+        self.interactive_prototype_weight = interactive_prototype_weight
+        if prototype_temperature <= 0.0:
+            raise ValueError("prototype_temperature must be positive")
+        if not 0.0 <= target_entropy_threshold_start <= 1.0:
+            raise ValueError("target_entropy_threshold_start must be in [0, 1]")
+        if not 0.0 <= target_entropy_threshold_end <= 1.0:
+            raise ValueError("target_entropy_threshold_end must be in [0, 1]")
+        self.prototype_temperature = prototype_temperature
+        self.prototype_warmup_epochs = max(0, int(prototype_warmup_epochs))
+        self.target_entropy_threshold_start = target_entropy_threshold_start
+        self.target_entropy_threshold_end = target_entropy_threshold_end
         self.log_every_n_batches = max(1, int(log_every_n_batches))
         self._epoch_started_at = None
 
@@ -181,6 +283,26 @@ class HADATCFormer(ClassificationModule):
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
         return 2.0 / (1.0 + math.exp(-10.0 * progress)) - 1.0
+
+    def _target_entropy_gate(self, target_logits: Tensor):
+        """Return pseudo-labels, confidence weights, and GPL-style selection."""
+        probabilities = target_logits.detach().softmax(dim=1)
+        entropy = -(probabilities * probabilities.clamp_min(1e-8).log()).sum(dim=1)
+        normalized_entropy = entropy / math.log(self.hparams.n_classes)
+        confidence = (1.0 - normalized_entropy).clamp(0.0, 1.0)
+
+        adaptation_epochs = max(
+            int(self.hparams.max_epochs) - self.prototype_warmup_epochs - 1, 1
+        )
+        progress = max(self.current_epoch - self.prototype_warmup_epochs, 0)
+        progress = min(progress / adaptation_epochs, 1.0)
+        threshold = self.target_entropy_threshold_start + progress * (
+            self.target_entropy_threshold_end
+            - self.target_entropy_threshold_start
+        )
+        selected = normalized_entropy <= threshold
+        pseudo_labels = probabilities.argmax(dim=1)
+        return pseudo_labels, confidence, selected, normalized_entropy.mean(), threshold
 
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
@@ -218,7 +340,52 @@ class HADATCFormer(ClassificationModule):
         target_features = all_features[source_count:]
 
         source_logits = self.model.classify_features(source_features)
+        target_logits = self.model.classify_features(target_features)
         classification_loss = F.cross_entropy(source_logits, source_y)
+
+        # GPL local alignment: the source bank is supervised by real source
+        # labels. The target bank sees only entropy-filtered pseudo-labels.
+        self.prototype_bank.update("source", source_features, source_y)
+        source_prototype_loss = self.prototype_bank.contrastive_loss(
+            source_features,
+            source_y,
+            self.prototype_bank.source_prototypes,
+            self.prototype_bank.source_initialized,
+            self.prototype_temperature,
+        )
+        pseudo_labels, target_confidence, target_selected, mean_target_entropy, entropy_threshold = (
+            self._target_entropy_gate(target_logits)
+        )
+        prototype_adaptation_active = self.current_epoch >= self.prototype_warmup_epochs
+        if not prototype_adaptation_active:
+            target_selected = torch.zeros_like(target_selected)
+        if prototype_adaptation_active and target_selected.any():
+            self.prototype_bank.update(
+                "target",
+                target_features[target_selected],
+                pseudo_labels[target_selected],
+                target_confidence[target_selected],
+            )
+            target_to_source_loss = self.prototype_bank.contrastive_loss(
+                target_features[target_selected],
+                pseudo_labels[target_selected],
+                self.prototype_bank.source_prototypes,
+                self.prototype_bank.source_initialized,
+                self.prototype_temperature,
+                target_confidence[target_selected],
+            )
+            source_to_target_loss = self.prototype_bank.contrastive_loss(
+                source_features,
+                source_y,
+                self.prototype_bank.target_prototypes,
+                self.prototype_bank.target_initialized,
+                self.prototype_temperature,
+            )
+            interactive_prototype_loss = 0.5 * (
+                target_to_source_loss + source_to_target_loss
+            )
+        else:
+            interactive_prototype_loss = source_features.new_zeros(())
 
         alpha = self._grl_alpha()
         domain_logits = self.domain_discriminator(self.grl(all_features, alpha))
@@ -238,6 +405,8 @@ class HADATCFormer(ClassificationModule):
             + self.adversarial_weight * adversarial_loss
             + self.mmd_weight * mmd_loss
             + self.temporal_mmd_weight * temporal_mmd_loss
+            + self.source_prototype_weight * source_prototype_loss
+            + self.interactive_prototype_weight * interactive_prototype_loss
         )
 
         acc = accuracy(
@@ -249,6 +418,10 @@ class HADATCFormer(ClassificationModule):
         self.log("train_cls_loss", classification_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_source_prototype_loss", source_prototype_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_interactive_prototype_loss", interactive_prototype_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_target_confident_ratio", target_selected.float().mean(), on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_target_entropy", mean_target_entropy, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log(
             "train_temporal_mmd_loss",
             temporal_mmd_loss,
@@ -285,6 +458,10 @@ class HADATCFormer(ClassificationModule):
                 f"domain={adversarial_loss.detach().item():.4f} | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
                 f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
+                f"sproto={source_prototype_loss.detach().item():.4f} | "
+                f"xproto={interactive_prototype_loss.detach().item():.4f} | "
+                f"tkeep={target_selected.float().mean().detach().item() * 100:.1f}% "
+                f"(H<={entropy_threshold:.2f}) | "
                 f"acc={acc.detach().item() * 100:.2f}% | "
                 f"elapsed={elapsed / 60:.1f}m | ETA={eta_text}"
             )
