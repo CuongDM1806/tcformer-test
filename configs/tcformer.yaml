@@ -74,6 +74,7 @@ model_kwargs:
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3 
+  log_every_n_batches: 5
   
   lr: 0.0009 
   beta_1: 0.5 

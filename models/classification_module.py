@@ -9,6 +9,7 @@ from torchmetrics.classification import (
 import pytorch_lightning as pl
 from utils.lr_scheduler import linear_warmup_cosine_decay
 import random
+import time
 
 # Helper: Randomly selects a subset of EEG channels (augmentations)
 def select_random_channels(x, keep_ratio=0.9):
@@ -54,11 +55,14 @@ class ClassificationModule(pl.LightningModule):
             scheduler=False,
             max_epochs=1000,
             warmup_epochs=20,
+            log_every_n_batches=0,
             **kwargs
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
         self.model = model
+        self.log_every_n_batches = max(0, int(log_every_n_batches))
+        self._train_epoch_started_at = None
 
         # ── metrics ───────────────────────────────────────
         self.test_kappa = MulticlassCohenKappa(num_classes=n_classes)        
@@ -95,8 +99,38 @@ class ClassificationModule(pl.LightningModule):
             return [optimizer]
 
     # steps
+    def on_train_epoch_start(self):
+        self._train_epoch_started_at = time.perf_counter()
+
     def training_step(self, batch, batch_idx):
-        loss, _ = self.shared_step(batch, batch_idx, mode="train")
+        loss, acc = self.shared_step(batch, batch_idx, mode="train")
+
+        total_batches = self.trainer.num_training_batches
+        current_batch = batch_idx + 1
+        should_print = self.log_every_n_batches > 0 and (
+            current_batch == 1
+            or current_batch % self.log_every_n_batches == 0
+            or current_batch == total_batches
+        )
+        if should_print:
+            if self._train_epoch_started_at is None:
+                self._train_epoch_started_at = time.perf_counter()
+            elapsed = time.perf_counter() - self._train_epoch_started_at
+            seconds_per_batch = elapsed / current_batch
+            if isinstance(total_batches, int):
+                eta_seconds = seconds_per_batch * max(total_batches - current_batch, 0)
+                batch_progress = f"{current_batch}/{total_batches}"
+                eta_text = f"{eta_seconds / 60:.1f}m"
+            else:
+                batch_progress = f"{current_batch}/?"
+                eta_text = "?"
+            self.print(
+                f"Epoch {self.current_epoch + 1}/{self.hparams.max_epochs} | "
+                f"Batch {batch_progress} | "
+                f"loss={loss.detach().item():.4f} | "
+                f"acc={acc.detach().item() * 100:.2f}% | "
+                f"elapsed={elapsed / 60:.1f}m | ETA={eta_text}"
+            )
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -152,4 +186,3 @@ class ClassificationModule(pl.LightningModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         x, _ = batch
         return torch.argmax(self.forward(x), dim=-1)
-    
