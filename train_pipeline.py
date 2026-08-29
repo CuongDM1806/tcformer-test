@@ -1,3 +1,4 @@
+import gc
 import os, time, yaml
 
 # Colab exports its notebook-only matplotlib backend to subprocesses. The
@@ -102,10 +103,33 @@ def train_and_test(config):
         train_times.append((time.time() - st_train) / 60) # minutes
 
         # ---------------- TEST -----------------
+        # Passing the datamodule to trainer.test() makes Lightning invoke
+        # prepare_data/setup again. For LOSO this reloads every subject and can
+        # exhaust Colab RAM. Reuse the already prepared test loader instead.
+        test_loader = datamodule.test_dataloader()
+        datamodule.dataset = None
+        datamodule.train_dataset = None
+        datamodule.val_dataset = None
+        datamodule.target_dataset = None
+        gc.collect()
+
         st_test = time.time()
-        test_results = trainer.test(model, datamodule)
+        test_results = trainer.test(model, dataloaders=test_loader)
         test_duration = time.time() - st_test
         test_times.append(test_duration)
+
+        subject_result = test_results[0]
+        subject_acc = float(subject_result["test_acc"])
+        subject_loss = float(subject_result["test_loss"])
+        subject_kappa = float(subject_result["test_kappa"])
+        print(
+            f"\nTARGET SUBJECT {subject_id} RESULT | "
+            f"acc={subject_acc * 100:.2f}% | "
+            f"loss={subject_loss:.4f} | "
+            f"kappa={subject_kappa:.4f} | "
+            f"test_time={test_duration:.2f}s\n",
+            flush=True,
+        )
         print(
             f">>> Target subject {subject_id} test | "
             f"acc={test_results[0]['test_acc'] * 100:.2f}% | "
@@ -123,9 +147,9 @@ def train_and_test(config):
         response_times.append(lat_ms)  # convert to seconds for summary helper
 
         # ---------------- METRICS --------------
-        test_accs.append(test_results[0]["test_acc"])
-        test_losses.append(test_results[0]["test_loss"])
-        test_kappas.append(test_results[0]["test_kappa"])
+        test_accs.append(subject_acc)
+        test_losses.append(subject_loss)
+        test_kappas.append(subject_kappa)
 
         # compute & store this subject's confusion matrix
         # The [C × C] tensor is inside the LightningModule:
