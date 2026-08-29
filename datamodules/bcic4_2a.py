@@ -136,12 +136,22 @@ class BCICIV2aLOSO(BCICIV2a):
 
     def __init__(self, preprocessing_dict: dict, subject_id: int):
         super().__init__(preprocessing_dict, subject_id)
+        self._setup_complete = False
 
     def prepare_data(self) -> None:
+        # ``Trainer.test`` may call the data hooks again after ``fit``.  The
+        # LOSO dataset is large, so do not reload all subjects once the tensor
+        # datasets have already been materialized.
+        if self._setup_complete or self.dataset is not None:
+            return
         self.dataset = load_bcic4(subject_ids=self.all_subject_ids, dataset="2a",
                                   preprocessing_dict=self.preprocessing_dict)
 
     def setup(self, stage: Optional[str] = None) -> None:
+        # Reuse the tensors created for fit when Lightning switches to test.
+        # Rebuilding here temporarily keeps two complete LOSO copies in RAM.
+        if self._setup_complete:
+            return
         if self.dataset is None:
             self.prepare_data()
         # split the data
@@ -179,6 +189,11 @@ class BCICIV2aLOSO(BCICIV2a):
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
+        self._setup_complete = True
+
+        # The train/validation/target/test tensors are now self-contained.
+        # Release the much larger Braindecode/MNE window hierarchy before fit.
+        self.dataset = None
 
         # self.train_dataset = BaseDataModule._make_tensor_dataset(X, y, 
         #                                                          preprocessing_dict=self.preprocessing_dict, mode="train")

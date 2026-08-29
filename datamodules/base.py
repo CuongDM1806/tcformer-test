@@ -82,12 +82,16 @@ class BaseDataModule(pl.LightningDataModule):
         return self.test_dataloader()
 
     def test_dataloader(self) -> DataLoader:
+        # Test sets are small.  On Windows, worker processes can duplicate a
+        # substantial part of the parent process and cause a RAM spike after
+        # training, so testing is single-process unless explicitly overridden.
+        test_num_workers = self.preprocessing_dict.get("test_num_workers", 0)
         return DataLoader(self.test_dataset,
                           batch_size=self.preprocessing_dict["batch_size"],
-                          num_workers=self.preprocessing_dict.get("num_workers", os.cpu_count() // 2),
+                          num_workers=test_num_workers,
                           pin_memory=True,
-                          persistent_workers=True,          # ↩︎ keeps workers alive between epochs
-                          prefetch_factor=4,                 # ↩︎ each worker preloads 4 future batches                          
+                          persistent_workers=test_num_workers > 0,
+                          **({"prefetch_factor": 2} if test_num_workers > 0 else {}),
                         )
 
     @staticmethod

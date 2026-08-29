@@ -106,6 +106,12 @@ def train_and_test(config):
         test_results = trainer.test(model, datamodule)
         test_duration = time.time() - st_test
         test_times.append(test_duration)
+        print(
+            f">>> Target subject {subject_id} test | "
+            f"acc={test_results[0]['test_acc'] * 100:.2f}% | "
+            f"loss={test_results[0]['test_loss']:.4f} | "
+            f"kappa={test_results[0]['test_kappa']:.4f}"
+        )
 
         # ---------------- LATENCY --------------
         # Deduce input shape from one sample of the test dataset
