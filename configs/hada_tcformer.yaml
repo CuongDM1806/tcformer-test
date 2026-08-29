@@ -66,6 +66,7 @@ model_kwargs:
   adaptation_dropout: 0.3
   adversarial_weight: 1.0
   mmd_weight: 0.5
+  temporal_mmd_weight: 0.1
   log_every_n_batches: 5
 
   lr: 0.0009

@@ -136,6 +136,7 @@ class HADATCFormer(ClassificationModule):
         adaptation_dropout: float = 0.3,
         adversarial_weight: float = 1.0,
         mmd_weight: float = 0.5,
+        temporal_mmd_weight: float = 0.1,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -169,6 +170,7 @@ class HADATCFormer(ClassificationModule):
         self.mmd_loss = MultiKernelMMDLoss()
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
+        self.temporal_mmd_weight = temporal_mmd_weight
         self.log_every_n_batches = max(1, int(log_every_n_batches))
         self._epoch_started_at = None
 
@@ -196,7 +198,21 @@ class HADATCFormer(ClassificationModule):
 
         # A shared forward pass also gives BatchNorm both domains without ever
         # reading target labels.
-        all_features = self.model.extract_features(torch.cat((source_x, target_x), dim=0))
+        temporal_features = self.model.extract_temporal_features(
+            torch.cat((source_x, target_x), dim=0)
+        )
+        pooled_features = self.model.tcn_head.pool_temporal_features(temporal_features)
+
+        # Auxiliary alignment before temporal compression. It sees information
+        # from every TCN time position and introduces no trainable parameters.
+        temporal_mean_features = temporal_features.mean(dim=-1)
+        source_temporal_mean = temporal_mean_features[:source_count]
+        target_temporal_mean = temporal_mean_features[source_count:]
+        temporal_mmd_loss = self.mmd_loss(
+            source_temporal_mean, target_temporal_mean
+        )
+
+        all_features = pooled_features
         all_features = self.aligner(all_features)
         source_features = all_features[:source_count]
         target_features = all_features[source_count:]
@@ -221,6 +237,7 @@ class HADATCFormer(ClassificationModule):
             classification_loss
             + self.adversarial_weight * adversarial_loss
             + self.mmd_weight * mmd_loss
+            + self.temporal_mmd_weight * temporal_mmd_loss
         )
 
         acc = accuracy(
@@ -232,6 +249,13 @@ class HADATCFormer(ClassificationModule):
         self.log("train_cls_loss", classification_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log(
+            "train_temporal_mmd_loss",
+            temporal_mmd_loss,
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
         self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
 
         total_batches = self.trainer.num_training_batches
@@ -260,6 +284,7 @@ class HADATCFormer(ClassificationModule):
                 f"cls={classification_loss.detach().item():.4f} | "
                 f"domain={adversarial_loss.detach().item():.4f} | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
+                f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
                 f"acc={acc.detach().item() * 100:.2f}% | "
                 f"elapsed={elapsed / 60:.1f}m | ETA={eta_text}"
             )

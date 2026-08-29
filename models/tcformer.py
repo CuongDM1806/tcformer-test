@@ -221,6 +221,9 @@ class ClassificationHead(nn.Module):
             groups=n_groups,
             max_norm=max_norm,
         )
+        # Zero initialization reproduces the previous equal averaging at the
+        # start of training; softmax then learns each group's contribution.
+        self.group_weights = nn.Parameter(torch.zeros(n_groups))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -230,8 +233,10 @@ class ClassificationHead(nn.Module):
         # x = self.drop(x) 
         x = self.linear(x).squeeze(-1)
 
-        # (B, n_groups, n_classes) → mean over groups
-        x = x.view(x.size(0), self.n_groups, self.n_classes).mean(dim=1)
+        # (B, n_groups, n_classes) -> learned weighted sum over groups
+        x = x.view(x.size(0), self.n_groups, self.n_classes)
+        weights = torch.softmax(self.group_weights, dim=0)
+        x = (x * weights.view(1, self.n_groups, 1)).sum(dim=1)
         return x
 
 class TCNHead(nn.Module):
@@ -249,9 +254,18 @@ class TCNHead(nn.Module):
             n_groups=n_groups,
             n_classes=n_classes,
         )     
+    def extract_temporal_features(self, x):
+        """Return the complete TCN sequence before temporal aggregation."""
+        return self.tcn(x)
+
+    @staticmethod
+    def pool_temporal_features(x):
+        """Preserve both the causal final state and whole-trial information."""
+        return 0.5 * (x[:, :, -1] + x.mean(dim=-1))
+
     def extract_features(self, x):
-        x = self.tcn(x)
-        return x[:, :, -1]
+        x = self.extract_temporal_features(x)
+        return self.pool_temporal_features(x)
 
     def classify_features(self, x):
         if x.ndim == 2:
@@ -453,7 +467,7 @@ class TCFormerModule(nn.Module):
         # # Kaiming (He) init is recommended for Conv layers that precede SiLU / ReLU
         # nn.init.kaiming_normal_(self.reduce[0].weight, nonlinearity="linear") 
 
-    def extract_features(self, x):      # x: [B, C_electrodes, T]
+    def extract_temporal_features(self, x):  # x: [B, C_electrodes, T]
         conv_features = self.conv_block(x)         
         _, _, T = conv_features.shape
 
@@ -464,7 +478,11 @@ class TCFormerModule(nn.Module):
         tran_features = self.reduce(tokens)
 
         features = torch.cat((conv_features, tran_features), dim=1) 
-        return self.tcn_head.extract_features(features)
+        return self.tcn_head.extract_temporal_features(features)
+
+    def extract_features(self, x):
+        temporal_features = self.extract_temporal_features(x)
+        return self.tcn_head.pool_temporal_features(temporal_features)
 
     def classify_features(self, features):
         return self.tcn_head.classify_features(features)
