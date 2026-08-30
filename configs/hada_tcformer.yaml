@@ -67,6 +67,8 @@ model_kwargs:
   adversarial_weight: 1.0
   mmd_weight: 0.5
   temporal_mmd_weight: 0.1
+  # High-gap, low-confidence target subjects use 25% of all DA losses.
+  light_adaptation_factor: 0.25
   log_every_n_batches: 5
 
   lr: 0.0009

@@ -137,6 +137,7 @@ class HADATCFormer(ClassificationModule):
         adversarial_weight: float = 1.0,
         mmd_weight: float = 0.5,
         temporal_mmd_weight: float = 0.1,
+        light_adaptation_factor: float = 0.25,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -171,8 +172,19 @@ class HADATCFormer(ClassificationModule):
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
         self.temporal_mmd_weight = temporal_mmd_weight
+        if not 0.0 < light_adaptation_factor <= 1.0:
+            raise ValueError("light_adaptation_factor must be in (0, 1].")
+        self.light_adaptation_factor = light_adaptation_factor
         self.log_every_n_batches = max(1, int(log_every_n_batches))
         self._epoch_started_at = None
+        # One LOSO run has one target subject. These EMAs therefore summarize
+        # target-level transferability instead of reacting to a single batch.
+        self.register_buffer(
+            "_target_gap_ema", torch.tensor(float("nan")), persistent=False
+        )
+        self.register_buffer(
+            "_target_confidence_ema", torch.tensor(float("nan")), persistent=False
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         features = self.aligner(self.model.extract_features(x))
@@ -181,6 +193,60 @@ class HADATCFormer(ClassificationModule):
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
         return 2.0 / (1.0 + math.exp(-10.0 * progress)) - 1.0
+
+    @torch.no_grad()
+    def _target_adaptation_gate(
+        self,
+        source_features: Tensor,
+        target_features: Tensor,
+        target_logits: Tensor,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        """Return a target-level normal/light DA gate and its diagnostics.
+
+        A target is treated as high-risk when its normalized domain gap is
+        larger than the within-domain feature spread while its prediction
+        confidence is in the lower half of the range between random guessing
+        and certainty. Fixed, dimensionless cutoffs keep tuning to a minimum.
+        """
+        source = F.normalize(source_features.detach(), p=2, dim=1)
+        target = F.normalize(target_features.detach(), p=2, dim=1)
+        source_center = source.mean(dim=0)
+        target_center = target.mean(dim=0)
+
+        center_distance = torch.linalg.vector_norm(source_center - target_center)
+        source_spread = torch.linalg.vector_norm(
+            source - source_center, dim=1
+        ).mean()
+        target_spread = torch.linalg.vector_norm(
+            target - target_center, dim=1
+        ).mean()
+        domain_gap = center_distance / (
+            0.5 * (source_spread + target_spread)
+        ).clamp_min(1e-6)
+
+        mean_confidence = target_logits.detach().softmax(dim=1).amax(dim=1).mean()
+        random_confidence = 1.0 / self.hparams.n_classes
+        normalized_confidence = (
+            (mean_confidence - random_confidence) / (1.0 - random_confidence)
+        ).clamp(0.0, 1.0)
+
+        ema_decay = 0.9
+        if torch.isnan(self._target_gap_ema):
+            self._target_gap_ema.copy_(domain_gap)
+            self._target_confidence_ema.copy_(normalized_confidence)
+        else:
+            self._target_gap_ema.lerp_(domain_gap, 1.0 - ema_decay)
+            self._target_confidence_ema.lerp_(
+                normalized_confidence, 1.0 - ema_decay
+            )
+
+        use_light_adaptation = (self._target_gap_ema > 1.0) & (
+            self._target_confidence_ema < 0.5
+        )
+        normal_gate = source_features.new_ones(())
+        light_gate = source_features.new_tensor(self.light_adaptation_factor)
+        gate = torch.where(use_light_adaptation, light_gate, normal_gate)
+        return gate, self._target_gap_ema.clone(), self._target_confidence_ema.clone()
 
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
@@ -218,7 +284,15 @@ class HADATCFormer(ClassificationModule):
         target_features = all_features[source_count:]
 
         source_logits = self.model.classify_features(source_features)
+        with torch.no_grad():
+            target_logits = self.model.classify_features(target_features)
         classification_loss = F.cross_entropy(source_logits, source_y)
+
+        adaptation_gate, target_gap, target_confidence = (
+            self._target_adaptation_gate(
+                source_features, target_features, target_logits
+            )
+        )
 
         alpha = self._grl_alpha()
         domain_logits = self.domain_discriminator(self.grl(all_features, alpha))
@@ -235,9 +309,12 @@ class HADATCFormer(ClassificationModule):
         mmd_loss = self.mmd_loss(source_features, target_features)
         loss = (
             classification_loss
-            + self.adversarial_weight * adversarial_loss
-            + self.mmd_weight * mmd_loss
-            + self.temporal_mmd_weight * temporal_mmd_loss
+            + adaptation_gate
+            * (
+                self.adversarial_weight * adversarial_loss
+                + self.mmd_weight * mmd_loss
+                + self.temporal_mmd_weight * temporal_mmd_loss
+            )
         )
 
         acc = accuracy(
@@ -249,6 +326,27 @@ class HADATCFormer(ClassificationModule):
         self.log("train_cls_loss", classification_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log(
+            "train_da_gate",
+            adaptation_gate,
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
+        self.log(
+            "train_target_gap",
+            target_gap,
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
+        self.log(
+            "train_target_confidence",
+            target_confidence,
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
         self.log(
             "train_temporal_mmd_loss",
             temporal_mmd_loss,
@@ -277,6 +375,9 @@ class HADATCFormer(ClassificationModule):
             else:
                 batch_progress = f"{current_batch}/?"
                 eta_text = "?"
+            adaptation_mode = (
+                "light" if adaptation_gate.detach().item() < 1.0 else "normal"
+            )
             self.print(
                 f"Epoch {self.current_epoch + 1}/{self.hparams.max_epochs} | "
                 f"Batch {batch_progress} | "
@@ -285,6 +386,9 @@ class HADATCFormer(ClassificationModule):
                 f"domain={adversarial_loss.detach().item():.4f} | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
                 f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
+                f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "
+                f"gap={target_gap.detach().item():.2f} | "
+                f"conf={target_confidence.detach().item():.2f} | "
                 f"acc={acc.detach().item() * 100:.2f}% | "
                 f"elapsed={elapsed / 60:.1f}m | ETA={eta_text}"
             )
