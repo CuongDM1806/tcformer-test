@@ -113,6 +113,11 @@ def train_and_test(config):
         datamodule.target_dataset = None
         gc.collect()
 
+        # Optional source-free IM-TTA. The method consumes only target EEG;
+        # labels carried by the test loader are deliberately ignored.
+        if hasattr(model, "adapt_to_target"):
+            model.adapt_to_target(test_loader)
+
         st_test = time.time()
         test_results = trainer.test(model, dataloaders=test_loader)
         test_duration = time.time() - st_test

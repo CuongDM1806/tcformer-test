@@ -69,6 +69,11 @@ model_kwargs:
   temporal_mmd_weight: 0.1
   # High-gap, low-confidence target subjects use 25% of all DA losses.
   light_adaptation_factor: 0.25
+  # Source-free target adaptation after HADA training. Only BatchNorm affine
+  # parameters are updated; target labels are never read.
+  im_tta_steps: 5
+  im_tta_lr: 0.0001
+  im_tta_diversity_weight: 1.0
   log_every_n_batches: 5
 
   lr: 0.0009
