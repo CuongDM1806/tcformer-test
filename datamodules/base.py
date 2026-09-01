@@ -2,6 +2,8 @@ from typing import Dict, Optional
 
 import numpy as np
 import pytorch_lightning as pl
+from scipy.linalg import eigh
+from sklearn.covariance import OAS
 from sklearn.preprocessing import StandardScaler
 import torch
 from torch.utils.data.dataloader import DataLoader
@@ -135,6 +137,67 @@ class BaseDataModule(pl.LightningDataModule):
             ).transpose(1, 0, 2)
 
         return (transform(X_train), *(transform(array) for array in other_arrays))
+
+    @staticmethod
+    def _spd_power(matrix, exponent, epsilon=1e-8):
+        """Raise a symmetric positive-definite matrix to a real power."""
+        eigenvalues, eigenvectors = eigh(matrix)
+        eigenvalues = np.maximum(eigenvalues, epsilon)
+        return (eigenvectors * (eigenvalues ** exponent)) @ eigenvectors.T
+
+    @staticmethod
+    def _riemannian_mean(covariances, tolerance=1e-7, max_iterations=50):
+        """Compute the affine-invariant Riemannian mean of SPD matrices."""
+        mean = np.mean(covariances, axis=0)
+        for _ in range(max_iterations):
+            mean_sqrt = BaseDataModule._spd_power(mean, 0.5)
+            mean_invsqrt = BaseDataModule._spd_power(mean, -0.5)
+            tangent = np.zeros_like(mean)
+
+            for covariance in covariances:
+                centered = mean_invsqrt @ covariance @ mean_invsqrt
+                eigenvalues, eigenvectors = eigh(centered)
+                eigenvalues = np.maximum(eigenvalues, 1e-8)
+                tangent += (
+                    eigenvectors * np.log(eigenvalues)
+                ) @ eigenvectors.T
+
+            tangent /= len(covariances)
+            if np.linalg.norm(tangent, ord="fro") < tolerance:
+                break
+
+            eigenvalues, eigenvectors = eigh(tangent)
+            tangent_exp = (
+                eigenvectors * np.exp(eigenvalues)
+            ) @ eigenvectors.T
+            mean = mean_sqrt @ tangent_exp @ mean_sqrt
+            mean = 0.5 * (mean + mean.T)
+
+        return mean
+
+    @staticmethod
+    def _riemannian_whitener(X):
+        """Fit an OAS/Riemannian reference and return its inverse square root."""
+        covariances = np.stack(
+            [OAS().fit(trial.T.astype(np.float64)).covariance_ for trial in X],
+            axis=0,
+        )
+        reference = BaseDataModule._riemannian_mean(covariances)
+        return BaseDataModule._spd_power(reference, -0.5)
+
+    @staticmethod
+    def _riemannian_align_many(X_reference, *other_arrays):
+        """Fit RA on reference trials and apply the same whitening to all splits."""
+        whitener = BaseDataModule._riemannian_whitener(X_reference)
+
+        def transform(array):
+            aligned = np.einsum("cd,ndt->nct", whitener, array, optimize=True)
+            return aligned.astype(array.dtype, copy=False)
+
+        return (
+            transform(X_reference),
+            *(transform(array) for array in other_arrays),
+        )
     
     @staticmethod
     def _make_tensor_dataset(X, y):

@@ -309,11 +309,39 @@ class HADATCFormer(ClassificationModule):
         final_stats = None
         with torch.enable_grad():
             for step in range(1, self.im_tta_steps + 1):
-                loss_sum = 0.0
-                conditional_sum = 0.0
-                marginal_sum = 0.0
+                # First pass estimates the class marginal over the complete
+                # target subject. Dropout remains disabled and BatchNorm has no
+                # running buffers, so this pass does not mutate model state.
+                probability_sum = None
                 sample_count = 0
+                with torch.no_grad():
+                    for batch in target_loader:
+                        target_x = (
+                            batch[0] if isinstance(batch, (tuple, list)) else batch
+                        )
+                        target_x = target_x.to(device, non_blocking=True)
+                        probabilities = self(target_x).softmax(dim=1)
+                        batch_sum = probabilities.sum(dim=0)
+                        probability_sum = (
+                            batch_sum
+                            if probability_sum is None
+                            else probability_sum + batch_sum
+                        )
+                        sample_count += target_x.size(0)
 
+                if sample_count == 0:
+                    raise RuntimeError("IM-TTA received an empty target loader.")
+                mean_probability = probability_sum / sample_count
+                marginal_entropy = -(
+                    mean_probability * mean_probability.clamp_min(1e-6).log()
+                ).sum()
+                marginal_gradient = mean_probability.clamp_min(1e-6).log() + 1.0
+
+                # Accumulate the exact full-target InfoMax gradient and update
+                # BatchNorm affine parameters once per target pass.
+                optimizer.zero_grad(set_to_none=True)
+                conditional_sum = 0.0
+                second_pass_count = 0
                 for batch in target_loader:
                     target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
                     target_x = target_x.to(device, non_blocking=True)
@@ -324,31 +352,31 @@ class HADATCFormer(ClassificationModule):
                     conditional_entropy = -(
                         probabilities * log_probabilities
                     ).sum(dim=1).mean()
-                    mean_probability = probabilities.mean(dim=0)
-                    marginal_entropy = -(
-                        mean_probability * mean_probability.clamp_min(1e-6).log()
-                    ).sum()
-                    loss = (
-                        conditional_entropy
-                        - self.im_tta_diversity_weight * marginal_entropy
-                    )
-
-                    optimizer.zero_grad(set_to_none=True)
-                    loss.backward()
-                    optimizer.step()
-
                     batch_size = target_x.size(0)
-                    loss_sum += loss.detach().item() * batch_size
+                    batch_fraction = batch_size / sample_count
+                    diversity_surrogate = (
+                        probabilities * marginal_gradient.unsqueeze(0)
+                    ).sum(dim=1).mean()
+                    loss = batch_fraction * (
+                        conditional_entropy
+                        + self.im_tta_diversity_weight * diversity_surrogate
+                    )
+                    loss.backward()
                     conditional_sum += conditional_entropy.detach().item() * batch_size
-                    marginal_sum += marginal_entropy.detach().item() * batch_size
-                    sample_count += batch_size
+                    second_pass_count += batch_size
 
-                if sample_count == 0:
-                    raise RuntimeError("IM-TTA received an empty target loader.")
+                if second_pass_count != sample_count:
+                    raise RuntimeError("IM-TTA target loader changed between passes.")
+                optimizer.step()
+                conditional_entropy_value = conditional_sum / sample_count
+                loss_value = (
+                    conditional_entropy_value
+                    - self.im_tta_diversity_weight * marginal_entropy.item()
+                )
                 final_stats = {
-                    "loss": loss_sum / sample_count,
-                    "conditional_entropy": conditional_sum / sample_count,
-                    "marginal_entropy": marginal_sum / sample_count,
+                    "loss": loss_value,
+                    "conditional_entropy": conditional_entropy_value,
+                    "marginal_entropy": marginal_entropy.item(),
                     "samples": sample_count,
                 }
                 self.print(

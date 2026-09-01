@@ -172,12 +172,40 @@ class BCICIV2aLOSO(BCICIV2a):
         # load the data
         train_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in train_datasets]
         val_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in val_datasets]
+        X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
+        X_target, _ = BaseDataModule._dataset_to_arrays(target_dataset)
+
+        if self.preprocessing_dict.get("riemannian_alignment", False):
+            # Fit one reference per subject using only that subject's training
+            # session. Source validation and held-out target test trials never
+            # contribute to their corresponding whitening matrices.
+            print(
+                f"Applying strict per-subject RA for LOSO target {self.subject_id} "
+                "(reference = each subject's training session)",
+                flush=True,
+            )
+            aligned_train_arrays = []
+            aligned_val_arrays = []
+            for source_id, train_array, val_array in zip(
+                train_subjects, train_arrays, val_arrays
+            ):
+                print(f"  RA source subject {source_id}", flush=True)
+                aligned_train, aligned_val = BaseDataModule._riemannian_align_many(
+                    train_array[0], val_array[0]
+                )
+                aligned_train_arrays.append((aligned_train, train_array[1]))
+                aligned_val_arrays.append((aligned_val, val_array[1]))
+            train_arrays = aligned_train_arrays
+            val_arrays = aligned_val_arrays
+            print(f"  RA target subject {self.subject_id}", flush=True)
+            X_target, X_test = BaseDataModule._riemannian_align_many(
+                X_target, X_test
+            )
+
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
         y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
         X_val = np.concatenate([arr[0] for arr in val_arrays], axis=0)
         y_val = np.concatenate([arr[1] for arr in val_arrays], axis=0)
-        X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
-        X_target, _ = BaseDataModule._dataset_to_arrays(target_dataset)
 
         # scale data
         if self.preprocessing_dict["z_scale"]:
