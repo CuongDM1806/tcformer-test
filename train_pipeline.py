@@ -111,6 +111,7 @@ def train_and_test(config):
         datamodule.train_dataset = None
         datamodule.val_dataset = None
         datamodule.target_dataset = None
+        datamodule.all_target_dataset = None
         gc.collect()
 
         st_test = time.time()
@@ -171,6 +172,22 @@ def train_and_test(config):
         if metrics_callback.train_acc and metrics_callback.val_acc:
             plot_curve(metrics_callback.train_acc, metrics_callback.val_acc,
                         "Accuracy", subject_id, result_dir / f"curves/subject_{subject_id}_acc.png")
+        if metrics_callback.train_loss and metrics_callback.val_all_sessions_loss:
+            plot_curve(
+                metrics_callback.train_loss,
+                metrics_callback.val_all_sessions_loss,
+                "Loss (target sessions 1+2)",
+                subject_id,
+                result_dir / f"curves/subject_{subject_id}_all_sessions_loss.png",
+            )
+        if metrics_callback.train_acc and metrics_callback.val_all_sessions_acc:
+            plot_curve(
+                metrics_callback.train_acc,
+                metrics_callback.val_all_sessions_acc,
+                "Accuracy (target sessions 1+2)",
+                subject_id,
+                result_dir / f"curves/subject_{subject_id}_all_sessions_acc.png",
+            )
 
         # Optionally save the trained model's weights
         if config.get("save_checkpoint", False):
