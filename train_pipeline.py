@@ -62,8 +62,9 @@ def train_and_test(config):
   
     # Initialize containers for tracking metrics across subjects
     test_accs, test_losses, test_kappas = [], [], []
-    train_times, test_times, response_times = [], [], []
-    all_confmats = []
+    all_sessions_accs, all_sessions_losses, all_sessions_kappas = [], [], []
+    train_times, test_times, all_sessions_test_times, response_times = [], [], [], []
+    all_confmats, all_sessions_confmats = [], []
 
     # Loop through each subject ID for training and testing   
     for subject_id in subject_ids:
@@ -107,6 +108,11 @@ def train_and_test(config):
         # prepare_data/setup again. For LOSO this reloads every subject and can
         # exhaust Colab RAM. Reuse the already prepared test loader instead.
         test_loader = datamodule.test_dataloader()
+        all_sessions_loader = (
+            datamodule.all_target_dataloader()
+            if datamodule.all_target_dataset is not None
+            else None
+        )
         datamodule.dataset = None
         datamodule.train_dataset = None
         datamodule.val_dataset = None
@@ -129,7 +135,7 @@ def train_and_test(config):
         subject_loss = float(subject_result["test_loss"])
         subject_kappa = float(subject_result["test_kappa"])
         print(
-            f"\nTARGET SUBJECT {subject_id} RESULT | "
+            f"\nTARGET SUBJECT {subject_id} SESSION 2 RESULT | "
             f"acc={subject_acc * 100:.2f}% | "
             f"loss={subject_loss:.4f} | "
             f"kappa={subject_kappa:.4f} | "
@@ -137,11 +143,41 @@ def train_and_test(config):
             flush=True,
         )
         print(
-            f">>> Target subject {subject_id} test | "
+            f">>> Target subject {subject_id} session 2 test | "
             f"acc={test_results[0]['test_acc'] * 100:.2f}% | "
             f"loss={test_results[0]['test_loss']:.4f} | "
             f"kappa={test_results[0]['test_kappa']:.4f}"
         )
+
+        # Session 2 remains the primary held-out LOSO benchmark. The combined
+        # Session 1+2 score is auxiliary because Session 1 was already consumed
+        # without labels by domain adaptation during training.
+        session_2_confmat = model.test_confmat.numpy().copy()
+        if all_sessions_loader is not None:
+            st_all_sessions_test = time.time()
+            all_sessions_results = trainer.test(
+                model, dataloaders=all_sessions_loader
+            )
+            all_sessions_duration = time.time() - st_all_sessions_test
+            all_sessions_test_times.append(all_sessions_duration)
+
+            all_sessions_result = all_sessions_results[0]
+            all_sessions_acc = float(all_sessions_result["test_acc"])
+            all_sessions_loss = float(all_sessions_result["test_loss"])
+            all_sessions_kappa = float(all_sessions_result["test_kappa"])
+            all_sessions_accs.append(all_sessions_acc)
+            all_sessions_losses.append(all_sessions_loss)
+            all_sessions_kappas.append(all_sessions_kappa)
+            all_sessions_confmats.append(model.test_confmat.numpy().copy())
+
+            print(
+                f"\nTARGET SUBJECT {subject_id} SESSION 1+2 RESULT "
+                f"(AUXILIARY) | acc={all_sessions_acc * 100:.2f}% | "
+                f"loss={all_sessions_loss:.4f} | "
+                f"kappa={all_sessions_kappa:.4f} | "
+                f"test_time={all_sessions_duration:.2f}s\n",
+                flush=True,
+            )
 
         # ---------------- LATENCY --------------
         # Deduce input shape from one sample of the test dataset
@@ -159,7 +195,7 @@ def train_and_test(config):
 
         # compute & store this subject's confusion matrix
         # The [C × C] tensor is inside the LightningModule:
-        cm = model.test_confmat.numpy()
+        cm = session_2_confmat
         all_confmats.append(cm)
 
         # plot per-subject if requested
@@ -168,7 +204,20 @@ def train_and_test(config):
                 cm, save_path=result_dir / f"confmats/confmat_subject_{subject_id}.png",
                 class_names=datamodule_cls.class_names,
                 title=f"Confusion Matrix – Subject {subject_id}",
-            )            
+            )
+            if all_sessions_loader is not None:
+                plot_confusion_matrix(
+                    all_sessions_confmats[-1],
+                    save_path=(
+                        result_dir
+                        / f"confmats/confmat_subject_{subject_id}_sessions_1_2.png"
+                    ),
+                    class_names=datamodule_cls.class_names,
+                    title=(
+                        f"Confusion Matrix - Subject {subject_id} "
+                        "Sessions 1+2 (Auxiliary)"
+                    ),
+                )
 
         # Plot and save loss and accuracy curves if available
         if metrics_callback.train_loss and metrics_callback.val_loss:
@@ -201,7 +250,11 @@ def train_and_test(config):
    
     # Summarize and save final results
     write_summary(result_dir, model_name, dataset_name, subject_ids, param_count,
-        test_accs, test_losses, test_kappas, train_times, test_times, response_times)
+        test_accs, test_losses, test_kappas, train_times, test_times, response_times,
+        all_sessions_accs=all_sessions_accs,
+        all_sessions_losses=all_sessions_losses,
+        all_sessions_kappas=all_sessions_kappas,
+        all_sessions_test_times=all_sessions_test_times)
     
     # plot the average if requested
     if config.get("plot_cm_average", True) and all_confmats:
@@ -211,6 +264,14 @@ def train_and_test(config):
             class_names= datamodule_cls.class_names,
             title="Average Confusion Matrix",
         )     
+    if config.get("plot_cm_average", True) and all_sessions_confmats:
+        avg_all_sessions_cm = np.mean(np.stack(all_sessions_confmats), axis=0)
+        plot_confusion_matrix(
+            avg_all_sessions_cm,
+            save_path=result_dir / "confmats/avg_confusion_matrix_sessions_1_2.png",
+            class_names=datamodule_cls.class_names,
+            title="Average Confusion Matrix - Target Sessions 1+2 (Auxiliary)",
+        )
 
 
 # Command-line argument parsing
