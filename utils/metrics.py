@@ -37,7 +37,9 @@ class MetricsCallback(Callback):
 # Helper to write summary results to a text file
 def write_summary(result_dir, model_name, dataset_name, subject_ids,
                    param_count, test_accs, test_losses, test_kappas,
-                   train_times, test_times, response_times):
+                   train_times, test_times, response_times,
+                   all_sessions_accs=None, all_sessions_losses=None,
+                   all_sessions_kappas=None, all_sessions_test_times=None):
     avg_test_acc = float(np.mean(test_accs))
     std_test_acc = float(np.std(test_accs))
     avg_test_kappa = float(np.mean(test_kappas))   # 🆕  average κ
@@ -47,9 +49,17 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
 
     total_train_time = float(np.sum(train_times))
     avg_response_time = float(np.mean(response_times))   # milliseconds
+    has_all_sessions = bool(all_sessions_accs)
+    if has_all_sessions:
+        avg_all_sessions_acc = float(np.mean(all_sessions_accs))
+        std_all_sessions_acc = float(np.std(all_sessions_accs))
+        avg_all_sessions_loss = float(np.mean(all_sessions_losses))
+        std_all_sessions_loss = float(np.std(all_sessions_losses))
+        avg_all_sessions_kappa = float(np.mean(all_sessions_kappas))
+        std_all_sessions_kappa = float(np.std(all_sessions_kappas))
 
 
-    with open(result_dir / "results.txt", "w") as f:
+    with open(result_dir / "results.txt", "w", encoding="utf-8") as f:
         f.write(f"Results for model: {model_name}\n")
         f.write(f"#Params: {param_count}\n")
         f.write(f"Dataset: {dataset_name}\n")
@@ -59,11 +69,19 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
         for i, subject_id in enumerate(subject_ids):
             f.write(
                 f"Subject {subject_id} => Train Time: {train_times[i]:.2f}m, "
-                f"Test Time: {test_times[i]:.2f}s, "
-                f"Test Acc: {test_accs[i]:.4f}, "
-                f"Test Loss: {test_losses[i]:.4f}, "
-                f"Test Kappa: {test_kappas[i]:.4f}\n"   # 🆕 κ output
+                f"Session 2 Test Time: {test_times[i]:.2f}s, "
+                f"Session 2 Acc: {test_accs[i]:.4f}, "
+                f"Session 2 Loss: {test_losses[i]:.4f}, "
+                f"Session 2 Kappa: {test_kappas[i]:.4f}"
             )
+            if has_all_sessions:
+                f.write(
+                    f", Sessions 1+2 Time: {all_sessions_test_times[i]:.2f}s, "
+                    f"Sessions 1+2 Acc: {all_sessions_accs[i]:.4f}, "
+                    f"Sessions 1+2 Loss: {all_sessions_losses[i]:.4f}, "
+                    f"Sessions 1+2 Kappa: {all_sessions_kappas[i]:.4f}"
+                )
+            f.write("\n")
 
         f.write("\n--- Summary Statistics ---\n")
         f.write(f"Average Test Accuracy: {avg_test_acc * 100:.2f} ± {std_test_acc * 100:.2f}\n")
@@ -71,6 +89,23 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
         f.write(f"Average Test Loss:     {avg_test_loss:.3f} ± {std_test_loss:.3f}\n")
         f.write(f"Total Training Time: {total_train_time:.2f} min\n")
         f.write(f"Average Response Time: {avg_response_time:.2f} ms\n")
+        if has_all_sessions:
+            f.write("\n--- Auxiliary Target Sessions 1+2 ---\n")
+            f.write(
+                f"Average Sessions 1+2 Accuracy: "
+                f"{avg_all_sessions_acc * 100:.2f} ± "
+                f"{std_all_sessions_acc * 100:.2f}\n"
+            )
+            f.write(
+                f"Average Sessions 1+2 Kappa:    "
+                f"{avg_all_sessions_kappa:.3f} ± "
+                f"{std_all_sessions_kappa:.3f}\n"
+            )
+            f.write(
+                f"Average Sessions 1+2 Loss:     "
+                f"{avg_all_sessions_loss:.3f} ± "
+                f"{std_all_sessions_loss:.3f}\n"
+            )
 
     print("\n=== Summary ===")
     print(f"Average Test Accuracy: {avg_test_acc * 100:.2f} ± {std_test_acc * 100:.2f}")
@@ -78,3 +113,20 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
     print(f"Average Test Loss:     {avg_test_loss:.3f} ± {std_test_loss:.3f}")
     print(f"Total Training Time: {total_train_time:.2f} min")
     print(f"Average Response Time: {avg_response_time:.2f} ms")
+    if has_all_sessions:
+        print("\n=== Auxiliary Target Sessions 1+2 ===")
+        print(
+            f"Average Sessions 1+2 Accuracy: "
+            f"{avg_all_sessions_acc * 100:.2f} ± "
+            f"{std_all_sessions_acc * 100:.2f}"
+        )
+        print(
+            f"Average Sessions 1+2 Kappa:    "
+            f"{avg_all_sessions_kappa:.3f} ± "
+            f"{std_all_sessions_kappa:.3f}"
+        )
+        print(
+            f"Average Sessions 1+2 Loss:     "
+            f"{avg_all_sessions_loss:.3f} ± "
+            f"{std_all_sessions_loss:.3f}"
+        )
