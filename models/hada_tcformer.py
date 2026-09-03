@@ -131,6 +131,9 @@ class HADATCFormer(ClassificationModule):
         kv_heads: int = 4,
         trans_depth: int = 5,
         trans_dropout: float = 0.4,
+        sequence_block_types=None,
+        mamba_d_state: int = 8,
+        mamba_d_conv: int = 3,
         aligner_hidden_dim: int = 128,
         domain_hidden_dim: int = 128,
         adaptation_dropout: float = 0.3,
@@ -162,6 +165,9 @@ class HADATCFormer(ClassificationModule):
             kv_heads=kv_heads,
             trans_depth=trans_depth,
             trans_dropout=trans_dropout,
+            sequence_block_types=sequence_block_types,
+            mamba_d_state=mamba_d_state,
+            mamba_d_conv=mamba_d_conv,
         )
         super().__init__(model, n_classes, **kwargs)
         self.aligner = ResidualFeatureAligner(

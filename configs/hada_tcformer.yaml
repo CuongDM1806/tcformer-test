@@ -60,6 +60,11 @@ model_kwargs:
   kv_heads: 2
   trans_depth: 5
   trans_dropout: 0.4
+  # Hybrid encoder: replace two of five Transformer blocks with lightweight,
+  # dependency-free selective SSM blocks instead of adding extra blocks.
+  sequence_block_types: [transformer, mamba_forward, transformer, mamba_backward, transformer]
+  mamba_d_state: 8
+  mamba_d_conv: 3
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3

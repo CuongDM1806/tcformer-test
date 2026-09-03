@@ -384,6 +384,93 @@ class _TransformerBlock(nn.Module):
         x = x + self.drop_path(self.attn(self.norm1(x), cos, sin))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
+
+
+class _SelectiveSSMMixer(nn.Module):
+    """Small, dependency-free Mamba-style selective state-space mixer.
+
+    The recurrent state is maintained per feature channel.  Input-dependent
+    step sizes and B/C projections select what is written to and read from the
+    state, while the diagonal negative A parameter keeps the recurrence stable.
+    """
+
+    def __init__(self, d_model: int, d_state: int = 8, d_conv: int = 3):
+        super().__init__()
+        if d_state < 1 or d_conv < 1:
+            raise ValueError("mamba_d_state and mamba_d_conv must be positive.")
+        self.d_model = d_model
+        self.d_state = d_state
+        self.in_proj = nn.Linear(d_model, 2 * d_model, bias=False)
+        self.local_conv = nn.Conv1d(
+            d_model, d_model, d_conv, groups=d_model, padding=d_conv - 1
+        )
+        self.x_proj = nn.Linear(d_model, d_model + 2 * d_state, bias=False)
+        self.A_log = nn.Parameter(
+            torch.log(torch.arange(1, d_state + 1, dtype=torch.float32))
+            .unsqueeze(0)
+            .repeat(d_model, 1)
+        )
+        self.D = nn.Parameter(torch.ones(d_model))
+        self.out_proj = nn.Linear(d_model, d_model, bias=False)
+
+    def forward(self, x: Tensor) -> Tensor:
+        batch, length, _ = x.shape
+        values, gate = self.in_proj(x).chunk(2, dim=-1)
+        values = self.local_conv(values.transpose(1, 2))[..., :length]
+        values = torch.nn.functional.silu(values.transpose(1, 2))
+
+        delta_raw, B, C = torch.split(
+            self.x_proj(values), [self.d_model, self.d_state, self.d_state], dim=-1
+        )
+        delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
+        A = -torch.exp(self.A_log).to(dtype=x.dtype)
+        state = x.new_zeros(batch, self.d_model, self.d_state)
+        outputs = []
+        for step in range(length):
+            dt = delta[:, step, :].unsqueeze(-1)
+            decay = torch.exp(dt * A.unsqueeze(0))
+            state = (
+                decay * state
+                + dt
+                * B[:, step, :].unsqueeze(1)
+                * values[:, step, :].unsqueeze(-1)
+            )
+            readout = (state * C[:, step, :].unsqueeze(1)).sum(dim=-1)
+            outputs.append(readout + self.D * values[:, step, :])
+
+        y = torch.stack(outputs, dim=1)
+        y = y * torch.nn.functional.silu(gate)
+        return self.out_proj(y)
+
+
+class _SelectiveSSMBlock(nn.Module):
+    """Pre-norm residual selective SSM, optionally scanning time backwards."""
+
+    def __init__(
+        self,
+        d_model: int,
+        d_state: int = 8,
+        d_conv: int = 3,
+        dropout: float = 0.4,
+        drop_path_rate: float = 0.0,
+        reverse: bool = False,
+    ):
+        super().__init__()
+        self.reverse = reverse
+        self.norm = nn.LayerNorm(d_model)
+        self.mixer = _SelectiveSSMMixer(d_model, d_state, d_conv)
+        self.dropout = nn.Dropout(dropout)
+        self.drop_path = DropPath(drop_path_rate)
+
+    def forward(self, x: Tensor, cos: Tensor = None, sin: Tensor = None) -> Tensor:
+        residual = x
+        mixed = self.norm(x)
+        if self.reverse:
+            mixed = torch.flip(mixed, dims=(1,))
+        mixed = self.mixer(mixed)
+        if self.reverse:
+            mixed = torch.flip(mixed, dims=(1,))
+        return residual + self.drop_path(self.dropout(mixed))
         
 #   helper
 def _xavier_zero_bias(module: nn.Module) -> None:
@@ -416,6 +503,9 @@ class TCFormerModule(nn.Module):
             trans_dropout: float = 0.4,
             drop_path_max: float = 0.25, 
             trans_depth: int = 5,
+            sequence_block_types=None,
+            mamba_d_state: int = 8,
+            mamba_d_conv: int = 3,
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -445,11 +535,33 @@ class TCFormerModule(nn.Module):
 
         self.register_buffer("_cos", None, persistent=False)
         self.register_buffer("_sin", None, persistent=False)
-        self.transformer = nn.ModuleList([
-            _TransformerBlock(self.d_model, q_heads, kv_heads, dropout=trans_dropout, 
-                              drop_path_rate=drop_rates[i].item())
-            for i in range(trans_depth)
-        ])
+        if sequence_block_types is None:
+            sequence_block_types = ["transformer"] * trans_depth
+        if len(sequence_block_types) != trans_depth:
+            raise ValueError("sequence_block_types length must equal trans_depth.")
+        valid_block_types = {"transformer", "mamba_forward", "mamba_backward"}
+        unknown = set(sequence_block_types) - valid_block_types
+        if unknown:
+            raise ValueError(f"Unknown sequence block types: {sorted(unknown)}")
+        self.sequence_block_types = tuple(sequence_block_types)
+        self.head_dim = self.d_model // q_heads
+        self.transformer = nn.ModuleList()
+        for i, block_type in enumerate(self.sequence_block_types):
+            if block_type == "transformer":
+                block = _TransformerBlock(
+                    self.d_model, q_heads, kv_heads, dropout=trans_dropout,
+                    drop_path_rate=drop_rates[i].item()
+                )
+            else:
+                block = _SelectiveSSMBlock(
+                    self.d_model,
+                    d_state=mamba_d_state,
+                    d_conv=mamba_d_conv,
+                    dropout=trans_dropout,
+                    drop_path_rate=drop_rates[i].item(),
+                    reverse=block_type == "mamba_backward",
+                )
+            self.transformer.append(block)
 
         self.reduce = nn.Sequential(
             Rearrange("b t c -> b c t"),            # 1. rearrange for Conv1d over channels
@@ -492,7 +604,7 @@ class TCFormerModule(nn.Module):
         
     def _rotary_cache(self, seq_len: int, device: torch.device):
         """Build (or reuse) RoPE caches for the current sequence length."""
-        head_dim = self.transformer[0].attn.head_dim  # use per‑head dimension, **not** d_model
+        head_dim = self.head_dim  # use per-head dimension, not d_model
         if (self._cos is None) or (self._cos.shape[0] < seq_len):
             cos, sin = _build_rotary_cache(head_dim, seq_len, device)
             self._cos, self._sin = cos.to(device), sin.to(device)
@@ -517,6 +629,9 @@ class TCFormer(ClassificationModule):
             kv_heads: int = 4,
             trans_depth: int = 5,    
             trans_dropout: float = 0.4,
+            sequence_block_types=None,
+            mamba_d_state: int = 8,
+            mamba_d_conv: int = 3,
             **kwargs
         ):
         model = TCFormerModule(
@@ -537,6 +652,9 @@ class TCFormer(ClassificationModule):
             kv_heads = kv_heads, 
             trans_depth = trans_depth,
             trans_dropout = trans_dropout,
+            sequence_block_types=sequence_block_types,
+            mamba_d_state=mamba_d_state,
+            mamba_d_conv=mamba_d_conv,
         )
         super().__init__(model, n_classes, **kwargs)
     
