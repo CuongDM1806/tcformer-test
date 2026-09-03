@@ -138,9 +138,6 @@ class HADATCFormer(ClassificationModule):
         mmd_weight: float = 0.5,
         temporal_mmd_weight: float = 0.1,
         light_adaptation_factor: float = 0.25,
-        im_tta_steps: int = 0,
-        im_tta_lr: float = 1e-4,
-        im_tta_diversity_weight: float = 1.0,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -178,15 +175,6 @@ class HADATCFormer(ClassificationModule):
         if not 0.0 < light_adaptation_factor <= 1.0:
             raise ValueError("light_adaptation_factor must be in (0, 1].")
         self.light_adaptation_factor = light_adaptation_factor
-        if im_tta_steps < 0:
-            raise ValueError("im_tta_steps must be non-negative.")
-        if im_tta_lr <= 0.0:
-            raise ValueError("im_tta_lr must be positive.")
-        if im_tta_diversity_weight < 0.0:
-            raise ValueError("im_tta_diversity_weight must be non-negative.")
-        self.im_tta_steps = int(im_tta_steps)
-        self.im_tta_lr = float(im_tta_lr)
-        self.im_tta_diversity_weight = float(im_tta_diversity_weight)
         self.log_every_n_batches = max(1, int(log_every_n_batches))
         self._epoch_started_at = None
         # One LOSO run has one target subject. These EMAs therefore summarize
@@ -262,135 +250,6 @@ class HADATCFormer(ClassificationModule):
 
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
-
-    def adapt_to_target(self, target_loader):
-        """Adapt BatchNorm affine parameters using unlabeled target trials.
-
-        The information-maximization objective sharpens individual target
-        predictions while maintaining a diverse batch-level class marginal.
-        Target labels may be present in the evaluation loader but are ignored.
-        """
-        if self.im_tta_steps == 0:
-            return None
-
-        self.eval()
-        for parameter in self.parameters():
-            parameter.requires_grad_(False)
-
-        batch_norm_modules = []
-        adaptation_parameters = []
-        for module in self.model.modules():
-            if not isinstance(module, nn.modules.batchnorm._BatchNorm):
-                continue
-            if not module.affine:
-                continue
-            module.train()
-            module.track_running_stats = False
-            module.running_mean = None
-            module.running_var = None
-            module.weight.requires_grad_(True)
-            module.bias.requires_grad_(True)
-            batch_norm_modules.append(module)
-            adaptation_parameters.extend((module.weight, module.bias))
-
-        if not adaptation_parameters:
-            raise RuntimeError(
-                "IM-TTA requires at least one affine BatchNorm layer in TCFormer."
-            )
-
-        optimizer = torch.optim.Adam(adaptation_parameters, lr=self.im_tta_lr)
-        parameter_count = sum(parameter.numel() for parameter in adaptation_parameters)
-        self.print(
-            f"IM-TTA start | steps={self.im_tta_steps} | lr={self.im_tta_lr:g} | "
-            f"BN_layers={len(batch_norm_modules)} | trainable_params={parameter_count}"
-        )
-
-        device = next(self.parameters()).device
-        final_stats = None
-        with torch.enable_grad():
-            for step in range(1, self.im_tta_steps + 1):
-                # First pass estimates the class marginal over the complete
-                # target subject. Dropout remains disabled and BatchNorm has no
-                # running buffers, so this pass does not mutate model state.
-                probability_sum = None
-                sample_count = 0
-                with torch.no_grad():
-                    for batch in target_loader:
-                        target_x = (
-                            batch[0] if isinstance(batch, (tuple, list)) else batch
-                        )
-                        target_x = target_x.to(device, non_blocking=True)
-                        probabilities = self(target_x).softmax(dim=1)
-                        batch_sum = probabilities.sum(dim=0)
-                        probability_sum = (
-                            batch_sum
-                            if probability_sum is None
-                            else probability_sum + batch_sum
-                        )
-                        sample_count += target_x.size(0)
-
-                if sample_count == 0:
-                    raise RuntimeError("IM-TTA received an empty target loader.")
-                mean_probability = probability_sum / sample_count
-                marginal_entropy = -(
-                    mean_probability * mean_probability.clamp_min(1e-6).log()
-                ).sum()
-                marginal_gradient = mean_probability.clamp_min(1e-6).log() + 1.0
-
-                # Accumulate the exact full-target InfoMax gradient and update
-                # BatchNorm affine parameters once per target pass.
-                optimizer.zero_grad(set_to_none=True)
-                conditional_sum = 0.0
-                second_pass_count = 0
-                for batch in target_loader:
-                    target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
-                    target_x = target_x.to(device, non_blocking=True)
-                    logits = self.forward(target_x)
-                    probabilities = logits.softmax(dim=1)
-                    log_probabilities = probabilities.clamp_min(1e-6).log()
-
-                    conditional_entropy = -(
-                        probabilities * log_probabilities
-                    ).sum(dim=1).mean()
-                    batch_size = target_x.size(0)
-                    batch_fraction = batch_size / sample_count
-                    diversity_surrogate = (
-                        probabilities * marginal_gradient.unsqueeze(0)
-                    ).sum(dim=1).mean()
-                    loss = batch_fraction * (
-                        conditional_entropy
-                        + self.im_tta_diversity_weight * diversity_surrogate
-                    )
-                    loss.backward()
-                    conditional_sum += conditional_entropy.detach().item() * batch_size
-                    second_pass_count += batch_size
-
-                if second_pass_count != sample_count:
-                    raise RuntimeError("IM-TTA target loader changed between passes.")
-                optimizer.step()
-                conditional_entropy_value = conditional_sum / sample_count
-                loss_value = (
-                    conditional_entropy_value
-                    - self.im_tta_diversity_weight * marginal_entropy.item()
-                )
-                final_stats = {
-                    "loss": loss_value,
-                    "conditional_entropy": conditional_entropy_value,
-                    "marginal_entropy": marginal_entropy.item(),
-                    "samples": sample_count,
-                }
-                self.print(
-                    f"IM-TTA step {step}/{self.im_tta_steps} | "
-                    f"loss={final_stats['loss']:.4f} | "
-                    f"cond_entropy={final_stats['conditional_entropy']:.4f} | "
-                    f"marg_entropy={final_stats['marginal_entropy']:.4f} | "
-                    f"target_samples={sample_count}"
-                )
-
-        # Keep dropout disabled for evaluation. BatchNorm continues to use
-        # target batch statistics because its running buffers are disabled.
-        self.eval()
-        return final_stats
 
     def training_step(self, batch, batch_idx):
         if not isinstance(batch, dict) or "source" not in batch or "target" not in batch:
