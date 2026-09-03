@@ -175,7 +175,23 @@ class BCICIV2aLOSO(BCICIV2a):
         X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
         X_target, y_target = BaseDataModule._dataset_to_arrays(target_dataset)
 
-        if self.preprocessing_dict.get("riemannian_alignment", False):
+        alignment_mode = self.preprocessing_dict.get("covariance_alignment")
+        if alignment_mode is None:
+            alignment_mode = (
+                "riemannian_identity"
+                if self.preprocessing_dict.get("riemannian_alignment", False)
+                else "none"
+            )
+        valid_alignment_modes = {
+            "none", "riemannian_identity", "whiten_recolor_target"
+        }
+        if alignment_mode not in valid_alignment_modes:
+            raise ValueError(
+                f"Unknown covariance_alignment={alignment_mode!r}; expected one of "
+                f"{sorted(valid_alignment_modes)}."
+            )
+
+        if alignment_mode == "riemannian_identity":
             # Fit one reference per subject using only that subject's training
             # session. Source validation and held-out target test trials never
             # contribute to their corresponding whitening matrices.
@@ -201,6 +217,31 @@ class BCICIV2aLOSO(BCICIV2a):
             X_target, X_test = BaseDataModule._riemannian_align_many(
                 X_target, X_test
             )
+        elif alignment_mode == "whiten_recolor_target":
+            # Estimate the destination from the target training session only.
+            # Target labels and held-out target test trials are never accessed.
+            target_reference = BaseDataModule._riemannian_reference(X_target)
+            print(
+                f"Applying source-to-target whitening + recoloring for LOSO "
+                f"target {self.subject_id} (destination = unlabeled target "
+                "training-session reference)",
+                flush=True,
+            )
+            recolored_train_arrays = []
+            recolored_val_arrays = []
+            for source_id, train_array, val_array in zip(
+                train_subjects, train_arrays, val_arrays
+            ):
+                print(f"  Recolor source subject {source_id} -> target", flush=True)
+                recolored_train, recolored_val = (
+                    BaseDataModule._whiten_recolor_many(
+                        train_array[0], target_reference, val_array[0]
+                    )
+                )
+                recolored_train_arrays.append((recolored_train, train_array[1]))
+                recolored_val_arrays.append((recolored_val, val_array[1]))
+            train_arrays = recolored_train_arrays
+            val_arrays = recolored_val_arrays
 
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
         y = np.concatenate([arr[1] for arr in train_arrays], axis=0)

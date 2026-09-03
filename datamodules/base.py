@@ -192,13 +192,18 @@ class BaseDataModule(pl.LightningDataModule):
         return mean
 
     @staticmethod
-    def _riemannian_whitener(X):
-        """Fit an OAS/Riemannian reference and return its inverse square root."""
+    def _riemannian_reference(X):
+        """Estimate the affine-invariant mean of per-trial OAS covariances."""
         covariances = np.stack(
             [OAS().fit(trial.T.astype(np.float64)).covariance_ for trial in X],
             axis=0,
         )
-        reference = BaseDataModule._riemannian_mean(covariances)
+        return BaseDataModule._riemannian_mean(covariances)
+
+    @staticmethod
+    def _riemannian_whitener(X):
+        """Fit an OAS/Riemannian reference and return its inverse square root."""
+        reference = BaseDataModule._riemannian_reference(X)
         return BaseDataModule._spd_power(reference, -0.5)
 
     @staticmethod
@@ -209,6 +214,30 @@ class BaseDataModule(pl.LightningDataModule):
         def transform(array):
             aligned = np.einsum("cd,ndt->nct", whitener, array, optimize=True)
             return aligned.astype(array.dtype, copy=False)
+
+        return (
+            transform(X_reference),
+            *(transform(array) for array in other_arrays),
+        )
+
+    @staticmethod
+    def _whiten_recolor_many(X_reference, destination_reference, *other_arrays):
+        """Whiten one domain and recolor it to a destination SPD reference.
+
+        The transform A = G_dst^(1/2) G_src^(-1/2) satisfies
+        A G_src A.T = G_dst.  Only ``X_reference`` estimates the source
+        reference; the same transform is then applied to the other splits.
+        """
+        source_reference = BaseDataModule._riemannian_reference(X_reference)
+        source_whitener = BaseDataModule._spd_power(source_reference, -0.5)
+        destination_color = BaseDataModule._spd_power(destination_reference, 0.5)
+        transform_matrix = destination_color @ source_whitener
+
+        def transform(array):
+            recolored = np.einsum(
+                "cd,ndt->nct", transform_matrix, array, optimize=True
+            )
+            return recolored.astype(array.dtype, copy=False)
 
         return (
             transform(X_reference),
