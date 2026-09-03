@@ -584,7 +584,11 @@ class TCFormerModule(nn.Module):
         _, _, T = conv_features.shape
 
         tokens = self.rearrange(self.mix(conv_features)) 
-        cos, sin = self._rotary_cache(T , tokens.device)
+        if "transformer" in self.sequence_block_types:
+            cos, sin = self._rotary_cache(T, tokens.device)
+        else:
+            # A full selective-SSM stack needs neither attention nor RoPE.
+            cos, sin = None, None
         for blk in self.transformer:
             tokens = blk(tokens, cos, sin)
         tran_features = self.reduce(tokens)

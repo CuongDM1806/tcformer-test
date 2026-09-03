@@ -56,13 +56,13 @@ model_kwargs:
   pool_length_2: 7
   dropout_conv: 0.4
   use_group_attn: true
-  q_heads: 4
-  kv_heads: 2
+  # Legacy names retained by TCFormerModule for sequence depth and dropout.
+  # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
   trans_depth: 5
   trans_dropout: 0.4
-  # Hybrid encoder: replace two of five Transformer blocks with lightweight,
-  # dependency-free selective SSM blocks instead of adding extra blocks.
-  sequence_block_types: [transformer, mamba_forward, transformer, mamba_backward, transformer]
+  # Full five-block lightweight Mamba-style encoder. Alternating scan direction
+  # gives both temporal directions without doubling each block's parameters.
+  sequence_block_types: [mamba_forward, mamba_backward, mamba_forward, mamba_backward, mamba_forward]
   mamba_d_state: 8
   mamba_d_conv: 3
   tcn_depth: 2
