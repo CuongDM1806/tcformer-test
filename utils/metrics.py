@@ -9,6 +9,7 @@ class MetricsCallback(Callback):
         super().__init__()
         self.train_loss, self.val_loss = [], []
         self.train_acc, self.val_acc = [], []
+        self.val_all_sessions_loss, self.val_all_sessions_acc = [], []
 
     def on_train_epoch_end(self, trainer, pl_module):
         metrics = trainer.callback_metrics
@@ -23,6 +24,14 @@ class MetricsCallback(Callback):
             self.val_loss.append(metrics["val_loss"].cpu().item())
         if "val_acc" in metrics:
             self.val_acc.append(metrics["val_acc"].cpu().item())
+        if "val_all_sessions_loss" in metrics:
+            self.val_all_sessions_loss.append(
+                metrics["val_all_sessions_loss"].cpu().item()
+            )
+        if "val_all_sessions_acc" in metrics:
+            self.val_all_sessions_acc.append(
+                metrics["val_all_sessions_acc"].cpu().item()
+            )
 
 
 # Helper to write summary results to a text file
