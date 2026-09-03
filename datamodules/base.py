@@ -36,6 +36,7 @@ class BaseDataModule(pl.LightningDataModule):
     train_dataset = None
     test_dataset = None
     target_dataset = None
+    all_target_dataset = None
 
     def __init__(self, preprocessing_dict: Dict, subject_id: int):
         super(BaseDataModule, self).__init__()
@@ -81,7 +82,22 @@ class BaseDataModule(pl.LightningDataModule):
         return {"source": source_loader, "target": self._target_train_dataloader()}
 
     def val_dataloader(self) -> DataLoader:
-        return self.test_dataloader()
+        session_2_loader = self.test_dataloader()
+        if self.all_target_dataset is None:
+            return session_2_loader
+        return [session_2_loader, self.all_target_dataloader()]
+
+    def all_target_dataloader(self) -> DataLoader:
+        """Evaluate the target subject on session 1 and session 2 together."""
+        test_num_workers = self.preprocessing_dict.get("test_num_workers", 0)
+        return DataLoader(
+            self.all_target_dataset,
+            batch_size=self.preprocessing_dict["batch_size"],
+            num_workers=test_num_workers,
+            pin_memory=True,
+            persistent_workers=test_num_workers > 0,
+            **({"prefetch_factor": 2} if test_num_workers > 0 else {}),
+        )
 
     def test_dataloader(self) -> DataLoader:
         # Test sets are small.  On Windows, worker processes can duplicate a

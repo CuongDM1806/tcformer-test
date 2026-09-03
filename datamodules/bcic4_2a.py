@@ -173,7 +173,7 @@ class BCICIV2aLOSO(BCICIV2a):
         train_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in train_datasets]
         val_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in val_datasets]
         X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
-        X_target, _ = BaseDataModule._dataset_to_arrays(target_dataset)
+        X_target, y_target = BaseDataModule._dataset_to_arrays(target_dataset)
 
         alignment_mode = self.preprocessing_dict.get("covariance_alignment")
         if alignment_mode is None:
@@ -258,6 +258,10 @@ class BCICIV2aLOSO(BCICIV2a):
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
+        self.all_target_dataset = BaseDataModule._make_tensor_dataset(
+            np.concatenate((X_target, X_test), axis=0),
+            np.concatenate((y_target, y_test), axis=0),
+        )
         self._setup_complete = True
 
         # The train/validation/target/test tensors are now self-contained.

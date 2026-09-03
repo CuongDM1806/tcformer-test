@@ -99,9 +99,13 @@ class ClassificationModule(pl.LightningModule):
         loss, _ = self.shared_step(batch, batch_idx, mode="train")
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        loss, acc = self.shared_step(batch, batch_idx, mode="val")
-        return {"val_loss": loss, "val_acc": acc}
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+        # BCIC-IV-2a LOSO exposes two evaluation views every epoch:
+        #   loader 0: target session 2 (the existing primary metric)
+        #   loader 1: target sessions 1+2 (a calibration-inclusive metric)
+        mode = "val" if dataloader_idx == 0 else "val_all_sessions"
+        loss, acc = self.shared_step(batch, batch_idx, mode=mode)
+        return {f"{mode}_loss": loss, f"{mode}_acc": acc}
 
     def test_step(self, batch, batch_idx):
         loss, acc = self.shared_step(batch, batch_idx, mode="test")
@@ -122,8 +126,14 @@ class ClassificationModule(pl.LightningModule):
         loss = F.cross_entropy(y_hat, y)
         acc = accuracy(y_hat, y, task="multiclass", num_classes=self.hparams.n_classes)
         # log scalar metrics
-        self.log(f"{mode}_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log(f"{mode}_acc", acc, prog_bar=True, on_step=False, on_epoch=True)
+        self.log(
+            f"{mode}_loss", loss, prog_bar=True, on_step=False, on_epoch=True,
+            add_dataloader_idx=False,
+        )
+        self.log(
+            f"{mode}_acc", acc, prog_bar=True, on_step=False, on_epoch=True,
+            add_dataloader_idx=False,
+        )
 
         if mode == "test":
             preds = torch.argmax(y_hat, dim=-1)
@@ -135,7 +145,7 @@ class ClassificationModule(pl.LightningModule):
                     prog_bar=False, on_step=False, on_epoch=True)
 
         return loss, acc
-    
+
     # grab confusion matrix once per test epoch
     def on_test_epoch_end(self):
         # 1) raw counts  ───────────────────────────────────────────
@@ -152,4 +162,3 @@ class ClassificationModule(pl.LightningModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         x, _ = batch
         return torch.argmax(self.forward(x), dim=-1)
-    
