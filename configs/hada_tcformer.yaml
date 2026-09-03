@@ -19,9 +19,10 @@ preprocessing:
     start: 0.0
     stop: 0.0
     batch_size: 48
-    # Per-subject OAS covariance + affine-invariant Riemannian whitening.
-    # Each whitener is fit on that subject's training session only.
-    riemannian_alignment: true
+    # Fit OAS/Riemannian references from each source training session and the
+    # unlabeled target training session. Each source is whitened and recolored
+    # to the target reference; target labels/test trials are never used.
+    covariance_alignment: whiten_recolor_target
   bcic2b:
     sfreq: 250
     low_cut: null
