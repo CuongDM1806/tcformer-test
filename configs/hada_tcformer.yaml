@@ -57,8 +57,11 @@ preprocessing:
     test_num_workers: 0
     validation_fraction: 0.2
     # Disabled by default: 64-channel Riemannian means are computationally
-    # expensive. HADA and IM-TTA remain enabled by the model configuration.
+    # expensive.
     riemannian_alignment: false
+    # Keep the IM-TTA implementation available, but skip it for PhysioNet.
+    model_overrides:
+      im_tta_steps: 0
 
 model: "HADATCFormer"
 model_kwargs:

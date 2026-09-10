@@ -59,16 +59,31 @@ class PhysioNetMILOSO(BaseDataModule):
                     f"{list(split_by_subject)}"
                 )
             X, y = BaseDataModule._dataset_to_arrays(subject_dataset)
+            expected_classes = np.arange(self.classes)
+            observed_classes, class_counts = np.unique(y, return_counts=True)
+            if X.ndim != 3 or X.shape[1] != self.channels:
+                raise RuntimeError(
+                    f"PhysioNet S{subject_id:03d} has invalid EEG shape "
+                    f"{tuple(X.shape)}; expected [trials, {self.channels}, time]."
+                )
+            if not np.array_equal(observed_classes, expected_classes):
+                raise RuntimeError(
+                    f"PhysioNet S{subject_id:03d} has classes "
+                    f"{observed_classes.tolist()}; expected "
+                    f"{expected_classes.tolist()}."
+                )
             arrays[subject_id] = (
                 X.astype(np.float32, copy=False),
                 y.astype(np.int64, copy=False),
             )
             print(
                 f"PhysioNet S{subject_id:03d} | trials={len(y)} | "
-                f"shape={tuple(X.shape)}",
+                f"class_counts={class_counts.tolist()} | shape={tuple(X.shape)}",
                 flush=True,
             )
 
+        if set(arrays) != set(self.all_subject_ids):
+            raise RuntimeError("PhysioNet loader did not materialize subjects 1..20.")
         type(self)._subject_arrays_cache = arrays
         return arrays
 
@@ -94,6 +109,8 @@ class PhysioNetMILOSO(BaseDataModule):
             for subject_id in self.all_subject_ids
             if subject_id != self.subject_id
         ]
+        if len(source_ids) != 19 or self.subject_id in source_ids:
+            raise RuntimeError("Invalid PhysioNet LOSO source/target separation.")
         train_arrays = []
         val_arrays = []
         for source_id in source_ids:
@@ -105,6 +122,14 @@ class PhysioNetMILOSO(BaseDataModule):
                 random_state=seed + source_id,
                 stratify=y_source,
             )
+            if np.intersect1d(train_indices, val_indices).size:
+                raise RuntimeError(
+                    f"PhysioNet S{source_id:03d} train/validation overlap."
+                )
+            if len(train_indices) + len(val_indices) != len(indices):
+                raise RuntimeError(
+                    f"PhysioNet S{source_id:03d} split lost source trials."
+                )
             X_train = X_source[train_indices]
             y_train = y_source[train_indices]
             X_val = X_source[val_indices]

@@ -328,6 +328,14 @@ def run():
         config["max_epochs"] = config["max_epochs_2b"] if args.dataset == "bcic2b" else config["max_epochs"]
 
     config["preprocessing"] = config["preprocessing"][args.dataset]
+    dataset_model_overrides = config["preprocessing"].pop("model_overrides", {})
+    if dataset_model_overrides:
+        config["model_kwargs"].update(dataset_model_overrides)
+        print(
+            f"Dataset-specific model overrides ({args.dataset}): "
+            f"{dataset_model_overrides}",
+            flush=True,
+        )
     config["preprocessing"]["z_scale"] = config["z_scale"]
     config["preprocessing"]["domain_adaptation"] = config.get("domain_adaptation", False)
     # Override interaug if specified
