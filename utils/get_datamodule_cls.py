@@ -1,5 +1,6 @@
 from datamodules import BCICIII_IVa, BCICIII_IVaLOSO, BCICIV2a, BCICIV2aTVT,\
-    BCICIV2aLOSO, BCICIV2b, BCICIV2bLOSO, HighGamma, HighGammaLOSO, REH_MI
+    BCICIV2aLOSO, BCICIV2b, BCICIV2bLOSO, HighGamma, HighGammaLOSO, \
+    PhysioNetMILOSO, REH_MI
 
 
 def get_datamodule_cls(dataset_name):
@@ -21,6 +22,8 @@ def get_datamodule_cls(dataset_name):
         datamodule_cls = HighGamma
     elif dataset_name == "hgd_loso":
         datamodule_cls = HighGammaLOSO
+    elif dataset_name == "physionet_loso":
+        datamodule_cls = PhysioNetMILOSO
     elif dataset_name == "reh_mi":
         datamodule_cls = REH_MI
     else:

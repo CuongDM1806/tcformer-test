@@ -45,6 +45,20 @@ preprocessing:
     stop: 0.0
     batch_size: 48
     remove_artifacts: true
+  physionet:
+    # First 20 PhysioNet EEGMMIDB subjects; four imagined movement classes.
+    sfreq: 160
+    low_cut: 4
+    high_cut: 40
+    start: 0.0
+    stop: 0.0
+    batch_size: 48
+    num_workers: 2
+    test_num_workers: 0
+    validation_fraction: 0.2
+    # Disabled by default: 64-channel Riemannian means are computationally
+    # expensive. HADA and IM-TTA remain enabled by the model configuration.
+    riemannian_alignment: false
 
 model: "HADATCFormer"
 model_kwargs:

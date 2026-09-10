@@ -134,8 +134,11 @@ def train_and_test(config):
         subject_acc = float(subject_result["test_acc"])
         subject_loss = float(subject_result["test_loss"])
         subject_kappa = float(subject_result["test_kappa"])
+        primary_test_label = getattr(
+            datamodule_cls, "primary_test_label", "SESSION 2"
+        )
         print(
-            f"\nTARGET SUBJECT {subject_id} SESSION 2 RESULT | "
+            f"\nTARGET SUBJECT {subject_id} {primary_test_label} RESULT | "
             f"acc={subject_acc * 100:.2f}% | "
             f"loss={subject_loss:.4f} | "
             f"kappa={subject_kappa:.4f} | "
@@ -143,16 +146,15 @@ def train_and_test(config):
             flush=True,
         )
         print(
-            f">>> Target subject {subject_id} session 2 test | "
+            f">>> Target subject {subject_id} {primary_test_label.lower()} | "
             f"acc={test_results[0]['test_acc'] * 100:.2f}% | "
             f"loss={test_results[0]['test_loss']:.4f} | "
             f"kappa={test_results[0]['test_kappa']:.4f}"
         )
 
-        # Session 2 remains the primary held-out LOSO benchmark. The combined
-        # Session 1+2 score is auxiliary because Session 1 was already consumed
-        # without labels by domain adaptation during training.
-        session_2_confmat = model.test_confmat.numpy().copy()
+        # Some datasets expose an additional combined-session evaluation view.
+        # PhysioNet has one imagery test view, so this branch is skipped.
+        primary_confmat = model.test_confmat.numpy().copy()
         if all_sessions_loader is not None:
             st_all_sessions_test = time.time()
             all_sessions_results = trainer.test(
@@ -195,7 +197,7 @@ def train_and_test(config):
 
         # compute & store this subject's confusion matrix
         # The [C × C] tensor is inside the LightningModule:
-        cm = session_2_confmat
+        cm = primary_confmat
         all_confmats.append(cm)
 
         # plot per-subject if requested
@@ -285,7 +287,7 @@ def parse_arguments():
     )        
     parser.add_argument("--dataset", type=str, default="bcic2a", 
         help="Name of the dataset to use."
-                        "Options: bcic2a, bcic2b, hgd, reh_mi, bcic3"
+                        "Options: bcic2a, bcic2b, hgd, physionet, reh_mi, bcic3"
     )
     parser.add_argument("--loso", action="store_true", default=False, 
         help="Enable subject-independent (LOSO) mode"
@@ -341,6 +343,7 @@ def run():
     # Override seed if specified
     if args.seed is not None:
         config["seed"] = args.seed
+    config["preprocessing"]["seed"] = config["seed"]
 
     # set to True to plot confusion matrices
     config["plot_cm_per_subject"] = True # set to True to plot per-subject confusion matrices
