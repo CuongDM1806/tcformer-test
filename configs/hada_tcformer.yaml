@@ -50,8 +50,9 @@ preprocessing:
     sfreq: 160
     low_cut: 4
     high_cut: 40
+    # Canonical MOABB window: one 3-second epoch starting at cue onset.
     start: 0.0
-    stop: 0.0
+    trial_duration: 3.0
     batch_size: 48
     num_workers: 2
     test_num_workers: 0

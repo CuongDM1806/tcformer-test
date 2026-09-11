@@ -58,12 +58,25 @@ def load_physionet(
     preprocess(dataset, preprocessors)
 
     sfreq = dataset.datasets[0].raw.info["sfreq"]
-    start_offset = int(preprocessing_dict.get("start", 0.0) * sfreq)
-    stop_offset = int(preprocessing_dict.get("stop", 0.0) * sfreq)
+    start_offset = int(round(preprocessing_dict.get("start", 0.0) * sfreq))
+    trial_duration = float(preprocessing_dict.get("trial_duration", 3.0))
+    window_size = int(round(trial_duration * sfreq))
+    if start_offset != 0 or trial_duration != 3.0:
+        raise ValueError(
+            "The PhysioNet MOABB benchmark requires trials from 0.0 to 3.0 s."
+        )
+
+    # EDF task annotations last about 4.1 s, whereas MOABB defines the
+    # benchmark interval as [0, 3] s.  An explicit window size plus
+    # drop_last_window=True produces exactly one onset-aligned 3 s epoch and
+    # prevents Braindecode from adding a second, end-aligned window.
     return create_windows_from_events(
         dataset,
         trial_start_offset_samples=start_offset,
-        trial_stop_offset_samples=stop_offset,
+        trial_stop_offset_samples=0,
+        window_size_samples=window_size,
+        window_stride_samples=window_size,
+        drop_last_window=True,
         mapping=PHYSIONET_IMAGERY_MAPPING,
         preload=False,
         on_missing="ignore",

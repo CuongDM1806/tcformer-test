@@ -61,10 +61,21 @@ class PhysioNetMILOSO(BaseDataModule):
             X, y = BaseDataModule._dataset_to_arrays(subject_dataset)
             expected_classes = np.arange(self.classes)
             observed_classes, class_counts = np.unique(y, return_counts=True)
-            if X.ndim != 3 or X.shape[1] != self.channels:
+            expected_timepoints = int(
+                round(
+                    self.preprocessing_dict["sfreq"]
+                    * self.preprocessing_dict.get("trial_duration", 3.0)
+                )
+            )
+            if (
+                X.ndim != 3
+                or X.shape[1] != self.channels
+                or X.shape[2] != expected_timepoints
+            ):
                 raise RuntimeError(
                     f"PhysioNet S{subject_id:03d} has invalid EEG shape "
-                    f"{tuple(X.shape)}; expected [trials, {self.channels}, time]."
+                    f"{tuple(X.shape)}; expected "
+                    f"[trials, {self.channels}, {expected_timepoints}]."
                 )
             if not np.array_equal(observed_classes, expected_classes):
                 raise RuntimeError(
