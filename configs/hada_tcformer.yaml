@@ -51,6 +51,7 @@ preprocessing:
     # Raw voltage: no microvolt scaling and no frequency filtering.
     low_cut: null
     high_cut: null
+    z_scale: false
     # Canonical MOABB window: one 3-second epoch starting at cue onset.
     start: 0.0
     trial_duration: 3.0

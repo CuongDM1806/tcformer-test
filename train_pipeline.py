@@ -336,7 +336,9 @@ def run():
             f"{dataset_model_overrides}",
             flush=True,
         )
-    config["preprocessing"]["z_scale"] = config["z_scale"]
+    config["preprocessing"]["z_scale"] = config["preprocessing"].get(
+        "z_scale", config["z_scale"]
+    )
     config["preprocessing"]["domain_adaptation"] = config.get("domain_adaptation", False)
     # Override interaug if specified
     if args.interaug:
