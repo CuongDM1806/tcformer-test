@@ -45,6 +45,24 @@ preprocessing:
     stop: 0.0
     batch_size: 48
     remove_artifacts: true
+  physionet:
+    # First 20 PhysioNet EEGMMIDB subjects; four imagined movement classes.
+    sfreq: 160
+    low_cut: 4
+    high_cut: 40
+    # Canonical MOABB window: one 3-second epoch starting at cue onset.
+    start: 0.0
+    trial_duration: 3.0
+    batch_size: 40
+    num_workers: 2
+    test_num_workers: 0
+    # Per-source split: 95% training, 5% source-only validation.
+    validation_fraction: 0.05
+    # Disabled by default: 64-channel Riemannian means are expensive.
+    riemannian_alignment: false
+    # Keep the IM-TTA implementation available, but skip it for PhysioNet.
+    model_overrides:
+      im_tta_steps: 0
 
 model: "HADATCFormer"
 model_kwargs:
