@@ -56,7 +56,8 @@ preprocessing:
     batch_size: 48
     num_workers: 2
     test_num_workers: 0
-    validation_fraction: 0.2
+    # Per-source split: 95% training, 5% source-only validation.
+    validation_fraction: 0.05
     # Disabled by default: 64-channel Riemannian means are computationally
     # expensive.
     riemannian_alignment: false

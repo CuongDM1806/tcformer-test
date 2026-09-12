@@ -14,7 +14,7 @@ class PhysioNetMILOSO(BaseDataModule):
     PhysioNet has no separate train/evaluation session.  In each fold, the
     target subject's complete imagery set is exposed without labels to HADA
     and is scored only after training (and optional IM-TTA).  Each of the 19
-    source subjects contributes a stratified 80/20 train/validation split.
+    source subjects contributes a stratified 95/5 train/validation split.
     """
 
     all_subject_ids = list(range(1, 21))
@@ -110,7 +110,7 @@ class PhysioNetMILOSO(BaseDataModule):
 
         seed = int(self.preprocessing_dict.get("seed", 0))
         validation_fraction = float(
-            self.preprocessing_dict.get("validation_fraction", 0.2)
+            self.preprocessing_dict.get("validation_fraction", 0.05)
         )
         if not 0.0 < validation_fraction < 1.0:
             raise ValueError("validation_fraction must be between 0 and 1.")
@@ -127,9 +127,18 @@ class PhysioNetMILOSO(BaseDataModule):
         for source_id in source_ids:
             X_source, y_source = subject_arrays[source_id]
             indices = np.arange(len(y_source))
+            class_count = np.unique(y_source).size
+            validation_size = max(
+                int(np.ceil(len(y_source) * validation_fraction)), class_count
+            )
+            if len(y_source) - validation_size < class_count:
+                raise ValueError(
+                    f"PhysioNet S{source_id:03d} has too few trials for a "
+                    f"stratified {validation_fraction:.1%} validation split."
+                )
             train_indices, val_indices = train_test_split(
                 indices,
-                test_size=validation_fraction,
+                test_size=validation_size,
                 random_state=seed + source_id,
                 stratify=y_source,
             )
