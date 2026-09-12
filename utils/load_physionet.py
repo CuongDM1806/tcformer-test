@@ -8,10 +8,6 @@ from braindecode.preprocessing import (
 )
 
 
-def scale(data, factor):
-    return data * factor
-
-
 PHYSIONET_IMAGERY_MAPPING = {
     "left_hand": 0,
     "right_hand": 1,
@@ -27,6 +23,7 @@ def load_physionet(
 ):
     """Load four-class motor-imagery trials from PhysioNet EEGMMIDB.
 
+    Trials are kept in their native voltage unit with no frequency filtering.
     MOABB's ``PhysionetMI`` defaults to imagined (not executed) runs. The
     explicit mapping removes the inter-trial ``rest`` event and gives stable
     class indices across runs that contain different pairs of motor tasks.
@@ -40,20 +37,10 @@ def load_physionet(
         Preprocessor(
             "pick_types", eeg=True, meg=False, stim=False, verbose=verbose
         ),
-        Preprocessor(scale, factor=1e6, apply_on_array=True),
         Preprocessor(
             "resample", sfreq=preprocessing_dict["sfreq"], verbose=verbose
         ),
     ]
-
-    low_cut = preprocessing_dict.get("low_cut")
-    high_cut = preprocessing_dict.get("high_cut")
-    if low_cut is not None or high_cut is not None:
-        preprocessors.append(
-            Preprocessor(
-                "filter", l_freq=low_cut, h_freq=high_cut, verbose=verbose
-            )
-        )
 
     preprocess(dataset, preprocessors)
 

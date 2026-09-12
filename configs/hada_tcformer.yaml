@@ -48,8 +48,9 @@ preprocessing:
   physionet:
     # First 20 PhysioNet EEGMMIDB subjects; four imagined movement classes.
     sfreq: 160
-    low_cut: 4
-    high_cut: 40
+    # Raw voltage: no microvolt scaling and no frequency filtering.
+    low_cut: null
+    high_cut: null
     # Canonical MOABB window: one 3-second epoch starting at cue onset.
     start: 0.0
     trial_duration: 3.0
