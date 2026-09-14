@@ -56,7 +56,9 @@ preprocessing:
     # This is an experimental full-trial setting, not the 0-3 s MOABB window.
     start: 0.0
     trial_duration: 4.1
-    batch_size: 96
+    # T4-safe micro-batch. Two accumulated steps preserve effective BS=96.
+    batch_size: 48
+    accumulate_grad_batches: 2
     num_workers: 2
     test_num_workers: 0
     # Per-source split: 95% training, 5% source-only validation.

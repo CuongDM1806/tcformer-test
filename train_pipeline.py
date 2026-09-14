@@ -77,6 +77,9 @@ def train_and_test(config):
         # Initialize PyTorch Lightning Trainer
         trainer = Trainer(
             max_epochs=config["max_epochs"],
+            accumulate_grad_batches=config["preprocessing"].get(
+                "accumulate_grad_batches", 1
+            ),
             devices = -1 if config.get("gpu_id", 0) == -1 else \
                 [config.get("gpu_id", 0)],
             num_sanity_val_steps=0,
