@@ -52,10 +52,11 @@ preprocessing:
     low_cut: null
     high_cut: null
     z_scale: false
-    # Canonical MOABB window: one 3-second epoch starting at cue onset.
+    # Full annotated task interval: one 4.1-second epoch from cue onset.
+    # This is an experimental full-trial setting, not the 0-3 s MOABB window.
     start: 0.0
-    trial_duration: 3.0
-    batch_size: 40
+    trial_duration: 4.1
+    batch_size: 96
     num_workers: 2
     test_num_workers: 0
     # Per-source split: 95% training, 5% source-only validation.

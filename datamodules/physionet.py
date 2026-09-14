@@ -64,7 +64,7 @@ class PhysioNetMILOSO(BaseDataModule):
             expected_timepoints = int(
                 round(
                     self.preprocessing_dict["sfreq"]
-                    * self.preprocessing_dict.get("trial_duration", 3.0)
+                    * self.preprocessing_dict.get("trial_duration", 4.1)
                 )
             )
             if (
