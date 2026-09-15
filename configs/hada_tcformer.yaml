@@ -71,6 +71,27 @@ preprocessing:
     # Keep the IM-TTA implementation available, but skip it for PhysioNet.
     model_overrides:
       im_tta_steps: 0
+  openbmi:
+    # Lee2019_MI labeled offline runs: 54 subjects, two sessions, left/right MI.
+    dataset_subject_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54]
+    # Cross-subject preprocessing used by the published Ensemble-MI pipeline.
+    sfreq: 100
+    low_cut: 4.0
+    high_cut: 38.0
+    common_average_reference: true
+    start: 0.0
+    trial_duration: 4.0
+    batch_size: 48
+    num_workers: 2
+    test_num_workers: 0
+    download_retries: 8
+    download_retry_delay_seconds: 5
+    z_scale: true
+    # Fit one OAS/Riemannian reference from session 1 of each subject only.
+    riemannian_alignment: true
+    # Requested default: transductive adaptation on unlabeled session-2 EEG.
+    model_overrides:
+      im_tta_steps: 5
 
 model: "HADATCFormer"
 model_kwargs:
