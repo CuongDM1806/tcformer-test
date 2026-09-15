@@ -1,3 +1,4 @@
+import time
 from typing import Dict
 
 from braindecode.datasets import MOABBDataset
@@ -6,6 +7,7 @@ from braindecode.preprocessing import (
     create_windows_from_events,
     preprocess,
 )
+from requests.exceptions import RequestException
 
 
 PHYSIONET_IMAGERY_MAPPING = {
@@ -28,10 +30,31 @@ def load_physionet(
     explicit mapping removes the inter-trial ``rest`` event and gives stable
     class indices across runs that contain different pairs of motor tasks.
     """
-    dataset = MOABBDataset(
-        dataset_name="PhysionetMI",
-        subject_ids=subject_ids,
+    download_retries = int(preprocessing_dict.get("download_retries", 8))
+    retry_delay = float(
+        preprocessing_dict.get("download_retry_delay_seconds", 5.0)
     )
+    if download_retries < 0 or retry_delay < 0:
+        raise ValueError("PhysioNet download retry settings must be non-negative.")
+
+    for attempt in range(download_retries + 1):
+        try:
+            dataset = MOABBDataset(
+                dataset_name="PhysionetMI",
+                subject_ids=subject_ids,
+            )
+            break
+        except RequestException as exc:
+            if attempt == download_retries:
+                raise
+            wait_seconds = min(retry_delay * (2**attempt), 60.0)
+            print(
+                f"PhysioNet download failed ({type(exc).__name__}: {exc}). "
+                f"Retry {attempt + 1}/{download_retries} in "
+                f"{wait_seconds:g} s; cached EDF files will be reused.",
+                flush=True,
+            )
+            time.sleep(wait_seconds)
 
     preprocessors = [
         Preprocessor(

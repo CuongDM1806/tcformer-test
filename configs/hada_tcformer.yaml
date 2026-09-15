@@ -61,6 +61,9 @@ preprocessing:
     accumulate_grad_batches: 2
     num_workers: 2
     test_num_workers: 0
+    # PhysioNet occasionally returns transient HTTP 5xx responses on Kaggle.
+    download_retries: 8
+    download_retry_delay_seconds: 5
     # Per-source split: 95% training, 5% source-only validation.
     validation_fraction: 0.05
     # Disabled by default: 64-channel Riemannian means are expensive.
