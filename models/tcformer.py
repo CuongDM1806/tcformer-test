@@ -471,6 +471,71 @@ class _SelectiveSSMBlock(nn.Module):
         if self.reverse:
             mixed = torch.flip(mixed, dims=(1,))
         return residual + self.drop_path(self.dropout(mixed))
+
+
+class _SwiGLUFeedForward(nn.Module):
+    """Compact gated feed-forward network for the selective-SSM blocks."""
+
+    def __init__(self, d_model: int, expansion_ratio: float = 2.0, dropout: float = 0.0):
+        super().__init__()
+        if expansion_ratio <= 0.0:
+            raise ValueError("mamba_ffn_ratio must be positive.")
+        hidden_dim = max(1, int(round(d_model * expansion_ratio)))
+        self.gate_and_value = nn.Linear(d_model, 2 * hidden_dim, bias=False)
+        self.out_proj = nn.Linear(hidden_dim, d_model, bias=False)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: Tensor) -> Tensor:
+        gate, value = self.gate_and_value(x).chunk(2, dim=-1)
+        return self.dropout(self.out_proj(torch.nn.functional.silu(gate) * value))
+
+
+class _BidirectionalSelectiveSSMBlock(nn.Module):
+    """Parallel forward/backward selective SSM with learned gated fusion.
+
+    Both mixers receive the same normalized representation. The backward path
+    is restored to the original time order before an input-dependent gate
+    combines the two directions. A pre-norm SwiGLU sublayer then increases the
+    channel-mixing capacity without changing the sequence resolution.
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        d_state: int = 8,
+        d_conv: int = 3,
+        dropout: float = 0.4,
+        drop_path_rate: float = 0.0,
+        ffn_ratio: float = 2.0,
+        ffn_dropout: float = 0.2,
+    ):
+        super().__init__()
+        self.ssm_norm = nn.RMSNorm(d_model)
+        self.forward_mixer = _SelectiveSSMMixer(d_model, d_state, d_conv)
+        self.backward_mixer = _SelectiveSSMMixer(d_model, d_state, d_conv)
+        self.direction_gate = nn.Linear(2 * d_model, d_model)
+        self.ssm_dropout = nn.Dropout(dropout)
+        self.ffn_norm = nn.RMSNorm(d_model)
+        self.ffn = _SwiGLUFeedForward(d_model, ffn_ratio, ffn_dropout)
+        self.drop_path = DropPath(drop_path_rate)
+
+        # Start as an unbiased average; training learns a feature- and
+        # timestep-dependent preference for the forward or backward scan.
+        nn.init.zeros_(self.direction_gate.weight)
+        nn.init.zeros_(self.direction_gate.bias)
+
+    def forward(self, x: Tensor, cos: Tensor = None, sin: Tensor = None) -> Tensor:
+        normalized = self.ssm_norm(x)
+        forward_features = self.forward_mixer(normalized)
+        backward_features = torch.flip(
+            self.backward_mixer(torch.flip(normalized, dims=(1,))), dims=(1,)
+        )
+        gate = torch.sigmoid(
+            self.direction_gate(torch.cat((forward_features, backward_features), dim=-1))
+        )
+        fused = gate * forward_features + (1.0 - gate) * backward_features
+        x = x + self.drop_path(self.ssm_dropout(fused))
+        return x + self.drop_path(self.ffn(self.ffn_norm(x)))
         
 #   helper
 def _xavier_zero_bias(module: nn.Module) -> None:
@@ -506,6 +571,8 @@ class TCFormerModule(nn.Module):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            mamba_ffn_ratio: float = 2.0,
+            mamba_ffn_dropout: float = 0.2,
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -539,7 +606,12 @@ class TCFormerModule(nn.Module):
             sequence_block_types = ["transformer"] * trans_depth
         if len(sequence_block_types) != trans_depth:
             raise ValueError("sequence_block_types length must equal trans_depth.")
-        valid_block_types = {"transformer", "mamba_forward", "mamba_backward"}
+        valid_block_types = {
+            "transformer",
+            "mamba_forward",
+            "mamba_backward",
+            "mamba_bidirectional",
+        }
         unknown = set(sequence_block_types) - valid_block_types
         if unknown:
             raise ValueError(f"Unknown sequence block types: {sorted(unknown)}")
@@ -552,7 +624,7 @@ class TCFormerModule(nn.Module):
                     self.d_model, q_heads, kv_heads, dropout=trans_dropout,
                     drop_path_rate=drop_rates[i].item()
                 )
-            else:
+            elif block_type in {"mamba_forward", "mamba_backward"}:
                 block = _SelectiveSSMBlock(
                     self.d_model,
                     d_state=mamba_d_state,
@@ -560,6 +632,16 @@ class TCFormerModule(nn.Module):
                     dropout=trans_dropout,
                     drop_path_rate=drop_rates[i].item(),
                     reverse=block_type == "mamba_backward",
+                )
+            else:
+                block = _BidirectionalSelectiveSSMBlock(
+                    self.d_model,
+                    d_state=mamba_d_state,
+                    d_conv=mamba_d_conv,
+                    dropout=trans_dropout,
+                    drop_path_rate=drop_rates[i].item(),
+                    ffn_ratio=mamba_ffn_ratio,
+                    ffn_dropout=mamba_ffn_dropout,
                 )
             self.transformer.append(block)
 
@@ -636,6 +718,8 @@ class TCFormer(ClassificationModule):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            mamba_ffn_ratio: float = 2.0,
+            mamba_ffn_dropout: float = 0.2,
             **kwargs
         ):
         model = TCFormerModule(
@@ -659,6 +743,8 @@ class TCFormer(ClassificationModule):
             sequence_block_types=sequence_block_types,
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
+            mamba_ffn_ratio=mamba_ffn_ratio,
+            mamba_ffn_dropout=mamba_ffn_dropout,
         )
         super().__init__(model, n_classes, **kwargs)
     

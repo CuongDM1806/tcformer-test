@@ -84,13 +84,15 @@ model_kwargs:
   use_group_attn: true
   # Legacy names retained by TCFormerModule for sequence depth and dropout.
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
-  trans_depth: 5
+  trans_depth: 3
   trans_dropout: 0.4
-  # Full five-block lightweight Mamba-style encoder. Alternating scan direction
-  # gives both temporal directions without doubling each block's parameters.
-  sequence_block_types: [mamba_forward, mamba_backward, mamba_forward, mamba_backward, mamba_forward]
+  # Three parallel bidirectional blocks. Each block fuses independent forward
+  # and backward SSM paths with a learned gate, then applies an RMSNorm-SwiGLU FFN.
+  sequence_block_types: [mamba_bidirectional, mamba_bidirectional, mamba_bidirectional]
   mamba_d_state: 8
   mamba_d_conv: 3
+  mamba_ffn_ratio: 2.0
+  mamba_ffn_dropout: 0.2
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3
