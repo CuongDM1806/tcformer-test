@@ -24,7 +24,7 @@ from einops.layers.torch import Rearrange
 # Local application-specific imports
 from .classification_module import ClassificationModule
 from .modules import CausalConv1d, Conv1dWithConstraint
-from .channel_group_attention import ChannelGroupAttention
+from .channel_group_attention import CompetitiveScaleAttention
 from utils.weight_initialization import glorot_weight_zero_bias
 from utils.latency  import measure_latency
 
@@ -104,12 +104,12 @@ class MultiKernelConvBlock(nn.Module):
             nn.ELU(),
         )
 
-        # Enable grouped attention only if multiple groups are used (two temp kernels or more)
+        # Enable competitive scale attention only for a multi-branch frontend.
         self.use_group_attn = False if n_groups == 1 else use_group_attn
         if self.use_group_attn:
-            self.group_attn = ChannelGroupAttention(
-                in_channels=self.d_model,
-                num_groups=n_groups, 
+            self.scale_attn = CompetitiveScaleAttention(
+                channels_per_scale=F1,
+                num_scales=n_groups,
             )
         
         self.pool2 = nn.AvgPool2d((1, pool_length_2))
@@ -117,12 +117,19 @@ class MultiKernelConvBlock(nn.Module):
 
         # Initialize weights
         glorot_weight_zero_bias(self)
+        if self.use_group_attn:
+            # Restore the uniform softmax start after the generic initializer.
+            self.scale_attn.reset_output_projection()
 
     def forward(self, x):
         # --- 1. one temporal conv per kernel -----------------
         x = self.rearrange(x)         # (B, 1, C, T)
         feats = [conv(x) for conv in self.temporal_convs] # list of (B, F1, C, T')
-        x = torch.cat(feats, dim=1)   # concat on channel dim # [B, F1 x n_groups, C, T]
+        if self.use_group_attn:
+            x = self.scale_attn(feats)
+        else:
+            x = torch.cat(feats, dim=1)
+        # x: [B, F1 x n_groups, C, T]
 
         # --- 2. shared processing after concatenation --------
         # Channel Reduction Stage 1: (F1 * n_groups → d_model)
@@ -140,10 +147,6 @@ class MultiKernelConvBlock(nn.Module):
        
         # Grouped Temporal Convolution (1 × 16) applied independently to each group
         x = self.temporal_conv_2(x)                      
-        
-        # Group attention (optional) 
-        if self.use_group_attn:        
-            x = x + self.group_attn(x)   # Residual connection 
         
         x = self.pool2(x)                                # temporal pooling
         x = self.drop2(x)                                # dropout

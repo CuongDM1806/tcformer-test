@@ -2,6 +2,79 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+class CompetitiveScaleAttention(nn.Module):
+    """Sample-wise softmax competition between temporal-kernel branches."""
+
+    def __init__(
+        self,
+        channels_per_scale: int,
+        num_scales: int,
+        reduction: int = 4,
+        min_hidden_dim: int = 16,
+    ):
+        super().__init__()
+        if channels_per_scale < 1 or num_scales < 2:
+            raise ValueError(
+                "CompetitiveScaleAttention needs positive channels and at least two scales."
+            )
+        if reduction < 1:
+            raise ValueError("reduction must be positive.")
+
+        self.channels_per_scale = channels_per_scale
+        self.num_scales = num_scales
+        descriptor_dim = channels_per_scale * num_scales
+        hidden_dim = max(min_hidden_dim, descriptor_dim // reduction)
+        self.scale_mlp = nn.Sequential(
+            nn.LayerNorm(descriptor_dim),
+            nn.Linear(descriptor_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, descriptor_dim),
+        )
+        self.reset_output_projection()
+
+    def reset_output_projection(self):
+        """Start with identity reweighting: every branch has multiplier one."""
+        nn.init.zeros_(self.scale_mlp[-1].weight)
+        nn.init.zeros_(self.scale_mlp[-1].bias)
+
+    def forward(self, features):
+        if len(features) != self.num_scales:
+            raise ValueError(
+                f"Expected {self.num_scales} scale tensors, got {len(features)}."
+            )
+
+        reference_shape = features[0].shape
+        if len(reference_shape) != 4:
+            raise ValueError("Each scale tensor must have shape [B, F, C, T].")
+        if reference_shape[1] != self.channels_per_scale:
+            raise ValueError(
+                f"Expected {self.channels_per_scale} channels per scale, "
+                f"got {reference_shape[1]}."
+            )
+        if any(feature.shape != reference_shape for feature in features[1:]):
+            raise ValueError("All temporal-scale tensors must have the same shape.")
+
+        # [B, G, F, C, T]. Log-energy avoids cancellation of signed EEG
+        # features and exposes all scales jointly to the gate MLP.
+        stacked = torch.stack(features, dim=1)
+        descriptor = torch.log(
+            stacked.square().mean(dim=(-1, -2)).clamp_min(1e-6)
+        ).flatten(1)
+
+        batch_size = stacked.size(0)
+        logits = self.scale_mlp(descriptor).view(
+            batch_size,
+            self.num_scales,
+            self.channels_per_scale,
+            1,
+            1,
+        )
+        # Scaling by G makes uniform softmax weights equal one, exactly
+        # preserving the old concatenation's magnitude at initialization.
+        weights = torch.softmax(logits, dim=1) * self.num_scales
+        return (stacked * weights).flatten(1, 2)
+
 class ChannelGroupAttention(nn.Module):
     """
     Implements Channel Group Attention.
@@ -129,4 +202,3 @@ if __name__ == '__main__':
         expanded = weights.repeat_interleave(group_attention_layer.group_size, dim=1)
         print("\nExample expanded weights (first sample, first 20 channels):")
         print(expanded[0, :20].squeeze()) # Should show the first weight repeated 16 times, then the second
-

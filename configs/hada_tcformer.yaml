@@ -81,6 +81,7 @@ model_kwargs:
   pool_length_1: 8
   pool_length_2: 7
   dropout_conv: 0.4
+  # Early sample-wise softmax competition across the 20/32/64 temporal scales.
   use_group_attn: true
   # Legacy names retained by TCFormerModule for sequence depth and dropout.
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
