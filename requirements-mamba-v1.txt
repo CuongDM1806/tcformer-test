@@ -1,3 +1,5 @@
 # Install requirements.txt and CUDA-enabled PyTorch first, then install this
 # file with --no-build-isolation so mamba-ssm can select the matching wheel.
+# mamba-ssm 2.2.6 imports generation aliases removed by Transformers 5.x.
+transformers==4.44.2
 mamba-ssm==2.2.6.post3
