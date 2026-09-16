@@ -126,6 +126,10 @@ def train_and_test(config):
         # Optional source-free IM-TTA. The method consumes only target EEG;
         # labels carried by the test loader are deliberately ignored.
         if hasattr(model, "adapt_to_target"):
+            # ``Trainer.fit`` can offload the model to CPU during teardown.
+            # Restore the strategy device before external adaptation; CUDA-only
+            # sequence kernels such as mamba-ssm cannot execute on CPU tensors.
+            model.to(trainer.strategy.root_device)
             model.adapt_to_target(test_loader)
 
         st_test = time.time()

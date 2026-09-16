@@ -281,6 +281,16 @@ class HADATCFormer(ClassificationModule):
         if self.im_tta_steps == 0:
             return None
 
+        # Lightning may offload the module to CPU when ``Trainer.fit`` tears
+        # down its fit loop. Move it back to the trainer's accelerator before
+        # IM-TTA; official mamba-ssm selective-scan kernels require CUDA input.
+        trainer = getattr(self, "_trainer", None)
+        strategy = getattr(trainer, "strategy", None)
+        root_device = getattr(strategy, "root_device", None)
+        if root_device is not None:
+            self.to(root_device)
+        device = next(self.parameters()).device
+
         self.eval()
         for parameter in self.parameters():
             parameter.requires_grad_(False)
@@ -310,10 +320,10 @@ class HADATCFormer(ClassificationModule):
         parameter_count = sum(parameter.numel() for parameter in adaptation_parameters)
         self.print(
             f"IM-TTA start | steps={self.im_tta_steps} | lr={self.im_tta_lr:g} | "
-            f"BN_layers={len(batch_norm_modules)} | trainable_params={parameter_count}"
+            f"BN_layers={len(batch_norm_modules)} | trainable_params={parameter_count} | "
+            f"device={device}"
         )
 
-        device = next(self.parameters()).device
         final_stats = None
         with torch.enable_grad():
             for step in range(1, self.im_tta_steps + 1):
