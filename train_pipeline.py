@@ -192,10 +192,21 @@ def train_and_test(config):
         # Deduce input shape from one sample of the test dataset
         sample_x, _ = datamodule.test_dataset[0]
         input_shape = (1, *sample_x.shape)  # prepend batch dim
-        # device_str = "cuda:" + str(config["gpu_id"]) if config["gpu_id"] != -1 else "cpu"
-        device_str = "cpu"
-        lat_ms = measure_latency(model, input_shape, device=device_str)
-        response_times.append(lat_ms)  # convert to seconds for summary helper
+        # Benchmark on the same device used by the Trainer. Official mamba-ssm
+        # selective-scan kernels are CUDA-only and cannot be benchmarked after
+        # forcibly moving the model and dummy input to CPU.
+        device_str = str(trainer.strategy.root_device)
+        try:
+            lat_ms = measure_latency(model, input_shape, device=device_str)
+        except Exception as exc:
+            # Latency is an auxiliary metric and must not discard a completed
+            # training/test fold or stop the remaining LOSO subjects.
+            print(
+                f"WARNING: latency measurement skipped on {device_str}: {exc}",
+                flush=True,
+            )
+            lat_ms = float("nan")
+        response_times.append(lat_ms)  # milliseconds
 
         # ---------------- METRICS --------------
         test_accs.append(subject_acc)
