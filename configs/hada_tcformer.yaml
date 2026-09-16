@@ -86,11 +86,12 @@ model_kwargs:
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
   trans_depth: 5
   trans_dropout: 0.4
-  # Full five-block lightweight Mamba-style encoder. Alternating scan direction
-  # gives both temporal directions without doubling each block's parameters.
-  sequence_block_types: [mamba_forward, mamba_backward, mamba_forward, mamba_backward, mamba_forward]
-  mamba_d_state: 8
-  mamba_d_conv: 3
+  # Official Mamba-v1 blocks from mamba-ssm. Alternating scan direction gives
+  # both temporal directions without doubling every block's parameters.
+  sequence_block_types: [mamba_ssm_v1_forward, mamba_ssm_v1_backward, mamba_ssm_v1_forward, mamba_ssm_v1_backward, mamba_ssm_v1_forward]
+  mamba_d_state: 16
+  mamba_d_conv: 4
+  mamba_expand: 2
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3

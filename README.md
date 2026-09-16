@@ -41,6 +41,15 @@ pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorc
 pip install -r requirements.txt
 ```
 
+The `feature/hada-mamba-ssm-v1` branch additionally uses the official CUDA
+Mamba-v1 block. Install it after PyTorch so the package selects a compatible
+wheel:
+
+```bash
+pip install packaging ninja wheel setuptools
+pip install --no-build-isolation -r requirements-mamba-v1.txt
+```
+
 ### 4. Verify the installation
 
 ```bash
