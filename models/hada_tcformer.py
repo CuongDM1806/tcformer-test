@@ -1,7 +1,7 @@
 """TCFormer with HADANet-style unsupervised domain adaptation.
 
 Only source labels contribute to classification. Target batches contain EEG
-samples only and are used by the adversarial and MK-MMD alignment objectives.
+samples only and are used by conditional adversarial and MK-MMD alignment.
 """
 
 import math
@@ -174,8 +174,11 @@ class HADATCFormer(ClassificationModule):
             model.feature_dim, aligner_hidden_dim, adaptation_dropout
         )
         self.grl = GradientReversal()
+        # CDAN conditions domain discrimination on the joint feature/prediction
+        # representation. For the default BCI2a setup this is 64 * 4 = 256.
+        conditional_feature_dim = model.feature_dim * n_classes
         self.domain_discriminator = DomainDiscriminator(
-            model.feature_dim, domain_hidden_dim, adaptation_dropout
+            conditional_feature_dim, domain_hidden_dim, adaptation_dropout
         )
         self.mmd_loss = MultiKernelMMDLoss()
         self.adversarial_weight = adversarial_weight
@@ -211,6 +214,18 @@ class HADATCFormer(ClassificationModule):
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
         return 2.0 / (1.0 + math.exp(-10.0 * progress)) - 1.0
+
+    @staticmethod
+    def _conditional_domain_features(features: Tensor, logits: Tensor) -> Tensor:
+        """Return the CDAN multilinear map ``feature (x) class probability``."""
+        if features.ndim != 2 or logits.ndim != 2:
+            raise ValueError("CDAN features and logits must both be rank-2 tensors.")
+        if features.size(0) != logits.size(0):
+            raise ValueError("CDAN features and logits must have the same batch size.")
+        probabilities = logits.softmax(dim=1)
+        return torch.bmm(
+            features.unsqueeze(2), probabilities.unsqueeze(1)
+        ).flatten(start_dim=1)
 
     @torch.no_grad()
     def _target_adaptation_gate(
@@ -431,8 +446,9 @@ class HADATCFormer(ClassificationModule):
         target_features = all_features[source_count:]
 
         source_logits = self.model.classify_features(source_features)
-        with torch.no_grad():
-            target_logits = self.model.classify_features(target_features)
+        # Target labels are never read. Gradients through target predictions are
+        # required because CDAN jointly aligns features and class predictions.
+        target_logits = self.model.classify_features(target_features)
         classification_loss = F.cross_entropy(source_logits, source_y)
 
         adaptation_gate, target_gap, target_confidence = (
@@ -442,7 +458,13 @@ class HADATCFormer(ClassificationModule):
         )
 
         alpha = self._grl_alpha()
-        domain_logits = self.domain_discriminator(self.grl(all_features, alpha))
+        all_logits = torch.cat((source_logits, target_logits), dim=0)
+        conditional_features = self._conditional_domain_features(
+            all_features, all_logits
+        )
+        domain_logits = self.domain_discriminator(
+            self.grl(conditional_features, alpha)
+        )
         domain_targets = torch.cat(
             (
                 torch.zeros(source_count, 1, device=all_features.device),
