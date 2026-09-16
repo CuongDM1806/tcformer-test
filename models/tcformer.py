@@ -94,12 +94,17 @@ class MultiKernelConvBlock(nn.Module):
             self.channel_reduction_2 = nn.Sequential(
                     nn.Conv2d(F2, self.d_model, (1, 1), bias=False, groups=n_groups),
                     nn.BatchNorm2d(self.d_model),
+                    nn.ELU(),
                 )
 
-        # Grouped temporal convolution (1 × 16) per group
+        # Depthwise-separable temporal refinement. The depthwise stage learns
+        # one temporal filter per feature map; the grouped pointwise stage then
+        # mixes features within each temporal-scale group without mixing scales.
         self.temporal_conv_2 = nn.Sequential(
             nn.Conv2d(self.d_model, self.d_model, (1, 16), padding='same',
-                       bias=False, groups=n_groups),
+                       bias=False, groups=self.d_model),
+            nn.Conv2d(self.d_model, self.d_model, (1, 1),
+                      bias=False, groups=n_groups),
             nn.BatchNorm2d(self.d_model),
             nn.ELU(),
         )
