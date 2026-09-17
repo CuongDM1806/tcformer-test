@@ -92,8 +92,11 @@ model_kwargs:
   mamba_d_state: 64
   mamba_d_conv: 4
   mamba_expand: 2
-  # d_model=48 and expand=2 give d_inner=96; 24 creates four SSD heads.
-  mamba_headdim: 24
+  # d_inner=48*2=96: 64 dimensions use SSD (8 heads x 8), while the
+  # remaining 32 use Mamba-2's gated MLP path. This also keeps fused CUDA
+  # projection strides aligned to multiples of eight.
+  mamba_d_ssm: 64
+  mamba_headdim: 8
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3

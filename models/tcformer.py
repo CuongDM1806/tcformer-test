@@ -487,20 +487,26 @@ class _MambaSSMV2Block(nn.Module):
         d_state: int = 64,
         d_conv: int = 4,
         expand: int = 2,
-        headdim: int = 24,
+        d_ssm: int = 64,
+        headdim: int = 8,
         dropout: float = 0.4,
         drop_path_rate: float = 0.0,
         reverse: bool = False,
     ):
         super().__init__()
-        if d_state < 1 or d_conv < 1 or expand < 1 or headdim < 1:
+        if d_state < 1 or d_conv < 1 or expand < 1 or d_ssm < 1 or headdim < 1:
             raise ValueError(
-                "Mamba-2 d_state, d_conv, expand and headdim must be positive."
+                "Mamba-2 d_state, d_conv, expand, d_ssm and headdim must be positive."
             )
-        if (d_model * expand) % headdim != 0:
+        d_inner = d_model * expand
+        if d_ssm > d_inner:
             raise ValueError(
-                "Mamba-2 requires d_model * expand to be divisible by headdim; "
-                f"got {d_model} * {expand} and headdim={headdim}."
+                f"Mamba-2 d_ssm={d_ssm} cannot exceed d_model * expand={d_inner}."
+            )
+        if d_ssm % headdim != 0:
+            raise ValueError(
+                "Mamba-2 requires d_ssm to be divisible by headdim; "
+                f"got d_ssm={d_ssm} and headdim={headdim}."
             )
         try:
             from mamba_ssm import Mamba2
@@ -518,6 +524,7 @@ class _MambaSSMV2Block(nn.Module):
             d_state=d_state,
             d_conv=d_conv,
             expand=expand,
+            d_ssm=d_ssm,
             headdim=headdim,
         )
         self.dropout = nn.Dropout(dropout)
@@ -568,7 +575,8 @@ class TCFormerModule(nn.Module):
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
             mamba_expand: int = 2,
-            mamba_headdim: int = 24,
+            mamba_d_ssm: int = 64,
+            mamba_headdim: int = 8,
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -636,6 +644,7 @@ class TCFormerModule(nn.Module):
                     d_state=mamba_d_state,
                     d_conv=mamba_d_conv,
                     expand=mamba_expand,
+                    d_ssm=mamba_d_ssm,
                     headdim=mamba_headdim,
                     dropout=trans_dropout,
                     drop_path_rate=drop_rates[i].item(),
@@ -717,7 +726,8 @@ class TCFormer(ClassificationModule):
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
             mamba_expand: int = 2,
-            mamba_headdim: int = 24,
+            mamba_d_ssm: int = 64,
+            mamba_headdim: int = 8,
             **kwargs
         ):
         model = TCFormerModule(
@@ -742,6 +752,7 @@ class TCFormer(ClassificationModule):
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
             mamba_expand=mamba_expand,
+            mamba_d_ssm=mamba_d_ssm,
             mamba_headdim=mamba_headdim,
         )
         super().__init__(model, n_classes, **kwargs)
