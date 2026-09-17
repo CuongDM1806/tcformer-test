@@ -1,8 +1,7 @@
-# Install requirements.txt and CUDA-enabled PyTorch first, then install this
-# file with --no-build-isolation so mamba-ssm can select the matching wheel.
+# Prebuilt Linux/Python 3.10 wheels for the Torch 2.7 + CUDA 12 environment
+# created by the Colab and Kaggle notebooks. Direct URLs avoid unreliable
+# source builds and guarantee that both CUDA extensions are present.
 # mamba-ssm 2.2.6 imports generation aliases removed by Transformers 5.x.
 transformers==4.44.2
-# Mamba-2's fused SSD path calls this CUDA extension directly. It is not an
-# active dependency of mamba-ssm 2.2.6, so install the matching Torch 2.7 wheel.
-causal-conv1d==1.5.4
-mamba-ssm==2.2.6.post3
+causal-conv1d @ https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.5.4/causal_conv1d-1.5.4%2Bcu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+mamba-ssm @ https://github.com/state-spaces/mamba/releases/download/v2.2.6.post3/mamba_ssm-2.2.6.post3%2Bcu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl

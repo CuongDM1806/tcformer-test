@@ -50,8 +50,9 @@ pip install packaging ninja wheel setuptools
 pip install --no-build-isolation -r requirements-mamba-v2.txt
 ```
 
-This also installs the `causal-conv1d` CUDA extension required by Mamba-2's
-fused SSD path; `mamba-ssm==2.2.6.post3` does not install it automatically.
+This uses the published CUDA 12 / Torch 2.7 / Python 3.10 wheels for both
+`mamba-ssm` and the `causal-conv1d` extension required by Mamba-2's fused SSD
+path; `mamba-ssm==2.2.6.post3` does not install the latter automatically.
 
 ### 4. Verify the installation
 
