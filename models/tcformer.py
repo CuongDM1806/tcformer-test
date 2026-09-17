@@ -473,44 +473,52 @@ class _SelectiveSSMBlock(nn.Module):
         return residual + self.drop_path(self.dropout(mixed))
 
 
-class _MambaSSMV1Block(nn.Module):
-    """Pre-norm residual block backed by the official Mamba-v1 implementation.
+class _MambaSSMV2Block(nn.Module):
+    """Pre-norm residual block backed by the official Mamba-2 implementation.
 
-    ``mamba_ssm.Mamba`` is the selective SSM block from the original Mamba
-    architecture.  Backward blocks reverse only the temporal axis before and
-    after the causal mixer, preserving the F-B-F-B-F layout of the lightweight
-    baseline while replacing its Python recurrence with the official CUDA scan.
+    Backward blocks reverse only the temporal axis before and after the causal
+    mixer, preserving the F-B-F-B-F layout of the lightweight baseline while
+    replacing its Python recurrence with the official SSD CUDA/Triton scan.
     """
 
     def __init__(
         self,
         d_model: int,
-        d_state: int = 16,
+        d_state: int = 64,
         d_conv: int = 4,
         expand: int = 2,
+        headdim: int = 24,
         dropout: float = 0.4,
         drop_path_rate: float = 0.0,
         reverse: bool = False,
     ):
         super().__init__()
-        if d_state < 1 or d_conv < 1 or expand < 1:
-            raise ValueError("Mamba-v1 d_state, d_conv and expand must be positive.")
+        if d_state < 1 or d_conv < 1 or expand < 1 or headdim < 1:
+            raise ValueError(
+                "Mamba-2 d_state, d_conv, expand and headdim must be positive."
+            )
+        if (d_model * expand) % headdim != 0:
+            raise ValueError(
+                "Mamba-2 requires d_model * expand to be divisible by headdim; "
+                f"got {d_model} * {expand} and headdim={headdim}."
+            )
         try:
-            from mamba_ssm import Mamba
+            from mamba_ssm import Mamba2
         except ImportError as exc:
             raise ImportError(
-                "Official Mamba-v1 blocks require mamba-ssm. Install the "
+                "Official Mamba-2 blocks require mamba-ssm. Install the "
                 "branch dependency with `pip install mamba-ssm==2.2.6.post3 "
                 "--no-build-isolation`."
             ) from exc
 
         self.reverse = reverse
         self.norm = nn.LayerNorm(d_model)
-        self.mixer = Mamba(
+        self.mixer = Mamba2(
             d_model=d_model,
             d_state=d_state,
             d_conv=d_conv,
             expand=expand,
+            headdim=headdim,
         )
         self.dropout = nn.Dropout(dropout)
         self.drop_path = DropPath(drop_path_rate)
@@ -560,6 +568,7 @@ class TCFormerModule(nn.Module):
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
             mamba_expand: int = 2,
+            mamba_headdim: int = 24,
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -597,8 +606,8 @@ class TCFormerModule(nn.Module):
             "transformer",
             "mamba_forward",
             "mamba_backward",
-            "mamba_ssm_v1_forward",
-            "mamba_ssm_v1_backward",
+            "mamba_ssm_v2_forward",
+            "mamba_ssm_v2_backward",
         }
         unknown = set(sequence_block_types) - valid_block_types
         if unknown:
@@ -622,14 +631,15 @@ class TCFormerModule(nn.Module):
                     reverse=block_type == "mamba_backward",
                 )
             else:
-                block = _MambaSSMV1Block(
+                block = _MambaSSMV2Block(
                     self.d_model,
                     d_state=mamba_d_state,
                     d_conv=mamba_d_conv,
                     expand=mamba_expand,
+                    headdim=mamba_headdim,
                     dropout=trans_dropout,
                     drop_path_rate=drop_rates[i].item(),
-                    reverse=block_type == "mamba_ssm_v1_backward",
+                    reverse=block_type == "mamba_ssm_v2_backward",
                 )
             self.transformer.append(block)
 
@@ -707,6 +717,7 @@ class TCFormer(ClassificationModule):
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
             mamba_expand: int = 2,
+            mamba_headdim: int = 24,
             **kwargs
         ):
         model = TCFormerModule(
@@ -731,6 +742,7 @@ class TCFormer(ClassificationModule):
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
             mamba_expand=mamba_expand,
+            mamba_headdim=mamba_headdim,
         )
         super().__init__(model, n_classes, **kwargs)
     

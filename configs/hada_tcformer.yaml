@@ -86,12 +86,14 @@ model_kwargs:
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
   trans_depth: 5
   trans_dropout: 0.4
-  # Official Mamba-v1 blocks from mamba-ssm. Alternating scan direction gives
+  # Official Mamba-2 blocks from mamba-ssm. Alternating scan direction gives
   # both temporal directions without doubling every block's parameters.
-  sequence_block_types: [mamba_ssm_v1_forward, mamba_ssm_v1_backward, mamba_ssm_v1_forward, mamba_ssm_v1_backward, mamba_ssm_v1_forward]
-  mamba_d_state: 16
+  sequence_block_types: [mamba_ssm_v2_forward, mamba_ssm_v2_backward, mamba_ssm_v2_forward, mamba_ssm_v2_backward, mamba_ssm_v2_forward]
+  mamba_d_state: 64
   mamba_d_conv: 4
   mamba_expand: 2
+  # d_model=48 and expand=2 give d_inner=96; 24 creates four SSD heads.
+  mamba_headdim: 24
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3

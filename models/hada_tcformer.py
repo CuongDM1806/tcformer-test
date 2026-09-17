@@ -135,6 +135,7 @@ class HADATCFormer(ClassificationModule):
         mamba_d_state: int = 8,
         mamba_d_conv: int = 3,
         mamba_expand: int = 2,
+        mamba_headdim: int = 24,
         aligner_hidden_dim: int = 128,
         domain_hidden_dim: int = 128,
         adaptation_dropout: float = 0.3,
@@ -170,6 +171,7 @@ class HADATCFormer(ClassificationModule):
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
             mamba_expand=mamba_expand,
+            mamba_headdim=mamba_headdim,
         )
         super().__init__(model, n_classes, **kwargs)
         self.aligner = ResidualFeatureAligner(
