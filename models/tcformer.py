@@ -506,6 +506,7 @@ class TCFormerModule(nn.Module):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            hierarchical_sequence: bool = False,
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -544,6 +545,11 @@ class TCFormerModule(nn.Module):
         if unknown:
             raise ValueError(f"Unknown sequence block types: {sorted(unknown)}")
         self.sequence_block_types = tuple(sequence_block_types)
+        self.hierarchical_sequence = bool(hierarchical_sequence)
+        if self.hierarchical_sequence and trans_depth != 5:
+            raise ValueError(
+                "hierarchical_sequence requires trans_depth=5 for the 2/2/1 layout."
+            )
         self.head_dim = self.d_model // q_heads
         self.transformer = nn.ModuleList()
         for i, block_type in enumerate(self.sequence_block_types):
@@ -563,6 +569,14 @@ class TCFormerModule(nn.Module):
                 )
             self.transformer.append(block)
 
+        if self.hierarchical_sequence:
+            # Top-down temporal feature pyramid: 62 -> 31 -> 16 tokens for a
+            # 1000-sample trial with 4x4 front-end pooling. LayerNorm controls
+            # the scale after cross-resolution residual fusion.
+            self.hierarchical_fusion_norms = nn.ModuleList(
+                [nn.LayerNorm(self.d_model), nn.LayerNorm(self.d_model)]
+            )
+
         self.reduce = nn.Sequential(
             Rearrange("b t c -> b c t"),            # 1. rearrange for Conv1d over channels
             nn.Conv1d(in_channels=self.d_model,     # 2. 1x1 conv over channel dim
@@ -581,16 +595,11 @@ class TCFormerModule(nn.Module):
 
     def extract_temporal_features(self, x):  # x: [B, C_electrodes, T]
         conv_features = self.conv_block(x)         
-        _, _, T = conv_features.shape
-
         tokens = self.rearrange(self.mix(conv_features)) 
-        if "transformer" in self.sequence_block_types:
-            cos, sin = self._rotary_cache(T, tokens.device)
+        if self.hierarchical_sequence:
+            tokens = self._forward_hierarchical_sequence(tokens)
         else:
-            # A full selective-SSM stack needs neither attention nor RoPE.
-            cos, sin = None, None
-        for blk in self.transformer:
-            tokens = blk(tokens, cos, sin)
+            tokens = self._forward_flat_sequence(tokens)
         tran_features = self.reduce(tokens)
 
         features = torch.cat((conv_features, tran_features), dim=1) 
@@ -605,6 +614,52 @@ class TCFormerModule(nn.Module):
 
     def forward(self, x):
         return self.classify_features(self.extract_features(x))
+
+    def _apply_sequence_block(self, block: nn.Module, tokens: Tensor) -> Tensor:
+        if isinstance(block, _TransformerBlock):
+            cos, sin = self._rotary_cache(tokens.size(1), tokens.device)
+        else:
+            cos, sin = None, None
+        return block(tokens, cos, sin)
+
+    def _forward_flat_sequence(self, tokens: Tensor) -> Tensor:
+        for block in self.transformer:
+            tokens = self._apply_sequence_block(block, tokens)
+        return tokens
+
+    @staticmethod
+    def _downsample_tokens(tokens: Tensor) -> Tensor:
+        # ceil_mode produces 62 -> 31 -> 16 instead of dropping the last token.
+        return torch.nn.functional.avg_pool1d(
+            tokens.transpose(1, 2), kernel_size=2, stride=2, ceil_mode=True
+        ).transpose(1, 2)
+
+    @staticmethod
+    def _upsample_tokens(tokens: Tensor, output_length: int) -> Tensor:
+        return torch.nn.functional.interpolate(
+            tokens.transpose(1, 2), size=output_length, mode="linear",
+            align_corners=False,
+        ).transpose(1, 2)
+
+    def _forward_hierarchical_sequence(self, tokens: Tensor) -> Tensor:
+        """Run a 2/2/1 encoder and fuse deep context through FPN-style skips."""
+        stage_1 = tokens
+        for block in self.transformer[:2]:
+            stage_1 = self._apply_sequence_block(block, stage_1)
+
+        stage_2 = self._downsample_tokens(stage_1)
+        for block in self.transformer[2:4]:
+            stage_2 = self._apply_sequence_block(block, stage_2)
+
+        stage_3 = self._downsample_tokens(stage_2)
+        stage_3 = self._apply_sequence_block(self.transformer[4], stage_3)
+
+        fused_2 = self.hierarchical_fusion_norms[1](
+            stage_2 + self._upsample_tokens(stage_3, stage_2.size(1))
+        )
+        return self.hierarchical_fusion_norms[0](
+            stage_1 + self._upsample_tokens(fused_2, stage_1.size(1))
+        )
         
     def _rotary_cache(self, seq_len: int, device: torch.device):
         """Build (or reuse) RoPE caches for the current sequence length."""
@@ -612,7 +667,7 @@ class TCFormerModule(nn.Module):
         if (self._cos is None) or (self._cos.shape[0] < seq_len):
             cos, sin = _build_rotary_cache(head_dim, seq_len, device)
             self._cos, self._sin = cos.to(device), sin.to(device)
-        return self._cos, self._sin
+        return self._cos[:seq_len], self._sin[:seq_len]
 
 class TCFormer(ClassificationModule):
     def __init__(self,
@@ -636,6 +691,7 @@ class TCFormer(ClassificationModule):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            hierarchical_sequence: bool = False,
             **kwargs
         ):
         model = TCFormerModule(
@@ -659,6 +715,7 @@ class TCFormer(ClassificationModule):
             sequence_block_types=sequence_block_types,
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
+            hierarchical_sequence=hierarchical_sequence,
         )
         super().__init__(model, n_classes, **kwargs)
     
