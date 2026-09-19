@@ -23,7 +23,7 @@ from einops.layers.torch import Rearrange
 
 # Local application-specific imports
 from .classification_module import ClassificationModule
-from .modules import CausalConv1d, Conv1dWithConstraint
+from .modules import Conv1dWithConstraint
 from .channel_group_attention import ChannelGroupAttention
 from utils.weight_initialization import glorot_weight_zero_bias
 from utils.latency  import measure_latency
@@ -152,45 +152,88 @@ class MultiKernelConvBlock(nn.Module):
 # ------------------------------------------------------------------------------- #
 
 # ------------------------------------------------------------------------------- #
-class TCNBlock(nn.Module):
-    def __init__(self, kernel_length: int = 4, n_filters: int = 32, dilation: int = 1,
-                 n_groups: int = 1, dropout: float = 0.3):
+class _SamePadGroupedConv1d(nn.Module):
+    """Grouped non-causal convolution that preserves even and odd lengths."""
+
+    def __init__(self, channels: int, kernel_size: int, dilation: int, groups: int):
         super().__init__()
-        self.conv1 = CausalConv1d(n_filters, n_filters, kernel_size=kernel_length,
-                                  dilation=dilation, groups=n_groups)
-        self.bn1 = nn.BatchNorm1d(n_filters)
-        self.nonlinearity1 = nn.ELU()
-        self.drop1 = nn.Dropout(dropout)
+        self.total_padding = dilation * (kernel_size - 1)
+        self.conv = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size=kernel_size,
+            dilation=dilation,
+            groups=groups,
+            bias=False,
+        )
 
-        self.conv2 = CausalConv1d(n_filters, n_filters, kernel_size=kernel_length,
-                                  dilation=dilation, groups=n_groups)
-        self.bn2 = nn.BatchNorm1d(n_filters)
-        self.nonlinearity2 = nn.ELU()
-        self.drop2 = nn.Dropout(dropout)
+    def forward(self, x: Tensor) -> Tensor:
+        left = self.total_padding // 2
+        right = self.total_padding - left
+        return self.conv(torch.nn.functional.pad(x, (left, right)))
 
-        self.nonlinearity3 = nn.ELU()
 
-        nn.init.constant_(self.conv1.bias, 0.0)
-        nn.init.constant_(self.conv2.bias, 0.0)
+class NonCausalTemporalPyramidBlock(nn.Module):
+    """Fuse symmetric temporal context at four dilation scales."""
 
-    def forward(self, input):
-        x = self.drop1(self.nonlinearity1(self.bn1(self.conv1(input))))
-        x = self.drop2(self.nonlinearity2(self.bn2(self.conv2(x))))
-        x = self.nonlinearity3(input + x)
-        return x
+    def __init__(
+        self,
+        kernel_length: int = 3,
+        n_filters: int = 32,
+        n_groups: int = 1,
+        dropout: float = 0.3,
+        dilations: tuple = (1, 2, 4, 8),
+    ):
+        super().__init__()
+        if kernel_length < 2:
+            raise ValueError("kernel_length must be at least 2.")
+        self.branches = nn.ModuleList(
+            _SamePadGroupedConv1d(n_filters, kernel_length, dilation, n_groups)
+            for dilation in dilations
+        )
+        self.branch_norms = nn.ModuleList(
+            nn.BatchNorm1d(n_filters) for _ in dilations
+        )
+        self.fuse = nn.Conv1d(
+            n_filters * len(dilations),
+            n_filters,
+            kernel_size=1,
+            groups=n_groups,
+            bias=False,
+        )
+        self.fuse_norm = nn.BatchNorm1d(n_filters)
+        self.dropout = nn.Dropout(dropout)
+        self.activation = nn.ELU()
 
-class TCN(nn.Module):
-    def __init__(self, depth: int = 2, kernel_length: int = 4, n_filters: int = 32,
-                 n_groups: int = 1, dropout: float = 0.3):
-        super(TCN, self).__init__()
-        self.blocks = nn.ModuleList()
-        for i in range(depth):
-            dilation = 2 ** i
-            self.blocks.append(TCNBlock(kernel_length, n_filters, dilation, n_groups, dropout))
+    def forward(self, x: Tensor) -> Tensor:
+        pyramid = [
+            self.activation(norm(conv(x)))
+            for conv, norm in zip(self.branches, self.branch_norms)
+        ]
+        update = self.fuse_norm(self.fuse(torch.cat(pyramid, dim=1)))
+        return self.activation(x + self.dropout(update))
 
-    def forward(self, x):
-        for blk in self.blocks:
-            x = blk(x)
+
+class NonCausalTemporalPyramid(nn.Module):
+    def __init__(
+        self,
+        depth: int = 2,
+        kernel_length: int = 3,
+        n_filters: int = 32,
+        n_groups: int = 1,
+        dropout: float = 0.3,
+    ):
+        super().__init__()
+        self.blocks = nn.ModuleList(
+            NonCausalTemporalPyramidBlock(
+                kernel_length, n_filters, n_groups, dropout
+            )
+            for _ in range(depth)
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        for block in self.blocks:
+            x = block(x)
         return x
 
 class ClassificationHead(nn.Module):
@@ -245,7 +288,9 @@ class TCNHead(nn.Module):
         super().__init__()
         self.n_groups = n_groups
         self.n_classes = n_classes
-        self.tcn = TCN(tcn_depth, kernel_length, d_features, n_groups, dropout_tcn)
+        self.tcn = NonCausalTemporalPyramid(
+            tcn_depth, kernel_length, d_features, n_groups, dropout_tcn
+        )
 
         # self.linear = Conv1dWithConstraint(d_model, n_classes*n_groups, kernel_size=1, 
         #                                         groups=n_groups, max_norm=0.25)   
@@ -260,8 +305,8 @@ class TCNHead(nn.Module):
 
     @staticmethod
     def pool_temporal_features(x):
-        """Preserve both the causal final state and whole-trial information."""
-        return 0.5 * (x[:, :, -1] + x.mean(dim=-1))
+        """Aggregate the complete symmetric context without endpoint bias."""
+        return x.mean(dim=-1)
 
     def extract_features(self, x):
         x = self.extract_temporal_features(x)
