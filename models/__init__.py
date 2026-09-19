@@ -1,6 +1,7 @@
 from .atcnet import ATCNet
 from .tcformer import TCFormer
 from .hada_tcformer import HADATCFormer
+from .masked_reconstruction_pretrain import MaskedReconstructionPretrain
 from .basenet import BaseNet
 from .eegconformer import EEGConformer
 from .eegnet import EEGNet

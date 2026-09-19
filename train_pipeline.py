@@ -93,7 +93,22 @@ def train_and_test(config):
 
         # Instantiate datamodule and model
         datamodule = datamodule_cls(config["preprocessing"], subject_id=subject_id)
-        model = model_cls(**config["model_kwargs"], max_epochs=config["max_epochs"])
+        fold_model_kwargs = dict(config["model_kwargs"])
+        pretrained_path_template = fold_model_kwargs.get(
+            "pretrained_encoder_path"
+        )
+        if pretrained_path_template:
+            resolved_path = Path(
+                str(pretrained_path_template).format(
+                    subject_id=subject_id, dataset=dataset_name
+                )
+            )
+            if not resolved_path.is_absolute():
+                resolved_path = Path(__file__).resolve().parent / resolved_path
+            fold_model_kwargs["pretrained_encoder_path"] = str(resolved_path)
+        model = model_cls(
+            **fold_model_kwargs, max_epochs=config["max_epochs"]
+        )
 
         # Optionally visualize the model graph
         # visualize_model_graph(model, model_name=model_name)
@@ -296,6 +311,22 @@ def parse_arguments():
         help="Enable subject-independent (LOSO) mode"
     )
     parser.add_argument("--gpu_id", type=int, default=0, help="GPU device ID to use")
+    parser.add_argument(
+        "--subject_ids",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Optional subset of subject IDs to run.",
+    )
+    parser.add_argument(
+        "--pretrained_encoder_dir",
+        type=Path,
+        default=None,
+        help=(
+            "Directory containing fold checkpoints named "
+            "<dataset>_target-XXX_encoder.pt."
+        ),
+    )
     
     parser.add_argument("--seed", type=int, default=None, 
                         help="Random seed value (overrides config if specified)")
@@ -353,6 +384,13 @@ def run():
     config.pop("interaug", None)
 
     config["gpu_id"] = args.gpu_id
+    if args.subject_ids is not None:
+        config["subject_ids"] = args.subject_ids
+    if args.pretrained_encoder_dir is not None:
+        config["model_kwargs"]["pretrained_encoder_path"] = str(
+            args.pretrained_encoder_dir
+            / f"{args.dataset}_target-{{subject_id:03d}}_encoder.pt"
+        )
     # Override seed if specified
     if args.seed is not None:
         config["seed"] = args.seed

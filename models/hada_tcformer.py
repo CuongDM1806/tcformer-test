@@ -6,6 +6,7 @@ samples only and are used by the adversarial and MK-MMD alignment objectives.
 
 import math
 import time
+from pathlib import Path
 
 import torch
 from torch import Tensor, nn
@@ -134,6 +135,7 @@ class HADATCFormer(ClassificationModule):
         sequence_block_types=None,
         mamba_d_state: int = 8,
         mamba_d_conv: int = 3,
+        pretrained_encoder_path: str | None = None,
         aligner_hidden_dim: int = 128,
         domain_hidden_dim: int = 128,
         adaptation_dropout: float = 0.3,
@@ -169,6 +171,18 @@ class HADATCFormer(ClassificationModule):
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
         )
+        if pretrained_encoder_path:
+            checkpoint_path = Path(pretrained_encoder_path)
+            if not checkpoint_path.is_file():
+                raise FileNotFoundError(
+                    f"Pretrained encoder checkpoint not found: {checkpoint_path}"
+                )
+            checkpoint = torch.load(
+                checkpoint_path, map_location="cpu", weights_only=True
+            )
+            encoder_state = checkpoint.get("encoder_state_dict", checkpoint)
+            model.load_state_dict(encoder_state, strict=True)
+            print(f"Loaded pretrained TCFormer encoder: {checkpoint_path}")
         super().__init__(model, n_classes, **kwargs)
         self.aligner = ResidualFeatureAligner(
             model.feature_dim, aligner_hidden_dim, adaptation_dropout

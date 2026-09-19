@@ -74,6 +74,8 @@ preprocessing:
 
 model: "HADATCFormer"
 model_kwargs:
+  # Set by --pretrained_encoder_dir for fold-specific SSL initialization.
+  pretrained_encoder_path: null
   F1: 32
   temp_kernel_lengths: [20, 32, 64]
   d_group: 16

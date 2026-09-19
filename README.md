@@ -70,6 +70,27 @@ python train_pipeline.py --model tcformer --dataset bcic2b --no_interaug
 # HGD, cross-subject (LOSO), no augmentation
 python train_pipeline.py --model tcformer --dataset hgd --loso --no_interaug
 ```
+
+### Fold-wise masked-reconstruction pretraining
+
+Pretrain one encoder per LOSO fold, using source training EEG and optionally
+the held-out subject's unlabeled target-training EEG. Target labels and the
+BCI IV-2a target test session are never included.
+
+```bash
+# Stage 1: create bcic2a_target-001_encoder.pt, ..., target-009_encoder.pt
+python pretrain_tcformer.py --dataset bcic2a --epochs 100 \
+  --output_dir pretrained_encoders/bcic2a
+
+# Stage 2: initialize each HADATCFormer fold from its matching checkpoint
+python train_pipeline.py --model hada_tcformer --dataset bcic2a --loso \
+  --pretrained_encoder_dir pretrained_encoders/bcic2a
+```
+
+Use `--source_only` during pretraining to exclude target EEG. The optional
+`--frequency_loss_weight` adds log-magnitude FFT reconstruction loss to the
+masked time-domain MSE.
+
 Batch a full sweep:
 > Helper script to enumerate **models × datasets × seeds × {±augmentation}** in both **subject-dependent** and **LOSO** settings:
 ```bash
