@@ -144,6 +144,7 @@ class HADATCFormer(ClassificationModule):
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
         im_tta_diversity_weight: float = 1.0,
+        require_balanced_domain_batches: bool = False,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -193,6 +194,9 @@ class HADATCFormer(ClassificationModule):
         self.im_tta_steps = int(im_tta_steps)
         self.im_tta_lr = float(im_tta_lr)
         self.im_tta_diversity_weight = float(im_tta_diversity_weight)
+        self.require_balanced_domain_batches = bool(
+            require_balanced_domain_batches
+        )
         self.log_every_n_batches = max(1, int(log_every_n_batches))
         self._epoch_started_at = None
         # One LOSO run has one target subject. These EMAs therefore summarize
@@ -408,6 +412,12 @@ class HADATCFormer(ClassificationModule):
         source_x, source_y = batch["source"]
         target_x = batch["target"]
         source_count = source_x.size(0)
+        target_count = target_x.size(0)
+        if self.require_balanced_domain_batches and source_count != target_count:
+            raise RuntimeError(
+                "Balanced domain batches are required, but received "
+                f"source={source_count} and target={target_count}."
+            )
 
         # A shared forward pass also gives BatchNorm both domains without ever
         # reading target labels.

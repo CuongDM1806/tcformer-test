@@ -1,8 +1,8 @@
-import numpy as np
 import torch
 
 
-def interaug(batch):
+def make_interaugmented_batch(batch):
+    """Create one same-size batch by recombining within-class time chunks."""
     x, y = batch
     new_samples = torch.zeros_like(x)
     new_labels = torch.zeros_like(y)
@@ -11,13 +11,15 @@ def interaug(batch):
     for cls in torch.unique(y):
         x_cls = x[y == cls]
         chunks = torch.cat(torch.chunk(x_cls, chunks=n_chunks, dim=-1))
-        # indices = np.random.choice(len(x_cls), size=(len(x_cls), n_chunks),
-        #                            replace=True)
-        indices = torch.randint(0, len(x_cls), size=(len(x_cls), n_chunks), device=x_cls.device)  
+        indices = torch.randint(
+            0, len(x_cls), size=(len(x_cls), n_chunks), device=x_cls.device
+        )
+        offsets = torch.arange(
+            0, chunks.shape[0], len(x_cls), device=x_cls.device
+        )
 
         for idx in indices:
-            # add offset
-            idx += np.arange(0, chunks.shape[0], len(x_cls))
+            idx = idx + offsets
 
             # create new sample
             new_sample = chunks[idx]
@@ -27,11 +29,19 @@ def interaug(batch):
             new_labels[current] = cls
             current += 1
 
+    perm = torch.randperm(len(new_samples), device=new_samples.device)
+    return new_samples[perm], new_labels[perm]
+
+
+def interaug(batch):
+    """Return the legacy concatenated original + augmented source batch."""
+    x, y = batch
+    new_samples, new_labels = make_interaugmented_batch(batch)
     combined_x = torch.cat((x, new_samples), dim=0)
     combined_y = torch.cat((y, new_labels), dim=0)
 
     # shuffle
-    perm = torch.randperm(len(combined_x))
+    perm = torch.randperm(len(combined_x), device=combined_x.device)
     combined_x = combined_x[perm]
     combined_y = combined_y[perm]
 

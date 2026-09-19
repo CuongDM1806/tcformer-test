@@ -19,9 +19,14 @@ preprocessing:
     start: 0.0
     stop: 0.0
     batch_size: 48
+    # Run original and InterAug samples as consecutive balanced domain steps.
+    separate_interaug_steps: true
+    accumulate_grad_batches: 2
     # Per-subject OAS covariance + affine-invariant Riemannian whitening.
     # Each whitener is fit on that subject's training session only.
     riemannian_alignment: true
+    model_overrides:
+      require_balanced_domain_batches: true
   bcic2b:
     sfreq: 250
     low_cut: null
@@ -59,6 +64,8 @@ preprocessing:
     # T4-safe micro-batch. Two accumulated steps preserve effective BS=96.
     batch_size: 48
     accumulate_grad_batches: 2
+    # Run source-original and source-InterAug in separate 48-sample steps.
+    separate_interaug_steps: true
     num_workers: 2
     test_num_workers: 0
     # PhysioNet occasionally returns transient HTTP 5xx responses on Kaggle.
@@ -71,6 +78,7 @@ preprocessing:
     # Keep the IM-TTA implementation available, but skip it for PhysioNet.
     model_overrides:
       im_tta_steps: 0
+      require_balanced_domain_batches: true
 
 model: "HADATCFormer"
 model_kwargs:

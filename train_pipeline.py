@@ -352,6 +352,18 @@ def run():
         config["preprocessing"]["interaug"] = config["interaug"]
     config.pop("interaug", None)
 
+    if config["preprocessing"].get("separate_interaug_steps", False):
+        if not config["preprocessing"]["interaug"]:
+            raise ValueError(
+                "separate_interaug_steps requires InterAug to be enabled."
+            )
+        if config["preprocessing"].get("accumulate_grad_batches", 1) != 2:
+            raise ValueError(
+                "Separate original/InterAug steps require "
+                "accumulate_grad_batches=2 so each pair produces one "
+                "optimizer update."
+            )
+
     config["gpu_id"] = args.gpu_id
     # Override seed if specified
     if args.seed is not None:

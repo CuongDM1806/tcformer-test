@@ -10,7 +10,7 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import TensorDataset
 import os
 
-from utils.interaug import interaug
+from utils.interaug import interaug, make_interaugmented_batch
 
 
 class InterAugCollate:
@@ -27,7 +27,36 @@ class InterAugCollate:
         return x, y
 
 
+class SeparateInterAugCollate:
+    """Build original and augmented batches for consecutive training steps."""
+
+    def __call__(self, batch):
+        xs, ys = zip(*batch)
+        original = (torch.stack(xs), torch.tensor(ys, dtype=torch.long))
+        augmented = make_interaugmented_batch(original)
+        return original, augmented
+
+
+class InterAugStepLoader:
+    """Flatten each (original, augmented) pair into two consecutive steps."""
+
+    def __init__(self, loader):
+        self.loader = loader
+
+    def __len__(self):
+        return 2 * len(self.loader)
+
+    def __iter__(self):
+        for original, augmented in self.loader:
+            yield original
+            yield augmented
+
+
 def make_collate_fn(preproc):
+    if preproc.get("interaug", False) and preproc.get(
+        "separate_interaug_steps", False
+    ):
+        return SeparateInterAugCollate()
     return InterAugCollate(preproc)
 
 
@@ -50,17 +79,25 @@ class BaseDataModule(pl.LightningDataModule):
         raise NotImplementedError
 
     def _source_train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train_dataset,
+        separate_steps = self.preprocessing_dict.get("interaug", False) and (
+            self.preprocessing_dict.get("separate_interaug_steps", False)
+        )
+        loader = DataLoader(self.train_dataset,
                           batch_size=self.preprocessing_dict["batch_size"],
                           shuffle=True,
                           num_workers=self.preprocessing_dict.get("num_workers", os.cpu_count() // 2),
                           pin_memory=True,
+                          drop_last=separate_steps,
                           persistent_workers=True,          # ↩︎ keeps workers alive between epochs
                           prefetch_factor=4,                 # ↩︎ each worker preloads 4 future batches                          
                           collate_fn=make_collate_fn(self.preprocessing_dict)  # 👈 new
                     )
+        return InterAugStepLoader(loader) if separate_steps else loader
 
     def _target_train_dataloader(self) -> DataLoader:
+        separate_steps = self.preprocessing_dict.get("interaug", False) and (
+            self.preprocessing_dict.get("separate_interaug_steps", False)
+        )
         return DataLoader(
             UnlabeledDataset(self.target_dataset),
             batch_size=self.preprocessing_dict["batch_size"],
@@ -69,6 +106,7 @@ class BaseDataModule(pl.LightningDataModule):
             pin_memory=True,
             persistent_workers=True,
             prefetch_factor=4,
+            drop_last=separate_steps,
         )
 
     def train_dataloader(self):
