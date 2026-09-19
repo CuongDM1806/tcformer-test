@@ -239,6 +239,58 @@ class ClassificationHead(nn.Module):
         x = (x * weights.view(1, self.n_groups, 1)).sum(dim=1)
         return x
 
+
+class AttentiveStatisticsPooling(nn.Module):
+    """Pool a temporal sequence into group-wise weighted mean and std features.
+
+    Each temporal-scale group learns its own attention distribution. Mean and
+    standard-deviation features are kept contiguous per group so the grouped
+    classification head cannot mix temporal scales accidentally.
+    """
+
+    def __init__(self, d_features: int, n_groups: int, eps: float = 1e-5):
+        super().__init__()
+        if d_features % n_groups != 0:
+            raise ValueError("d_features must be divisible by n_groups.")
+        self.n_groups = n_groups
+        self.features_per_group = d_features // n_groups
+        self.eps = eps
+        self.attention = nn.Conv1d(
+            d_features,
+            n_groups,
+            kernel_size=1,
+            groups=n_groups,
+            bias=True,
+        )
+        # Start from uniform temporal weighting and learn task-specific focus.
+        nn.init.zeros_(self.attention.weight)
+        nn.init.zeros_(self.attention.bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim != 3:
+            raise ValueError("Expected temporal features with shape (B, C, T).")
+
+        batch, channels, steps = x.shape
+        expected_channels = self.n_groups * self.features_per_group
+        if channels != expected_channels:
+            raise ValueError(
+                f"Expected {expected_channels} feature channels, got {channels}."
+            )
+
+        weights = torch.softmax(self.attention(x), dim=-1)
+        grouped = x.reshape(
+            batch, self.n_groups, self.features_per_group, steps
+        )
+        weights = weights.unsqueeze(2)
+
+        mean = (grouped * weights).sum(dim=-1)
+        variance = ((grouped - mean.unsqueeze(-1)).square() * weights).sum(dim=-1)
+        std = torch.sqrt(variance.clamp_min(self.eps))
+
+        # (B, G, 2*C_g) keeps mean/std from the same group together.
+        return torch.cat((mean, std), dim=-1).reshape(batch, -1)
+
+
 class TCNHead(nn.Module):
     def __init__(self, d_features: int = 64, n_groups: int = 1, tcn_depth: int = 2, 
                  kernel_length: int = 4,  dropout_tcn: float = 0.3, n_classes: int = 4):
@@ -246,11 +298,13 @@ class TCNHead(nn.Module):
         self.n_groups = n_groups
         self.n_classes = n_classes
         self.tcn = TCN(tcn_depth, kernel_length, d_features, n_groups, dropout_tcn)
+        self.pool = AttentiveStatisticsPooling(d_features, n_groups)
+        self.pooled_feature_dim = 2 * d_features
 
         # self.linear = Conv1dWithConstraint(d_model, n_classes*n_groups, kernel_size=1, 
         #                                         groups=n_groups, max_norm=0.25)   
         self.classifier = ClassificationHead(
-            d_features=d_features,
+            d_features=self.pooled_feature_dim,
             n_groups=n_groups,
             n_classes=n_classes,
         )     
@@ -258,10 +312,9 @@ class TCNHead(nn.Module):
         """Return the complete TCN sequence before temporal aggregation."""
         return self.tcn(x)
 
-    @staticmethod
-    def pool_temporal_features(x):
-        """Preserve both the causal final state and whole-trial information."""
-        return 0.5 * (x[:, :, -1] + x.mean(dim=-1))
+    def pool_temporal_features(self, x):
+        """Return learned weighted mean and std statistics over time."""
+        return self.pool(x)
 
     def extract_features(self, x):
         x = self.extract_temporal_features(x)
@@ -511,7 +564,8 @@ class TCFormerModule(nn.Module):
         self.n_classes = n_classes
         self.n_groups = len(temp_kernel_lengths)
         self.d_model = d_group*self.n_groups
-        self.feature_dim = d_group * (self.n_groups + 1)
+        self.temporal_feature_dim = d_group * (self.n_groups + 1)
+        self.feature_dim = 2 * self.temporal_feature_dim
 
         self.rearrange = Rearrange("b c seq -> b seq c")
 
@@ -573,7 +627,7 @@ class TCFormerModule(nn.Module):
             nn.SiLU(),
         )
 
-        self.tcn_head = TCNHead(self.feature_dim, (self.n_groups+1), tcn_depth,
+        self.tcn_head = TCNHead(self.temporal_feature_dim, (self.n_groups+1), tcn_depth,
                                 kernel_length_tcn, dropout_tcn, n_classes)
 
         # # Kaiming (He) init is recommended for Conv layers that precede SiLU / ReLU
