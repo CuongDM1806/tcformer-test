@@ -19,12 +19,23 @@ class InterAugCollate:
         self.preproc = preproc
 
     def __call__(self, batch):
-        xs, ys = zip(*batch)
+        has_subject_ids = len(batch[0]) == 3
+        if has_subject_ids:
+            xs, ys, subject_ids = zip(*batch)
+            subject_ids = torch.stack(subject_ids).long()
+        else:
+            xs, ys = zip(*batch)
         x = torch.stack(xs)
-        y = torch.tensor(ys, dtype=torch.long)
+        y = torch.stack(ys).long()
         if self.preproc.get("interaug", False):
-            x, y = interaug([x, y])
-        return x, y
+            augmented = interaug(
+                [x, y, subject_ids] if has_subject_ids else [x, y]
+            )
+            if has_subject_ids:
+                x, y, subject_ids = augmented
+            else:
+                x, y = augmented
+        return (x, y, subject_ids) if has_subject_ids else (x, y)
 
 
 def make_collate_fn(preproc):
@@ -216,8 +227,13 @@ class BaseDataModule(pl.LightningDataModule):
         )
     
     @staticmethod
-    def _make_tensor_dataset(X, y):
-        return TensorDataset(torch.Tensor(X), torch.Tensor(y).type(torch.LongTensor))
+    def _make_tensor_dataset(X, y, subject_ids=None):
+        tensors = [torch.Tensor(X), torch.as_tensor(y, dtype=torch.long)]
+        if subject_ids is not None:
+            if len(subject_ids) != len(X):
+                raise ValueError("subject_ids must contain one ID per EEG trial.")
+            tensors.append(torch.as_tensor(subject_ids, dtype=torch.long))
+        return TensorDataset(*tensors)
         # return TensorDataset(torch.tensor(X), torch.tensor(y).long())
 
     @staticmethod

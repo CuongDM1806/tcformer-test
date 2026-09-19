@@ -204,6 +204,18 @@ class BCICIV2aLOSO(BCICIV2a):
 
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
         y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
+        source_subject_index = {
+            source_id: index for index, source_id in enumerate(train_subjects)
+        }
+        source_subject_ids = np.concatenate(
+            [
+                np.full(
+                    len(array[0]), source_subject_index[source_id], dtype=np.int64
+                )
+                for source_id, array in zip(train_subjects, train_arrays)
+            ],
+            axis=0,
+        )
         X_val = np.concatenate([arr[0] for arr in val_arrays], axis=0)
         y_val = np.concatenate([arr[1] for arr in val_arrays], axis=0)
 
@@ -213,7 +225,13 @@ class BCICIV2aLOSO(BCICIV2a):
                 X, X_val, X_target, X_test
             )
 
-        self.train_dataset = BaseDataModule._make_tensor_dataset(X, y)
+        self.train_dataset = BaseDataModule._make_tensor_dataset(
+            X,
+            y,
+            source_subject_ids
+            if self.preprocessing_dict.get("subject_adversarial", False)
+            else None,
+        )
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)

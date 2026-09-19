@@ -69,6 +69,31 @@ class DomainDiscriminator(nn.Module):
         return self.net(features)
 
 
+class SubjectDiscriminator(nn.Module):
+    """Predict the source-subject identity through a gradient reversal layer."""
+
+    def __init__(
+        self,
+        feature_dim: int,
+        hidden_dim: int,
+        n_source_subjects: int,
+        dropout: float,
+    ):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(feature_dim, hidden_dim),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim // 2, n_source_subjects),
+        )
+
+    def forward(self, features: Tensor) -> Tensor:
+        return self.net(features)
+
+
 class MultiKernelMMDLoss(nn.Module):
     def __init__(self, kernel_mul: float = 2.0, kernel_num: int = 5):
         super().__init__()
@@ -138,6 +163,8 @@ class HADATCFormer(ClassificationModule):
         domain_hidden_dim: int = 128,
         adaptation_dropout: float = 0.3,
         adversarial_weight: float = 1.0,
+        n_source_subjects: int | None = None,
+        subject_adversarial_weight: float = 0.0,
         mmd_weight: float = 0.5,
         temporal_mmd_weight: float = 0.1,
         light_adaptation_factor: float = 0.25,
@@ -177,8 +204,28 @@ class HADATCFormer(ClassificationModule):
         self.domain_discriminator = DomainDiscriminator(
             model.feature_dim, domain_hidden_dim, adaptation_dropout
         )
+        if subject_adversarial_weight < 0.0:
+            raise ValueError("subject_adversarial_weight must be non-negative.")
+        if subject_adversarial_weight > 0.0:
+            if n_source_subjects is None or n_source_subjects < 2:
+                raise ValueError(
+                    "Positive subject_adversarial_weight requires at least two "
+                    "source subjects."
+                )
+            self.subject_discriminator = SubjectDiscriminator(
+                model.feature_dim,
+                domain_hidden_dim,
+                int(n_source_subjects),
+                adaptation_dropout,
+            )
+        else:
+            self.subject_discriminator = None
         self.mmd_loss = MultiKernelMMDLoss()
         self.adversarial_weight = adversarial_weight
+        self.n_source_subjects = (
+            int(n_source_subjects) if n_source_subjects is not None else None
+        )
+        self.subject_adversarial_weight = float(subject_adversarial_weight)
         self.mmd_weight = mmd_weight
         self.temporal_mmd_weight = temporal_mmd_weight
         if not 0.0 < light_adaptation_factor <= 1.0:
@@ -405,7 +452,18 @@ class HADATCFormer(ClassificationModule):
                 "Run it with --loso and a UDA-enabled config."
             )
 
-        source_x, source_y = batch["source"]
+        source_batch = batch["source"]
+        if not isinstance(source_batch, (tuple, list)) or len(source_batch) not in (2, 3):
+            raise RuntimeError(
+                "Source batches must contain (x, y) or (x, y, subject_id)."
+            )
+        source_x, source_y = source_batch[:2]
+        source_subject_id = source_batch[2] if len(source_batch) == 3 else None
+        if self.subject_discriminator is not None and source_subject_id is None:
+            raise RuntimeError(
+                "Subject adversarial training is enabled, but the source batch "
+                "does not contain subject IDs."
+            )
         target_x = batch["target"]
         source_count = source_x.size(0)
 
@@ -453,12 +511,29 @@ class HADATCFormer(ClassificationModule):
         adversarial_loss = F.binary_cross_entropy_with_logits(
             domain_logits, domain_targets
         )
+        if self.subject_discriminator is not None:
+            subject_logits = self.subject_discriminator(
+                self.grl(source_features, alpha)
+            )
+            subject_adversarial_loss = F.cross_entropy(
+                subject_logits, source_subject_id
+            )
+            subject_discriminator_acc = accuracy(
+                subject_logits,
+                source_subject_id,
+                task="multiclass",
+                num_classes=self.n_source_subjects,
+            )
+        else:
+            subject_adversarial_loss = classification_loss.new_zeros(())
+            subject_discriminator_acc = classification_loss.new_zeros(())
         mmd_loss = self.mmd_loss(source_features, target_features)
         loss = (
             classification_loss
             + adaptation_gate
             * (
                 self.adversarial_weight * adversarial_loss
+                + self.subject_adversarial_weight * subject_adversarial_loss
                 + self.mmd_weight * mmd_loss
                 + self.temporal_mmd_weight * temporal_mmd_loss
             )
@@ -472,6 +547,20 @@ class HADATCFormer(ClassificationModule):
         self.log("train_acc", acc, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_cls_loss", classification_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log(
+            "train_subject_adv_loss",
+            subject_adversarial_loss,
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
+        self.log(
+            "train_subject_disc_acc",
+            subject_discriminator_acc,
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
         self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log(
             "train_da_gate",
@@ -531,6 +620,8 @@ class HADATCFormer(ClassificationModule):
                 f"loss={loss.detach().item():.4f} | "
                 f"cls={classification_loss.detach().item():.4f} | "
                 f"domain={adversarial_loss.detach().item():.4f} | "
+                f"subject={subject_adversarial_loss.detach().item():.4f} "
+                f"({subject_discriminator_acc.detach().item() * 100:.1f}%) | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
                 f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
                 f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "

@@ -43,16 +43,29 @@ def train_and_test(config):
     result_dir.mkdir(parents=True, exist_ok=True)
     for sub in ["checkpoints", "confmats", "curves"]: (result_dir / sub).mkdir(parents=True, exist_ok=True)
 
-    # Save config to the result directory
-    with open(result_dir / "config.yaml", "w") as f:
-        yaml.dump(config, f, default_flow_style=False)
-
     # Retrieve model and datamodule classes
     model_cls = get_model_cls(model_name)
     datamodule_cls = get_datamodule_cls(dataset_name)
 
     config["model_kwargs"]["n_channels"] = datamodule_cls.channels
     config["model_kwargs"]["n_classes"] = datamodule_cls.classes
+    subject_adversarial_enabled = (
+        config["model_kwargs"].get("subject_adversarial_weight", 0.0) > 0.0
+    )
+    if subject_adversarial_enabled:
+        if dataset_name != "bcic2a_loso":
+            raise ValueError(
+                "Subject adversarial training currently requires BCIC IV-2a LOSO."
+            )
+        config["model_kwargs"]["n_source_subjects"] = (
+            len(datamodule_cls.all_subject_ids) - 1
+        )
+    config["preprocessing"]["subject_adversarial"] = subject_adversarial_enabled
+
+    # Save the fully resolved config, including the fold-invariant number of
+    # source subjects and the data-pipeline subject-label switch.
+    with open(result_dir / "config.yaml", "w") as f:
+        yaml.dump(config, f, default_flow_style=False)
 
     # Parse subject IDs from config
     subj_cfg = config["subject_ids"]
