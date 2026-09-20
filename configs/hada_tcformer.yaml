@@ -113,7 +113,10 @@ model_kwargs:
   lr: 0.0009
   beta_1: 0.5
   weight_decay: 0.001
-  optimizer: "adam"
+  # SAM performs two forward/backward passes and uses Adam for the final update.
+  optimizer: "sam"
+  sam_rho: 0.05
+  sam_adaptive: false
   scheduler: true
   warmup_epochs: 20
   warmup_epochs_loso: 3

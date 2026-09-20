@@ -249,10 +249,12 @@ class HADATCFormer(ClassificationModule):
         ).clamp(0.0, 1.0)
 
         ema_decay = 0.9
-        if torch.isnan(self._target_gap_ema):
+        ema_uninitialized = torch.isnan(self._target_gap_ema)
+        sam_second_pass = getattr(self, "_sam_second_pass", False)
+        if ema_uninitialized:
             self._target_gap_ema.copy_(domain_gap)
             self._target_confidence_ema.copy_(normalized_confidence)
-        else:
+        elif not sam_second_pass:
             self._target_gap_ema.lerp_(domain_gap, 1.0 - ema_decay)
             self._target_confidence_ema.lerp_(
                 normalized_confidence, 1.0 - ema_decay
@@ -467,6 +469,11 @@ class HADATCFormer(ClassificationModule):
         acc = accuracy(
             source_logits, source_y, task="multiclass", num_classes=self.hparams.n_classes
         )
+        # SAM invokes training_step again at perturbed weights. The returned
+        # loss still participates in backward, but metrics and console output
+        # must describe each data batch only once.
+        if getattr(self, "_sam_second_pass", False):
+            return loss
         batch_size = source_count
         self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_acc", acc, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)

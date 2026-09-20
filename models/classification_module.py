@@ -8,6 +8,7 @@ from torchmetrics.classification import (
 
 import pytorch_lightning as pl
 from utils.lr_scheduler import linear_warmup_cosine_decay
+from utils.sam import SAM
 import random
 
 # Helper: Randomly selects a subset of EEG channels (augmentations)
@@ -70,6 +71,16 @@ class ClassificationModule(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
+    def on_fit_start(self):
+        if (
+            self.hparams.optimizer == "sam"
+            and self.trainer.accumulate_grad_batches != 1
+        ):
+            raise RuntimeError(
+                "SAM requires accumulate_grad_batches=1 because its second "
+                "closure must reevaluate the same effective batch."
+            )
+
     # optimiser / scheduler
     def configure_optimizers(self):
         betas = self.hparams.get("beta_1", 0.9), self.hparams.get("beta_2", 0.999)
@@ -84,6 +95,17 @@ class ClassificationModule(pl.LightningModule):
         elif self.hparams.optimizer == "sgd":
             optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.lr,
                                         weight_decay=self.hparams.weight_decay)
+        elif self.hparams.optimizer == "sam":
+            optimizer = SAM(
+                self.parameters(),
+                base_optimizer=torch.optim.Adam,
+                model=self,
+                rho=self.hparams.get("sam_rho", 0.05),
+                adaptive=self.hparams.get("sam_adaptive", False),
+                lr=self.hparams.lr,
+                betas=betas,
+                weight_decay=self.hparams.weight_decay,
+            )
         else:
             raise NotImplementedError
         if self.hparams.scheduler:
