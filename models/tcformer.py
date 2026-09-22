@@ -24,7 +24,7 @@ from einops.layers.torch import Rearrange
 # Local application-specific imports
 from .classification_module import ClassificationModule
 from .modules import CausalConv1d, Conv1dWithConstraint
-from .channel_group_attention import ChannelGroupAttention
+from .channel_group_attention import ScaleSelect
 from utils.weight_initialization import glorot_weight_zero_bias
 from utils.latency  import measure_latency
 
@@ -107,9 +107,9 @@ class MultiKernelConvBlock(nn.Module):
         # Enable grouped attention only if multiple groups are used (two temp kernels or more)
         self.use_group_attn = False if n_groups == 1 else use_group_attn
         if self.use_group_attn:
-            self.group_attn = ChannelGroupAttention(
+            self.scale_select = ScaleSelect(
                 in_channels=self.d_model,
-                num_groups=n_groups, 
+                num_scales=n_groups,
             )
         
         self.pool2 = nn.AvgPool2d((1, pool_length_2))
@@ -143,7 +143,7 @@ class MultiKernelConvBlock(nn.Module):
         
         # Group attention (optional) 
         if self.use_group_attn:        
-            x = x + self.group_attn(x)   # Residual connection 
+            x = self.scale_select(x)
         
         x = self.pool2(x)                                # temporal pooling
         x = self.drop2(x)                                # dropout

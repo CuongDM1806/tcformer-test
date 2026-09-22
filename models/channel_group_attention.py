@@ -87,6 +87,66 @@ class ChannelGroupAttention(nn.Module):
         return out
 
 
+class ScaleSelect(nn.Module):
+    """Selective-kernel attention across aligned temporal-scale channels.
+
+    The channel axis is interpreted as ``num_scales`` groups with the same
+    number of channels per scale. A joint mean/std descriptor predicts one
+    softmax weight for every (scale, within-scale channel) pair, so matching
+    channels compete across scales while the output shape stays unchanged.
+    """
+
+    def __init__(self, in_channels=48, num_scales=3, reduction=4):
+        super().__init__()
+        if in_channels % num_scales != 0:
+            raise ValueError("in_channels must be divisible by num_scales")
+        if reduction < 1:
+            raise ValueError("reduction must be positive")
+
+        self.in_channels = in_channels
+        self.num_scales = num_scales
+        self.channels_per_scale = in_channels // num_scales
+        hidden_dim = max(4, (self.channels_per_scale // reduction) * 4)
+        self.fc = nn.Sequential(
+            nn.Linear(2 * self.channels_per_scale, hidden_dim),
+            nn.ELU(),
+            nn.Linear(hidden_dim, in_channels),
+        )
+
+    def forward(self, x):
+        if x.ndim != 4:
+            raise ValueError(f"Expected [B, C, H, T], got shape {tuple(x.shape)}")
+        batch, channels, height, length = x.shape
+        if channels != self.in_channels:
+            raise ValueError(
+                f"Input channel dimension ({channels}) does not match "
+                f"configured in_channels ({self.in_channels})"
+            )
+
+        scales = x.reshape(
+            batch,
+            self.num_scales,
+            self.channels_per_scale,
+            height,
+            length,
+        )
+        merged = scales.sum(dim=1)
+        flattened = merged.flatten(start_dim=2)
+        descriptor = torch.cat(
+            (
+                flattened.mean(dim=-1),
+                flattened.std(dim=-1, unbiased=False),
+            ),
+            dim=1,
+        )
+        weights = self.fc(descriptor).reshape(
+            batch, self.num_scales, self.channels_per_scale
+        )
+        weights = weights.softmax(dim=1)
+        selected = scales * weights[:, :, :, None, None]
+        return selected.reshape(batch, channels, height, length)
+
+
 
 # --- Example Usage ---
 if __name__ == '__main__':
@@ -129,4 +189,3 @@ if __name__ == '__main__':
         expanded = weights.repeat_interleave(group_attention_layer.group_size, dim=1)
         print("\nExample expanded weights (first sample, first 20 channels):")
         print(expanded[0, :20].squeeze()) # Should show the first weight repeated 16 times, then the second
-
