@@ -109,7 +109,8 @@ class MultiKernelConvBlock(nn.Module):
         if self.use_group_attn:
             self.group_attn = ChannelGroupAttention(
                 in_channels=self.d_model,
-                num_groups=n_groups, 
+                num_groups=n_groups,
+                centered=True,
             )
         
         self.pool2 = nn.AvgPool2d((1, pool_length_2))
@@ -143,7 +144,7 @@ class MultiKernelConvBlock(nn.Module):
         
         # Group attention (optional) 
         if self.use_group_attn:        
-            x = x + self.group_attn(x)   # Residual connection 
+            x = self.group_attn(x)  # centered gain in [0, 2]
         
         x = self.pool2(x)                                # temporal pooling
         x = self.drop2(x)                                # dropout

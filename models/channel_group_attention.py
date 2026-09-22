@@ -11,8 +11,9 @@ class ChannelGroupAttention(nn.Module):
     Args:
         in_channels (int): Number of input channels (C). Must be divisible by num_groups.
         num_groups (int): Number of groups (G) to divide channels into.
+        centered (bool): Scale sigmoid gates to [0, 2], making 1 the neutral gain.
     """
-    def __init__(self, in_channels, num_groups, reduction=4):
+    def __init__(self, in_channels, num_groups, reduction=4, centered=False):
         
         super().__init__()
 
@@ -21,6 +22,7 @@ class ChannelGroupAttention(nn.Module):
         self.in_channels = in_channels
         self.num_groups = num_groups
         self.group_size = in_channels // num_groups
+        self.centered = centered
 
         # x → GlobalAvgPool → att_fc → [ReLU?] → [Expand and Sigmoid] → multiply with input
         """
@@ -65,6 +67,13 @@ class ChannelGroupAttention(nn.Module):
           
         # 3. Apply sigmoid to get attention values
         att_weights = self.sigmoid(att_weights)
+
+        # Optional identity-centered gain. With zero logits, sigmoid=0.5 and
+        # the gain is exactly 1.0; learned gates can then suppress (<1) or
+        # amplify (>1) a scale instead of only amplifying it through an outer
+        # residual connection.
+        if self.centered:
+            att_weights = 2.0 * att_weights
 
         # 4. Apply attention
         # Efficient expansion using view (instead of repeat_interleave)
@@ -129,4 +138,3 @@ if __name__ == '__main__':
         expanded = weights.repeat_interleave(group_attention_layer.group_size, dim=1)
         print("\nExample expanded weights (first sample, first 20 channels):")
         print(expanded[0, :20].squeeze()) # Should show the first weight repeated 16 times, then the second
-
