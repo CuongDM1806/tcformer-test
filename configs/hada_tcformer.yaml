@@ -82,6 +82,13 @@ model_kwargs:
   pool_length_2: 7
   dropout_conv: 0.4
   use_group_attn: true
+  # Replace the grouped temporal Conv(1x16) with a residual large-kernel stage.
+  # Set to "conv" for the exact Full-Mamba frontend or "conv+lk" to stack both.
+  temporal_mixer: "lk"
+  lk_kernel: 31
+  lk_depth: 1
+  lk_expand: 2
+  lk_drop_path: 0.1
   # Legacy names retained by TCFormerModule for sequence depth and dropout.
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
   trans_depth: 5

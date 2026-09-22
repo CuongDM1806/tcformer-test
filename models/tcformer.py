@@ -25,6 +25,7 @@ from einops.layers.torch import Rearrange
 from .classification_module import ClassificationModule
 from .modules import CausalConv1d, Conv1dWithConstraint
 from .channel_group_attention import ChannelGroupAttention
+from .lk_block import LKTemporalStage
 from utils.weight_initialization import glorot_weight_zero_bias
 from utils.latency  import measure_latency
 
@@ -48,8 +49,18 @@ class MultiKernelConvBlock(nn.Module):
         dropout: float = 0.4,
         d_group: int = 16,
         use_group_attn: bool = True,
+        temporal_mixer: str = "conv",
+        lk_kernel: int = 31,
+        lk_depth: int = 1,
+        lk_expand: int = 2,
+        lk_drop_path: float = 0.1,
     ):
         super().__init__()
+        if temporal_mixer not in {"conv", "lk", "conv+lk"}:
+            raise ValueError(
+                "temporal_mixer must be one of: 'conv', 'lk', 'conv+lk'."
+            )
+        self.temporal_mixer = temporal_mixer
 
         # --- 1. one temporal conv per kernel -----------------
         self.rearrange = Rearrange("b c seq -> b 1 c seq")
@@ -96,13 +107,37 @@ class MultiKernelConvBlock(nn.Module):
                     nn.BatchNorm2d(self.d_model),
                 )
 
-        # Grouped temporal convolution (1 × 16) per group
-        self.temporal_conv_2 = nn.Sequential(
-            nn.Conv2d(self.d_model, self.d_model, (1, 16), padding='same',
-                       bias=False, groups=n_groups),
-            nn.BatchNorm2d(self.d_model),
-            nn.ELU(),
-        )
+        # Original grouped temporal convolution, retained exactly in the
+        # backward-compatible "conv" mode and before LK in "conv+lk" mode.
+        if temporal_mixer in {"conv", "conv+lk"}:
+            self.temporal_conv_2 = nn.Sequential(
+                nn.Conv2d(
+                    self.d_model,
+                    self.d_model,
+                    (1, 16),
+                    padding="same",
+                    bias=False,
+                    groups=n_groups,
+                ),
+                nn.BatchNorm2d(self.d_model),
+                nn.ELU(),
+            )
+        else:
+            self.temporal_conv_2 = nn.Identity()
+
+        if temporal_mixer in {"lk", "conv+lk"}:
+            self.lk_stage = LKTemporalStage(
+                self.d_model,
+                n_groups,
+                depth=lk_depth,
+                drop_path_max=lk_drop_path,
+                kernel_size=lk_kernel,
+                expand=lk_expand,
+                dropout=dropout,
+                layer_scale_init=1.0 if temporal_mixer == "lk" else 1e-2,
+            )
+        else:
+            self.lk_stage = nn.Identity()
 
         # Enable grouped attention only if multiple groups are used (two temp kernels or more)
         self.use_group_attn = False if n_groups == 1 else use_group_attn
@@ -139,7 +174,8 @@ class MultiKernelConvBlock(nn.Module):
             x = self.channel_reduction_2(x)
        
         # Grouped Temporal Convolution (1 × 16) applied independently to each group
-        x = self.temporal_conv_2(x)                      
+        x = self.temporal_conv_2(x)
+        x = self.lk_stage(x)
         
         # Group attention (optional) 
         if self.use_group_attn:        
@@ -506,6 +542,11 @@ class TCFormerModule(nn.Module):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            temporal_mixer: str = "conv",
+            lk_kernel: int = 31,
+            lk_depth: int = 1,
+            lk_expand: int = 2,
+            lk_drop_path: float = 0.1,
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -515,9 +556,22 @@ class TCFormerModule(nn.Module):
 
         self.rearrange = Rearrange("b c seq -> b seq c")
 
-        self.conv_block = MultiKernelConvBlock(n_channels, temp_kernel_lengths, F1, D, 
-                                               pool_length_1, pool_length_2, dropout_conv, 
-                                               d_group, use_group_attn)
+        self.conv_block = MultiKernelConvBlock(
+            n_channels,
+            temp_kernel_lengths,
+            F1,
+            D,
+            pool_length_1,
+            pool_length_2,
+            dropout_conv,
+            d_group,
+            use_group_attn,
+            temporal_mixer=temporal_mixer,
+            lk_kernel=lk_kernel,
+            lk_depth=lk_depth,
+            lk_expand=lk_expand,
+            lk_drop_path=lk_drop_path,
+        )
         self.mix = nn.Sequential(
             nn.Conv1d(
                 in_channels=self.d_model,
@@ -636,6 +690,11 @@ class TCFormer(ClassificationModule):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            temporal_mixer: str = "conv",
+            lk_kernel: int = 31,
+            lk_depth: int = 1,
+            lk_expand: int = 2,
+            lk_drop_path: float = 0.1,
             **kwargs
         ):
         model = TCFormerModule(
@@ -659,6 +718,11 @@ class TCFormer(ClassificationModule):
             sequence_block_types=sequence_block_types,
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
+            temporal_mixer=temporal_mixer,
+            lk_kernel=lk_kernel,
+            lk_depth=lk_depth,
+            lk_expand=lk_expand,
+            lk_drop_path=lk_drop_path,
         )
         super().__init__(model, n_classes, **kwargs)
     
