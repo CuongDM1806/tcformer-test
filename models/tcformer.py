@@ -25,6 +25,7 @@ from einops.layers.torch import Rearrange
 from .classification_module import ClassificationModule
 from .modules import CausalConv1d, Conv1dWithConstraint
 from .channel_group_attention import ChannelGroupAttention
+from .dynamic_spatial import ScaleConditionedDynamicSpatialConv
 from utils.weight_initialization import glorot_weight_zero_bias
 from utils.latency  import measure_latency
 
@@ -78,10 +79,17 @@ class MultiKernelConvBlock(nn.Module):
                     nn.BatchNorm2d(self.d_model),
                 )
             
-        # Depth-wise convolution across EEG channels
+        # Scale-conditioned dynamic spatial filtering across EEG channels.
+        # It preserves the baseline output layout: one static filter plus a
+        # trial-dependent residual for each temporal scale and spatial head.
         F2 = self.d_model * D if self.use_channel_reduction_1 else F1 * n_groups * D 
         self.channel_DW_conv = nn.Sequential(
-            nn.Conv2d(F1 * n_groups, F2, (n_channels, 1), bias=False, groups=F1 * n_groups),
+            ScaleConditionedDynamicSpatialConv(
+                in_channels=F1 * n_groups,
+                num_scales=n_groups,
+                n_electrodes=n_channels,
+                depth_multiplier=D,
+            ),
             nn.BatchNorm2d(F2),
             nn.ELU(),
         )
