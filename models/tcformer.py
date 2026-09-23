@@ -96,14 +96,6 @@ class MultiKernelConvBlock(nn.Module):
                     nn.BatchNorm2d(self.d_model),
                 )
 
-        # Grouped temporal convolution (1 × 16) per group
-        self.temporal_conv_2 = nn.Sequential(
-            nn.Conv2d(self.d_model, self.d_model, (1, 16), padding='same',
-                       bias=False, groups=n_groups),
-            nn.BatchNorm2d(self.d_model),
-            nn.ELU(),
-        )
-
         # Enable grouped attention only if multiple groups are used (two temp kernels or more)
         self.use_group_attn = False if n_groups == 1 else use_group_attn
         if self.use_group_attn:
@@ -138,9 +130,6 @@ class MultiKernelConvBlock(nn.Module):
         if self.use_channel_reduction_2:
             x = self.channel_reduction_2(x)
        
-        # Grouped Temporal Convolution (1 × 16) applied independently to each group
-        x = self.temporal_conv_2(x)                      
-        
         # Group attention (optional) 
         if self.use_group_attn:        
             x = x + self.group_attn(x)   # Residual connection 
