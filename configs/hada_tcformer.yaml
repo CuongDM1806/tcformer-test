@@ -29,6 +29,10 @@ preprocessing:
     start: 0.0
     stop: -0.5
     batch_size: 48
+    # Fit one 3-channel whitening reference from sessions 1-3 per subject.
+    riemannian_alignment: true
+    num_workers: 2
+    test_num_workers: 0
   bcic3:
     sfreq: 100
     low_cut: 0
