@@ -247,6 +247,25 @@ class TCNHead(nn.Module):
         self.n_classes = n_classes
         self.tcn = TCN(tcn_depth, kernel_length, d_features, n_groups, dropout_tcn)
 
+        # One temporal attention distribution per feature group. The final
+        # projection starts at zero, so attention is initially uniform.
+        self.temporal_attention = nn.Sequential(
+            nn.Conv1d(
+                d_features, d_features, kernel_size=1,
+                groups=n_groups, bias=False,
+            ),
+            nn.Tanh(),
+            nn.Conv1d(
+                d_features, n_groups, kernel_size=1,
+                groups=n_groups, bias=True,
+            ),
+        )
+        nn.init.zeros_(self.temporal_attention[-1].weight)
+        nn.init.zeros_(self.temporal_attention[-1].bias)
+        # sigmoid(0)=0.5 reproduces the original 50/50 last+mean pooling
+        # because the zero-initialized attention begins as a temporal mean.
+        self.pool_mix_logit = nn.Parameter(torch.zeros(n_groups))
+
         # self.linear = Conv1dWithConstraint(d_model, n_classes*n_groups, kernel_size=1, 
         #                                         groups=n_groups, max_norm=0.25)   
         self.classifier = ClassificationHead(
@@ -258,10 +277,19 @@ class TCNHead(nn.Module):
         """Return the complete TCN sequence before temporal aggregation."""
         return self.tcn(x)
 
-    @staticmethod
-    def pool_temporal_features(x):
-        """Preserve both the causal final state and whole-trial information."""
-        return 0.5 * (x[:, :, -1] + x.mean(dim=-1))
+    def pool_temporal_features(self, x):
+        """Learn when to pool while preserving the causal final-state path."""
+        batch, channels, timepoints = x.shape
+        channels_per_group = channels // self.n_groups
+        grouped = x.reshape(
+            batch, self.n_groups, channels_per_group, timepoints
+        )
+        attention = torch.softmax(self.temporal_attention(x), dim=-1)
+        attended = (grouped * attention.unsqueeze(2)).sum(dim=-1)
+        final_state = grouped[..., -1]
+        mix = torch.sigmoid(self.pool_mix_logit).view(1, self.n_groups, 1)
+        pooled = mix * final_state + (1.0 - mix) * attended
+        return pooled.reshape(batch, channels)
 
     def extract_features(self, x):
         x = self.extract_temporal_features(x)
