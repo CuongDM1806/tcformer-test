@@ -79,7 +79,7 @@ model_kwargs:
   d_group: 16
   D: 2
   pool_length_1: 8
-  pool_length_2: 7
+  pool_length_2: 8
   dropout_conv: 0.4
   use_group_attn: true
   # Legacy names retained by TCFormerModule for sequence depth and dropout.
