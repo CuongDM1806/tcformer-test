@@ -187,11 +187,37 @@ class TCN(nn.Module):
         for i in range(depth):
             dilation = 2 ** i
             self.blocks.append(TCNBlock(kernel_length, n_filters, dilation, n_groups, dropout))
+        self.n_groups = n_groups
+        self.channels_per_group = n_filters // n_groups
+        # Per-group residual weights for the TCN input and intermediate block
+        # outputs. Zero initialization exactly preserves the original final
+        # block output at the start of training.
+        self.level_scales = nn.Parameter(torch.zeros(n_groups, depth))
 
     def forward(self, x):
+        levels = [x]
         for blk in self.blocks:
             x = blk(x)
-        return x
+            levels.append(x)
+        if not self.blocks:
+            return x
+
+        batch, channels, timepoints = x.shape
+        final = levels[-1].reshape(
+            batch, self.n_groups, self.channels_per_group, timepoints
+        )
+        auxiliary = torch.stack(levels[:-1], dim=2).reshape(
+            batch,
+            self.n_groups,
+            self.channels_per_group,
+            len(levels) - 1,
+            timepoints,
+        ).permute(0, 1, 3, 2, 4)
+        scales = self.level_scales.tanh().view(
+            1, self.n_groups, len(levels) - 1, 1, 1
+        )
+        fused = final + (auxiliary * scales).sum(dim=2)
+        return fused.reshape(batch, channels, timepoints)
 
 class ClassificationHead(nn.Module):
     """
