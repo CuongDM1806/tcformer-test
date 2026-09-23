@@ -71,6 +71,23 @@ preprocessing:
     # Keep the IM-TTA implementation available, but skip it for PhysioNet.
     model_overrides:
       im_tta_steps: 0
+  zhou2016:
+    # Zhou et al. (2016): 14 EEG channels, 250 Hz, 3 MI classes.
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    z_scale: true
+    # The arrow/cue and motor-imagery period lasts exactly five seconds.
+    start: 0.0
+    trial_duration: 5.0
+    batch_size: 48
+    num_workers: 2
+    test_num_workers: 0
+    # Fit one reference per subject from sessions 1-2 only.
+    riemannian_alignment: true
+    # 1250 samples is not compatible with the legacy InterAug chunking rule.
+    # Preserve the complete native five-second epoch instead.
+    interaug: false
 
 model: "HADATCFormer"
 model_kwargs:

@@ -290,7 +290,7 @@ def parse_arguments():
     )        
     parser.add_argument("--dataset", type=str, default="bcic2a", 
         help="Name of the dataset to use."
-                        "Options: bcic2a, bcic2b, hgd, physionet, reh_mi, bcic3"
+                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, reh_mi, bcic3"
     )
     parser.add_argument("--loso", action="store_true", default=False, 
         help="Enable subject-independent (LOSO) mode"
@@ -349,7 +349,9 @@ def run():
     elif args.no_interaug:
         config["preprocessing"]["interaug"] = False
     else:
-        config["preprocessing"]["interaug"] = config["interaug"]
+        config["preprocessing"]["interaug"] = config["preprocessing"].get(
+            "interaug", config["interaug"]
+        )
     config.pop("interaug", None)
 
     config["gpu_id"] = args.gpu_id
