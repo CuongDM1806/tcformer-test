@@ -152,18 +152,57 @@ class MultiKernelConvBlock(nn.Module):
 # ------------------------------------------------------------------------------- #
 
 # ------------------------------------------------------------------------------- #
+class SeparableCausalConv1d(nn.Module):
+    """Causal temporal filtering followed by within-group feature mixing."""
+
+    def __init__(
+        self,
+        channels: int,
+        kernel_size: int,
+        dilation: int,
+        n_groups: int,
+    ):
+        super().__init__()
+        self.depthwise = CausalConv1d(
+            channels,
+            channels,
+            kernel_size=kernel_size,
+            dilation=dilation,
+            groups=channels,
+            bias=False,
+        )
+        self.pointwise = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size=1,
+            groups=n_groups,
+            bias=True,
+        )
+
+    @property
+    def bias(self):
+        """Expose the output bias for the baseline TCN initialization path."""
+        return self.pointwise.bias
+
+    def forward(self, x):
+        return self.pointwise(self.depthwise(x))
+
+
+# ------------------------------------------------------------------------------- #
 class TCNBlock(nn.Module):
     def __init__(self, kernel_length: int = 4, n_filters: int = 32, dilation: int = 1,
                  n_groups: int = 1, dropout: float = 0.3):
         super().__init__()
-        self.conv1 = CausalConv1d(n_filters, n_filters, kernel_size=kernel_length,
-                                  dilation=dilation, groups=n_groups)
+        self.conv1 = SeparableCausalConv1d(
+            n_filters, kernel_length, dilation, n_groups
+        )
         self.bn1 = nn.BatchNorm1d(n_filters)
         self.nonlinearity1 = nn.ELU()
         self.drop1 = nn.Dropout(dropout)
 
-        self.conv2 = CausalConv1d(n_filters, n_filters, kernel_size=kernel_length,
-                                  dilation=dilation, groups=n_groups)
+        self.conv2 = SeparableCausalConv1d(
+            n_filters, kernel_length, dilation, n_groups
+        )
         self.bn2 = nn.BatchNorm1d(n_filters)
         self.nonlinearity2 = nn.ELU()
         self.drop2 = nn.Dropout(dropout)
