@@ -1,7 +1,6 @@
 from typing import Optional
 
 import numpy as np
-from sklearn.preprocessing import StandardScaler
 from torch.utils.data.dataloader import DataLoader
 
 from .base import BaseDataModule
@@ -72,13 +71,18 @@ class BCICIV2bLOSO(BCICIV2b):
 
     def __init__(self, preprocessing_dict: dict, subject_id: int):
         super(BCICIV2bLOSO, self).__init__(preprocessing_dict, subject_id)
+        self._setup_complete = False
 
     def prepare_data(self) -> None:
+        if self._setup_complete or self.dataset is not None:
+            return
         self.dataset = load_bcic4(
             subject_ids=self.all_subject_ids, dataset="2b",
             preprocessing_dict=self.preprocessing_dict)
 
     def setup(self, stage: Optional[str] = None) -> None:
+        if self._setup_complete:
+            return
         if self.dataset is None:
             self.prepare_data()
         # split the data
@@ -103,13 +107,49 @@ class BCICIV2bLOSO(BCICIV2b):
         val_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in val_datasets]
         test_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in test_datasets]
         target_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in target_datasets]
+        X_test = np.concatenate([arr[0] for arr in test_arrays], axis=0)
+        y_test = np.concatenate([arr[1] for arr in test_arrays], axis=0)
+        X_target = np.concatenate([arr[0] for arr in target_arrays], axis=0)
+
+        if self.preprocessing_dict.get("riemannian_alignment", False):
+            # Fit one whitening reference per subject. Only sessions 1-3 are
+            # used to estimate it; sessions 4-5 never leak into the reference.
+            print(
+                f"Applying strict per-subject RA for BCIC IV-2b LOSO target "
+                f"{self.subject_id}",
+                flush=True,
+            )
+            aligned_train_arrays = []
+            aligned_val_arrays = []
+            for source_id in train_subjects:
+                source_sessions = _get_ordered_sessions(splitted_ds[str(source_id)])
+                source_train = [
+                    BaseDataModule._dataset_to_arrays(source_sessions[idx])
+                    for idx in (0, 1, 2)
+                ]
+                source_val = [
+                    BaseDataModule._dataset_to_arrays(source_sessions[idx])
+                    for idx in (3, 4)
+                ]
+                source_X = np.concatenate([arr[0] for arr in source_train], axis=0)
+                source_y = np.concatenate([arr[1] for arr in source_train], axis=0)
+                source_X_val = np.concatenate([arr[0] for arr in source_val], axis=0)
+                source_y_val = np.concatenate([arr[1] for arr in source_val], axis=0)
+                source_X, source_X_val = BaseDataModule._riemannian_align_many(
+                    source_X, source_X_val
+                )
+                aligned_train_arrays.append((source_X, source_y))
+                aligned_val_arrays.append((source_X_val, source_y_val))
+            train_arrays = aligned_train_arrays
+            val_arrays = aligned_val_arrays
+            X_target, X_test = BaseDataModule._riemannian_align_many(
+                X_target, X_test
+            )
+
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
         y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
         X_val = np.concatenate([arr[0] for arr in val_arrays], axis=0)
         y_val = np.concatenate([arr[1] for arr in val_arrays], axis=0)
-        X_test = np.concatenate([arr[0] for arr in test_arrays], axis=0)
-        y_test = np.concatenate([arr[1] for arr in test_arrays], axis=0)
-        X_target = np.concatenate([arr[0] for arr in target_arrays], axis=0)
 
         # scale data
         if self.preprocessing_dict["z_scale"]:
@@ -121,6 +161,8 @@ class BCICIV2bLOSO(BCICIV2b):
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
+        self._setup_complete = True
+        self.dataset = None
 
     def val_dataloader(self) -> DataLoader:
         return DataLoader(self.val_dataset,
