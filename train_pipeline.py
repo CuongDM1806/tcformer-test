@@ -65,6 +65,12 @@ def train_and_test(config):
     all_sessions_accs, all_sessions_losses, all_sessions_kappas = [], [], []
     train_times, test_times, all_sessions_test_times, response_times = [], [], [], []
     all_confmats, all_sessions_confmats = [], []
+    all_sessions_test_label = getattr(
+        datamodule_cls, "all_sessions_test_label", "SESSIONS 1+2"
+    )
+    primary_test_label = getattr(
+        datamodule_cls, "primary_test_label", "SESSION 2"
+    )
 
     # Loop through each subject ID for training and testing   
     for subject_id in subject_ids:
@@ -137,9 +143,6 @@ def train_and_test(config):
         subject_acc = float(subject_result["test_acc"])
         subject_loss = float(subject_result["test_loss"])
         subject_kappa = float(subject_result["test_kappa"])
-        primary_test_label = getattr(
-            datamodule_cls, "primary_test_label", "SESSION 2"
-        )
         print(
             f"\nTARGET SUBJECT {subject_id} {primary_test_label} RESULT | "
             f"acc={subject_acc * 100:.2f}% | "
@@ -176,7 +179,7 @@ def train_and_test(config):
             all_sessions_confmats.append(model.test_confmat.numpy().copy())
 
             print(
-                f"\nTARGET SUBJECT {subject_id} SESSION 1+2 RESULT "
+                f"\nTARGET SUBJECT {subject_id} {all_sessions_test_label} RESULT "
                 f"(AUXILIARY) | acc={all_sessions_acc * 100:.2f}% | "
                 f"loss={all_sessions_loss:.4f} | "
                 f"kappa={all_sessions_kappa:.4f} | "
@@ -215,12 +218,12 @@ def train_and_test(config):
                     all_sessions_confmats[-1],
                     save_path=(
                         result_dir
-                        / f"confmats/confmat_subject_{subject_id}_sessions_1_2.png"
+                        / f"confmats/confmat_subject_{subject_id}_all_sessions.png"
                     ),
                     class_names=datamodule_cls.class_names,
                     title=(
                         f"Confusion Matrix - Subject {subject_id} "
-                        "Sessions 1+2 (Auxiliary)"
+                        f"{all_sessions_test_label.title()} (Auxiliary)"
                     ),
                 )
 
@@ -259,7 +262,9 @@ def train_and_test(config):
         all_sessions_accs=all_sessions_accs,
         all_sessions_losses=all_sessions_losses,
         all_sessions_kappas=all_sessions_kappas,
-        all_sessions_test_times=all_sessions_test_times)
+        all_sessions_test_times=all_sessions_test_times,
+        all_sessions_test_label=all_sessions_test_label,
+        primary_test_label=primary_test_label)
     
     # plot the average if requested
     if config.get("plot_cm_average", True) and all_confmats:
@@ -273,9 +278,12 @@ def train_and_test(config):
         avg_all_sessions_cm = np.mean(np.stack(all_sessions_confmats), axis=0)
         plot_confusion_matrix(
             avg_all_sessions_cm,
-            save_path=result_dir / "confmats/avg_confusion_matrix_sessions_1_2.png",
+            save_path=result_dir / "confmats/avg_confusion_matrix_all_sessions.png",
             class_names=datamodule_cls.class_names,
-            title="Average Confusion Matrix - Target Sessions 1+2 (Auxiliary)",
+            title=(
+                "Average Confusion Matrix - Target "
+                f"{all_sessions_test_label.title()} (Auxiliary)"
+            ),
         )
 
 

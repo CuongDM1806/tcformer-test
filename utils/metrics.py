@@ -39,7 +39,9 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
                    param_count, test_accs, test_losses, test_kappas,
                    train_times, test_times, response_times,
                    all_sessions_accs=None, all_sessions_losses=None,
-                   all_sessions_kappas=None, all_sessions_test_times=None):
+                   all_sessions_kappas=None, all_sessions_test_times=None,
+                   all_sessions_test_label="Sessions 1+2",
+                   primary_test_label="Session 2"):
     avg_test_acc = float(np.mean(test_accs))
     std_test_acc = float(np.std(test_accs))
     avg_test_kappa = float(np.mean(test_kappas))   # 🆕  average κ
@@ -69,17 +71,19 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
         for i, subject_id in enumerate(subject_ids):
             f.write(
                 f"Subject {subject_id} => Train Time: {train_times[i]:.2f}m, "
-                f"Session 2 Test Time: {test_times[i]:.2f}s, "
-                f"Session 2 Acc: {test_accs[i]:.4f}, "
-                f"Session 2 Loss: {test_losses[i]:.4f}, "
-                f"Session 2 Kappa: {test_kappas[i]:.4f}"
+                f"{primary_test_label} Test Time: {test_times[i]:.2f}s, "
+                f"{primary_test_label} Acc: {test_accs[i]:.4f}, "
+                f"{primary_test_label} Loss: {test_losses[i]:.4f}, "
+                f"{primary_test_label} Kappa: {test_kappas[i]:.4f}"
             )
             if has_all_sessions:
                 f.write(
-                    f", Sessions 1+2 Time: {all_sessions_test_times[i]:.2f}s, "
-                    f"Sessions 1+2 Acc: {all_sessions_accs[i]:.4f}, "
-                    f"Sessions 1+2 Loss: {all_sessions_losses[i]:.4f}, "
-                    f"Sessions 1+2 Kappa: {all_sessions_kappas[i]:.4f}"
+                    f", {all_sessions_test_label} Time: "
+                    f"{all_sessions_test_times[i]:.2f}s, "
+                    f"{all_sessions_test_label} Acc: {all_sessions_accs[i]:.4f}, "
+                    f"{all_sessions_test_label} Loss: {all_sessions_losses[i]:.4f}, "
+                    f"{all_sessions_test_label} Kappa: "
+                    f"{all_sessions_kappas[i]:.4f}"
                 )
             f.write("\n")
 
@@ -90,19 +94,19 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
         f.write(f"Total Training Time: {total_train_time:.2f} min\n")
         f.write(f"Average Response Time: {avg_response_time:.2f} ms\n")
         if has_all_sessions:
-            f.write("\n--- Auxiliary Target Sessions 1+2 ---\n")
+            f.write(f"\n--- Auxiliary Target {all_sessions_test_label} ---\n")
             f.write(
-                f"Average Sessions 1+2 Accuracy: "
+                f"Average {all_sessions_test_label} Accuracy: "
                 f"{avg_all_sessions_acc * 100:.2f} ± "
                 f"{std_all_sessions_acc * 100:.2f}\n"
             )
             f.write(
-                f"Average Sessions 1+2 Kappa:    "
+                f"Average {all_sessions_test_label} Kappa:    "
                 f"{avg_all_sessions_kappa:.3f} ± "
                 f"{std_all_sessions_kappa:.3f}\n"
             )
             f.write(
-                f"Average Sessions 1+2 Loss:     "
+                f"Average {all_sessions_test_label} Loss:     "
                 f"{avg_all_sessions_loss:.3f} ± "
                 f"{std_all_sessions_loss:.3f}\n"
             )
@@ -114,19 +118,19 @@ def write_summary(result_dir, model_name, dataset_name, subject_ids,
     print(f"Total Training Time: {total_train_time:.2f} min")
     print(f"Average Response Time: {avg_response_time:.2f} ms")
     if has_all_sessions:
-        print("\n=== Auxiliary Target Sessions 1+2 ===")
+        print(f"\n=== Auxiliary Target {all_sessions_test_label} ===")
         print(
-            f"Average Sessions 1+2 Accuracy: "
+            f"Average {all_sessions_test_label} Accuracy: "
             f"{avg_all_sessions_acc * 100:.2f} ± "
             f"{std_all_sessions_acc * 100:.2f}"
         )
         print(
-            f"Average Sessions 1+2 Kappa:    "
+            f"Average {all_sessions_test_label} Kappa:    "
             f"{avg_all_sessions_kappa:.3f} ± "
             f"{std_all_sessions_kappa:.3f}"
         )
         print(
-            f"Average Sessions 1+2 Loss:     "
+            f"Average {all_sessions_test_label} Loss:     "
             f"{avg_all_sessions_loss:.3f} ± "
             f"{std_all_sessions_loss:.3f}"
         )
