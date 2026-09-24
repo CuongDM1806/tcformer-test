@@ -83,7 +83,9 @@ preprocessing:
     batch_size: 48
     num_workers: 2
     test_num_workers: 0
-    # Fit one reference per subject from sessions 1-2 only.
+    # Pool all three source sessions, then reserve 5% per source for validation.
+    validation_fraction: 0.05
+    # Fit one reference per source train split and one on all unlabeled target trials.
     riemannian_alignment: true
     # 1250 samples is not compatible with the legacy InterAug chunking rule.
     # Preserve the complete native five-second epoch instead.
