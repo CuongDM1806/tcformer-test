@@ -1,6 +1,7 @@
 from typing import Optional
 
 import numpy as np
+from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 
 from .base import BaseDataModule
@@ -28,19 +29,19 @@ def _get_three_sessions(subject_dataset):
 
 
 class Zhou2016LOSO(BaseDataModule):
-    """HADA LOSO split with the target subject's final session held out.
+    """Transductive HADA LOSO split over all three Zhou2016 sessions.
 
-    Source subjects use sessions 1-2 for supervised training and session 3
-    for source-only validation. For the held-out target subject, sessions 1-2
-    are exposed without labels to domain adaptation and session 3 is used only
-    for final evaluation.
+    All sessions from every source subject are pooled before a stratified,
+    source-only train/validation split. All sessions from the held-out target
+    subject are exposed without labels to HADA and optional IM-TTA, then the
+    same trials are evaluated with labels after adaptation.
     """
 
     all_subject_ids = list(range(1, 5))
     class_names = ["hand(L)", "hand(R)", "feet"]
     channels = 14
     classes = 3
-    primary_test_label = "SESSION 3"
+    primary_test_label = "ALL 3 SESSIONS"
 
     def __init__(self, preprocessing_dict: dict, subject_id: int):
         super().__init__(preprocessing_dict, subject_id)
@@ -81,6 +82,12 @@ class Zhou2016LOSO(BaseDataModule):
             for subject_id in self.all_subject_ids
             if subject_id != self.subject_id
         ]
+        seed = int(self.preprocessing_dict.get("seed", 0))
+        validation_fraction = float(
+            self.preprocessing_dict.get("validation_fraction", 0.05)
+        )
+        if not 0.0 < validation_fraction < 1.0:
+            raise ValueError("validation_fraction must be between 0 and 1.")
 
         source_train_arrays = []
         source_val_arrays = []
@@ -91,13 +98,40 @@ class Zhou2016LOSO(BaseDataModule):
             session_arrays = [
                 BaseDataModule._dataset_to_arrays(session) for session in sessions
             ]
-            X_source_train = np.concatenate(
-                [session_arrays[0][0], session_arrays[1][0]], axis=0
+            X_source = np.concatenate(
+                [session_array[0] for session_array in session_arrays], axis=0
             )
-            y_source_train = np.concatenate(
-                [session_arrays[0][1], session_arrays[1][1]], axis=0
+            y_source = np.concatenate(
+                [session_array[1] for session_array in session_arrays], axis=0
             )
-            X_source_val, y_source_val = session_arrays[2]
+            indices = np.arange(len(y_source))
+            class_count = np.unique(y_source).size
+            validation_size = max(
+                int(np.ceil(len(y_source) * validation_fraction)), class_count
+            )
+            if len(y_source) - validation_size < class_count:
+                raise ValueError(
+                    f"Zhou2016 S{source_id:02d} has too few trials for a "
+                    f"stratified {validation_fraction:.1%} validation split."
+                )
+            train_indices, val_indices = train_test_split(
+                indices,
+                test_size=validation_size,
+                random_state=seed + source_id,
+                stratify=y_source,
+            )
+            if np.intersect1d(train_indices, val_indices).size:
+                raise RuntimeError(
+                    f"Zhou2016 S{source_id:02d} train/validation overlap."
+                )
+            if len(train_indices) + len(val_indices) != len(indices):
+                raise RuntimeError(
+                    f"Zhou2016 S{source_id:02d} split lost source trials."
+                )
+            X_source_train = X_source[train_indices]
+            y_source_train = y_source[train_indices]
+            X_source_val = X_source[val_indices]
+            y_source_val = y_source[val_indices]
 
             if self.preprocessing_dict.get("riemannian_alignment", False):
                 X_source_train, X_source_val = (
@@ -116,14 +150,15 @@ class Zhou2016LOSO(BaseDataModule):
             for session in target_sessions
         ]
         X_target = np.concatenate(
-            [target_arrays[0][0], target_arrays[1][0]], axis=0
+            [target_array[0] for target_array in target_arrays], axis=0
         )
-        X_test, y_test = target_arrays[2]
+        y_test = np.concatenate(
+            [target_array[1] for target_array in target_arrays], axis=0
+        )
         if self.preprocessing_dict.get("riemannian_alignment", False):
-            # The target reference is fitted without using target labels.
-            X_target, X_test = BaseDataModule._riemannian_align_many(
-                X_target, X_test
-            )
+            # Fit on every unlabeled target trial used by HADA/IM-TTA.
+            X_target = BaseDataModule._riemannian_align_many(X_target)[0]
+        X_test = X_target.copy()
 
         X_train = np.concatenate(
             [item[0] for item in source_train_arrays], axis=0
@@ -181,7 +216,7 @@ class Zhou2016LOSO(BaseDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        """Use labeled source session 3 only; never target labels during fit."""
+        """Validate only on a held-out, stratified subset of source trials."""
         num_workers = self.preprocessing_dict.get("test_num_workers", 0)
         return DataLoader(
             self.val_dataset,
