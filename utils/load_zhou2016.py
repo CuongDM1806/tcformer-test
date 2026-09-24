@@ -51,11 +51,17 @@ def load_zhou2016(
     if duration <= 0:
         raise ValueError("Zhou2016 trial_duration must be positive.")
 
+    start_offset_samples = int(round(start * sfreq))
     window_size_samples = int(round(duration * sfreq))
+    # Zhou2016 CNT cue annotations are point events: their stored duration is
+    # zero. Therefore Braindecode cannot infer a trial extent on its own. Make
+    # the stop offset explicit so each cue spans exactly `duration` seconds.
+    # Offsets are both relative to cue onset, hence stop = start + duration.
+    stop_offset_samples = start_offset_samples + window_size_samples
     return create_windows_from_events(
         dataset,
-        trial_start_offset_samples=int(round(start * sfreq)),
-        trial_stop_offset_samples=0,
+        trial_start_offset_samples=start_offset_samples,
+        trial_stop_offset_samples=stop_offset_samples,
         window_size_samples=window_size_samples,
         window_stride_samples=window_size_samples,
         drop_last_window=False,
