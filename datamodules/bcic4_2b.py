@@ -68,6 +68,8 @@ class BCICIV2b(BaseDataModule):
 
 class BCICIV2bLOSO(BCICIV2b):
     val_dataset = None
+    primary_test_label = "SESSIONS 4-5"
+    all_sessions_test_label = "SESSIONS 1-5"
 
     def __init__(self, preprocessing_dict: dict, subject_id: int):
         super(BCICIV2bLOSO, self).__init__(preprocessing_dict, subject_id)
@@ -110,6 +112,7 @@ class BCICIV2bLOSO(BCICIV2b):
         X_test = np.concatenate([arr[0] for arr in test_arrays], axis=0)
         y_test = np.concatenate([arr[1] for arr in test_arrays], axis=0)
         X_target = np.concatenate([arr[0] for arr in target_arrays], axis=0)
+        y_target = np.concatenate([arr[1] for arr in target_arrays], axis=0)
 
         if self.preprocessing_dict.get("riemannian_alignment", False):
             # Fit one whitening reference per subject. Only sessions 1-3 are
@@ -161,6 +164,14 @@ class BCICIV2bLOSO(BCICIV2b):
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
+        # Auxiliary metric only: evaluate the final model on all five sessions
+        # of the held-out subject. Sessions 1-3 were already exposed without
+        # labels during HADA training, so this must never replace the primary
+        # sessions 4-5 result.
+        self.all_target_dataset = BaseDataModule._make_tensor_dataset(
+            np.concatenate((X_target, X_test), axis=0),
+            np.concatenate((y_target, y_test), axis=0),
+        )
         self._setup_complete = True
         self.dataset = None
 
