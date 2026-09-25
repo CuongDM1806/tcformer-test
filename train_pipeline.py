@@ -7,10 +7,12 @@ import os, time, yaml
 if os.environ.get("MPLBACKEND", "").startswith("module://matplotlib_inline"):
     os.environ["MPLBACKEND"] = "Agg"
 import numpy as np
+import torch
 from pathlib import Path
 from datetime import datetime
 from argparse import ArgumentParser
 from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.strategies import DDPStrategy
 # from torchviz import make_dot  # optional for graph visualization
 
@@ -73,6 +75,18 @@ def train_and_test(config):
         # Set seed for reproducibility
         seed_everything(config["seed"])
         metrics_callback = MetricsCallback()
+        best_checkpoint = ModelCheckpoint(
+            dirpath=result_dir / "checkpoints",
+            filename=(
+                f"subject_{subject_id}_best"
+                "-{epoch:03d}-{val_acc:.4f}"
+            ),
+            monitor="val_acc",
+            mode="max",
+            save_top_k=1,
+            save_last=False,
+            auto_insert_metric_name=False,
+        )
    
         # Initialize PyTorch Lightning Trainer
         trainer = Trainer(
@@ -87,8 +101,8 @@ def train_and_test(config):
             strategy = "auto" if config.get("gpu_id", 0) != -1 
                 else DDPStrategy(find_unused_parameters=True), 
             logger=False,
-            enable_checkpointing=False,
-            callbacks=[metrics_callback]
+            enable_checkpointing=True,
+            callbacks=[metrics_callback, best_checkpoint]
         )
 
         # Instantiate datamodule and model
@@ -105,6 +119,26 @@ def train_and_test(config):
         st_train = time.time()
         trainer.fit(model, datamodule=datamodule)
         train_times.append((time.time() - st_train) / 60) # minutes
+
+        # Zhou2016 reports the model selected by labeled source validation,
+        # not the weights from the final epoch. Target labels remain unseen.
+        if not best_checkpoint.best_model_path:
+            raise RuntimeError(
+                f"No best validation checkpoint was produced for subject {subject_id}."
+            )
+        checkpoint = torch.load(
+            best_checkpoint.best_model_path,
+            map_location="cpu",
+            weights_only=False,
+        )
+        model.load_state_dict(checkpoint["state_dict"])
+        best_val_acc = float(best_checkpoint.best_model_score)
+        print(
+            f"Loaded best source-validation checkpoint | "
+            f"subject={subject_id} | val_acc={best_val_acc * 100:.2f}% | "
+            f"path={best_checkpoint.best_model_path}",
+            flush=True,
+        )
 
         # ---------------- TEST -----------------
         # Passing the datamodule to trainer.test() makes Lightning invoke
