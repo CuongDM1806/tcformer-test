@@ -5,6 +5,7 @@ max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
 max_epochs_loso_hgd: 77
+max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
 domain_adaptation: true
@@ -80,16 +81,20 @@ preprocessing:
     # The arrow/cue and motor-imagery period lasts exactly five seconds.
     start: 0.0
     trial_duration: 5.0
-    batch_size: 48
+    batch_size: 32
     num_workers: 2
     test_num_workers: 0
-    # Pool all three source sessions, then reserve 5% per source for validation.
-    validation_fraction: 0.05
+    # DSAINet-compatible source split: reserve 20% from each source subject.
+    validation_fraction: 0.20
     # Fit one reference per source train split and one on all unlabeled target trials.
     riemannian_alignment: true
     # 1250 samples is not compatible with the legacy InterAug chunking rule.
     # Preserve the complete native five-second epoch instead.
     interaug: false
+    # Match the Zhou2016 optimizer settings reported for DSAINet.
+    model_overrides:
+      lr: 0.001
+      weight_decay: 0.0001
 
 model: "HADATCFormer"
 model_kwargs:
