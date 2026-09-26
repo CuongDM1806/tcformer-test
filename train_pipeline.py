@@ -106,6 +106,17 @@ def train_and_test(config):
         trainer.fit(model, datamodule=datamodule)
         train_times.append((time.time() - st_train) / 60) # minutes
 
+        if metrics_callback.best_model_state is None:
+            raise RuntimeError(
+                f"No val_acc was recorded for subject {subject_id}; "
+                "cannot evaluate the best-validation model."
+            )
+        model.load_state_dict(metrics_callback.best_model_state)
+        print(
+            f"Restored best validation model for subject {subject_id}: "
+            f"val_acc={metrics_callback.best_val_acc:.4f}"
+        )
+
         # ---------------- TEST -----------------
         # Passing the datamodule to trainer.test() makes Lightning invoke
         # prepare_data/setup again. For LOSO this reloads every subject and can

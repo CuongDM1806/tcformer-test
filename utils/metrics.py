@@ -1,6 +1,7 @@
 
 from pytorch_lightning import Callback
 import numpy as np
+import torch
 
 # Custom Callback to track train/val loss and accuracy each epoch
 class MetricsCallback(Callback):
@@ -10,6 +11,8 @@ class MetricsCallback(Callback):
         self.train_loss, self.val_loss = [], []
         self.train_acc, self.val_acc = [], []
         self.val_all_sessions_loss, self.val_all_sessions_acc = [], []
+        self.best_val_acc = float("-inf")
+        self.best_model_state = None
 
     def on_train_epoch_end(self, trainer, pl_module):
         metrics = trainer.callback_metrics
@@ -20,6 +23,15 @@ class MetricsCallback(Callback):
 
     def on_validation_epoch_end(self, trainer, pl_module):
         metrics = trainer.callback_metrics
+        val_acc = metrics.get("val_acc")
+        if val_acc is not None:
+            val_acc = float(val_acc.detach().cpu())
+            if val_acc > self.best_val_acc:
+                self.best_val_acc = val_acc
+                self.best_model_state = {
+                    name: tensor.detach().cpu().clone()
+                    for name, tensor in pl_module.state_dict().items()
+                }
         if "val_loss" in metrics:
             self.val_loss.append(metrics["val_loss"].cpu().item())
         if "val_acc" in metrics:
