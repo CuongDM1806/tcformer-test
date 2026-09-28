@@ -74,7 +74,9 @@ def train_and_test(config):
 
         # Set seed for reproducibility
         seed_everything(config["seed"])
-        metrics_callback = MetricsCallback()
+        metrics_callback = MetricsCallback(
+            log_every_n_epochs=config.get("log_every_n_epochs", 0)
+        )
         best_checkpoint = ModelCheckpoint(
             dirpath=result_dir / "checkpoints",
             filename=(
@@ -101,6 +103,7 @@ def train_and_test(config):
             strategy = "auto" if config.get("gpu_id", 0) != -1 
                 else DDPStrategy(find_unused_parameters=True), 
             logger=False,
+            enable_progress_bar=config.get("enable_progress_bar", True),
             enable_checkpointing=True,
             callbacks=[metrics_callback, best_checkpoint]
         )

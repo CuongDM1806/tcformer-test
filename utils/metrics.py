@@ -5,8 +5,9 @@ import numpy as np
 # Custom Callback to track train/val loss and accuracy each epoch
 class MetricsCallback(Callback):
     """Custom PyTorch Lightning callback to track training and validation metrics."""
-    def __init__(self):
+    def __init__(self, log_every_n_epochs=0):
         super().__init__()
+        self.log_every_n_epochs = max(0, int(log_every_n_epochs))
         self.train_loss, self.val_loss = [], []
         self.train_acc, self.val_acc = [], []
         self.val_all_sessions_loss, self.val_all_sessions_acc = [], []
@@ -31,6 +32,23 @@ class MetricsCallback(Callback):
         if "val_all_sessions_acc" in metrics:
             self.val_all_sessions_acc.append(
                 metrics["val_all_sessions_acc"].cpu().item()
+            )
+
+        epoch = trainer.current_epoch + 1
+        should_print = self.log_every_n_epochs > 0 and (
+            epoch % self.log_every_n_epochs == 0 or epoch == trainer.max_epochs
+        )
+        if should_print:
+            values = []
+            for name in ("train_loss", "train_acc", "val_loss", "val_acc"):
+                if name in metrics:
+                    value = metrics[name].detach().cpu().item()
+                    if name.endswith("acc"):
+                        values.append(f"{name}={value * 100:.2f}%")
+                    else:
+                        values.append(f"{name}={value:.4f}")
+            pl_module.print(
+                f"Epoch {epoch}/{trainer.max_epochs} | " + " | ".join(values)
             )
 
 

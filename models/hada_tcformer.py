@@ -193,7 +193,9 @@ class HADATCFormer(ClassificationModule):
         self.im_tta_steps = int(im_tta_steps)
         self.im_tta_lr = float(im_tta_lr)
         self.im_tta_diversity_weight = float(im_tta_diversity_weight)
-        self.log_every_n_batches = max(1, int(log_every_n_batches))
+        if log_every_n_batches < 0:
+            raise ValueError("log_every_n_batches must be non-negative.")
+        self.log_every_n_batches = int(log_every_n_batches)
         self._epoch_started_at = None
         # One LOSO run has one target subject. These EMAs therefore summarize
         # target-level transferability instead of reacting to a single batch.
@@ -505,7 +507,7 @@ class HADATCFormer(ClassificationModule):
 
         total_batches = self.trainer.num_training_batches
         current_batch = batch_idx + 1
-        should_print = (
+        should_print = self.log_every_n_batches > 0 and (
             current_batch == 1
             or current_batch % self.log_every_n_batches == 0
             or current_batch == total_batches
