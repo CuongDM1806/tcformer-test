@@ -98,9 +98,12 @@ model_kwargs:
   aligner_hidden_dim: 128
   domain_hidden_dim: 128
   adaptation_dropout: 0.3
+  # CDAN aligns feature x prediction; LMMD aligns matching source/target classes.
   adversarial_weight: 1.0
-  mmd_weight: 0.5
-  temporal_mmd_weight: 0.1
+  lmmd_weight: 0.5
+  temporal_lmmd_weight: 0.1
+  # Use every soft target prediction; raise this to filter uncertain samples.
+  lmmd_confidence_threshold: 0.0
   # High-gap, low-confidence target subjects use 25% of all DA losses.
   light_adaptation_factor: 0.25
   # Source-free target adaptation after HADA training. Only BatchNorm affine

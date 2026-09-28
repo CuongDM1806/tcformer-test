@@ -1,7 +1,7 @@
 """TCFormer with HADANet-style unsupervised domain adaptation.
 
 Only source labels contribute to classification. Target batches contain EEG
-samples only and are used by the adversarial and MK-MMD alignment objectives.
+samples only and are used by CDAN and class-conditional LMMD alignment.
 """
 
 import math
@@ -109,6 +109,93 @@ class MultiKernelMMDLoss(nn.Module):
         return source_term + target_term - 2.0 * k_st.mean()
 
 
+class LocalMultiKernelMMDLoss(MultiKernelMMDLoss):
+    """Class-conditional MK-MMD using source labels and soft target predictions."""
+
+    def __init__(
+        self,
+        n_classes: int,
+        confidence_threshold: float = 0.0,
+        kernel_mul: float = 2.0,
+        kernel_num: int = 5,
+    ):
+        super().__init__(kernel_mul=kernel_mul, kernel_num=kernel_num)
+        if n_classes < 2:
+            raise ValueError("n_classes must be at least 2.")
+        if not 0.0 <= confidence_threshold < 1.0:
+            raise ValueError("confidence_threshold must be in [0, 1).")
+        self.n_classes = int(n_classes)
+        self.confidence_threshold = float(confidence_threshold)
+
+    def forward(
+        self,
+        source: Tensor,
+        target: Tensor,
+        source_labels: Tensor,
+        target_logits: Tensor,
+    ) -> Tensor:
+        if source.size(0) < 2 or target.size(0) < 2:
+            return source.new_zeros(())
+        if source.size(0) != source_labels.size(0):
+            raise ValueError("source and source_labels must have the same batch size.")
+        if target.size(0) != target_logits.size(0):
+            raise ValueError("target and target_logits must have the same batch size.")
+        if target_logits.size(1) != self.n_classes:
+            raise ValueError("target_logits has an unexpected class dimension.")
+
+        source = F.normalize(source, p=2, dim=1)
+        target = F.normalize(target, p=2, dim=1)
+        total = torch.cat((source, target), dim=0)
+        distances = torch.cdist(total, total, p=2).square()
+
+        sample_count = total.size(0)
+        bandwidth = distances.detach().sum()
+        bandwidth = bandwidth / max(sample_count * (sample_count - 1), 1)
+        bandwidth = bandwidth.clamp_min(1e-6)
+        bandwidth = bandwidth / (self.kernel_mul ** (self.kernel_num // 2))
+        kernels = sum(
+            torch.exp(-distances / (bandwidth * (self.kernel_mul ** idx)))
+            for idx in range(self.kernel_num)
+        )
+
+        source_weights = F.one_hot(
+            source_labels.long(), num_classes=self.n_classes
+        ).to(dtype=source.dtype)
+        # Target labels are never accessed. Stop gradients through the weights so
+        # LMMD aligns features instead of rewarding changes to pseudo-labels.
+        target_weights = target_logits.detach().softmax(dim=1)
+        if self.confidence_threshold > 0.0:
+            confidence = target_weights.amax(dim=1)
+            target_weights = target_weights * (
+                confidence >= self.confidence_threshold
+            ).unsqueeze(1)
+
+        source_mass = source_weights.sum(dim=0)
+        target_mass = target_weights.sum(dim=0)
+        valid_classes = (source_mass > 0) & (target_mass > 1e-6)
+        if not valid_classes.any():
+            return source.new_zeros(())
+
+        source_weights = source_weights[:, valid_classes]
+        target_weights = target_weights[:, valid_classes]
+        source_weights = source_weights / source_weights.sum(dim=0).clamp_min(1e-6)
+        target_weights = target_weights / target_weights.sum(dim=0).clamp_min(1e-6)
+
+        source_count = source.size(0)
+        k_ss = kernels[:source_count, :source_count]
+        k_tt = kernels[source_count:, source_count:]
+        k_st = kernels[:source_count, source_count:]
+        w_ss = source_weights @ source_weights.transpose(0, 1)
+        w_tt = target_weights @ target_weights.transpose(0, 1)
+        w_st = source_weights @ target_weights.transpose(0, 1)
+        active_class_count = valid_classes.sum().to(dtype=source.dtype)
+        return (
+            (k_ss * w_ss).sum()
+            + (k_tt * w_tt).sum()
+            - 2.0 * (k_st * w_st).sum()
+        ) / active_class_count
+
+
 class HADATCFormer(ClassificationModule):
     """HADANet-style UDA applied to the TCFormer representation."""
 
@@ -138,8 +225,9 @@ class HADATCFormer(ClassificationModule):
         domain_hidden_dim: int = 128,
         adaptation_dropout: float = 0.3,
         adversarial_weight: float = 1.0,
-        mmd_weight: float = 0.5,
-        temporal_mmd_weight: float = 0.1,
+        lmmd_weight: float = 0.5,
+        temporal_lmmd_weight: float = 0.1,
+        lmmd_confidence_threshold: float = 0.0,
         light_adaptation_factor: float = 0.25,
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
@@ -174,13 +262,18 @@ class HADATCFormer(ClassificationModule):
             model.feature_dim, aligner_hidden_dim, adaptation_dropout
         )
         self.grl = GradientReversal()
+        # CDAN aligns the joint feature/prediction representation.
+        conditional_feature_dim = model.feature_dim * n_classes
         self.domain_discriminator = DomainDiscriminator(
-            model.feature_dim, domain_hidden_dim, adaptation_dropout
+            conditional_feature_dim, domain_hidden_dim, adaptation_dropout
         )
-        self.mmd_loss = MultiKernelMMDLoss()
+        self.lmmd_loss = LocalMultiKernelMMDLoss(
+            n_classes=n_classes,
+            confidence_threshold=lmmd_confidence_threshold,
+        )
         self.adversarial_weight = adversarial_weight
-        self.mmd_weight = mmd_weight
-        self.temporal_mmd_weight = temporal_mmd_weight
+        self.lmmd_weight = lmmd_weight
+        self.temporal_lmmd_weight = temporal_lmmd_weight
         if not 0.0 < light_adaptation_factor <= 1.0:
             raise ValueError("light_adaptation_factor must be in (0, 1].")
         self.light_adaptation_factor = light_adaptation_factor
@@ -213,6 +306,18 @@ class HADATCFormer(ClassificationModule):
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
         return 2.0 / (1.0 + math.exp(-10.0 * progress)) - 1.0
+
+    @staticmethod
+    def _conditional_domain_features(features: Tensor, logits: Tensor) -> Tensor:
+        """Return the CDAN multilinear map ``feature (x) class probability``."""
+        if features.ndim != 2 or logits.ndim != 2:
+            raise ValueError("CDAN features and logits must both be rank-2 tensors.")
+        if features.size(0) != logits.size(0):
+            raise ValueError("CDAN features and logits must have the same batch size.")
+        probabilities = logits.softmax(dim=1)
+        return torch.bmm(
+            features.unsqueeze(2), probabilities.unsqueeze(1)
+        ).flatten(start_dim=1)
 
     @torch.no_grad()
     def _target_adaptation_gate(
@@ -418,14 +523,10 @@ class HADATCFormer(ClassificationModule):
         )
         pooled_features = self.model.tcn_head.pool_temporal_features(temporal_features)
 
-        # Auxiliary alignment before temporal compression. It sees information
-        # from every TCN time position and introduces no trainable parameters.
+        # Retain pre-pooling descriptors for class-conditional temporal LMMD.
         temporal_mean_features = temporal_features.mean(dim=-1)
         source_temporal_mean = temporal_mean_features[:source_count]
         target_temporal_mean = temporal_mean_features[source_count:]
-        temporal_mmd_loss = self.mmd_loss(
-            source_temporal_mean, target_temporal_mean
-        )
 
         all_features = pooled_features
         all_features = self.aligner(all_features)
@@ -433,9 +534,20 @@ class HADATCFormer(ClassificationModule):
         target_features = all_features[source_count:]
 
         source_logits = self.model.classify_features(source_features)
-        with torch.no_grad():
-            target_logits = self.model.classify_features(target_features)
+        # Target labels are never read. CDAN uses differentiable probabilities;
+        # LMMD internally detaches them before constructing class weights.
+        target_logits = self.model.classify_features(target_features)
         classification_loss = F.cross_entropy(source_logits, source_y)
+
+        lmmd_loss = self.lmmd_loss(
+            source_features, target_features, source_y, target_logits
+        )
+        temporal_lmmd_loss = self.lmmd_loss(
+            source_temporal_mean,
+            target_temporal_mean,
+            source_y,
+            target_logits,
+        )
 
         adaptation_gate, target_gap, target_confidence = (
             self._target_adaptation_gate(
@@ -444,7 +556,13 @@ class HADATCFormer(ClassificationModule):
         )
 
         alpha = self._grl_alpha()
-        domain_logits = self.domain_discriminator(self.grl(all_features, alpha))
+        all_logits = torch.cat((source_logits, target_logits), dim=0)
+        conditional_features = self._conditional_domain_features(
+            all_features, all_logits
+        )
+        domain_logits = self.domain_discriminator(
+            self.grl(conditional_features, alpha)
+        )
         domain_targets = torch.cat(
             (
                 torch.zeros(source_count, 1, device=all_features.device),
@@ -455,14 +573,13 @@ class HADATCFormer(ClassificationModule):
         adversarial_loss = F.binary_cross_entropy_with_logits(
             domain_logits, domain_targets
         )
-        mmd_loss = self.mmd_loss(source_features, target_features)
         loss = (
             classification_loss
             + adaptation_gate
             * (
                 self.adversarial_weight * adversarial_loss
-                + self.mmd_weight * mmd_loss
-                + self.temporal_mmd_weight * temporal_mmd_loss
+                + self.lmmd_weight * lmmd_loss
+                + self.temporal_lmmd_weight * temporal_lmmd_loss
             )
         )
 
@@ -474,7 +591,7 @@ class HADATCFormer(ClassificationModule):
         self.log("train_acc", acc, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_cls_loss", classification_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
-        self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_lmmd_loss", lmmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log(
             "train_da_gate",
             adaptation_gate,
@@ -497,8 +614,8 @@ class HADATCFormer(ClassificationModule):
             batch_size=batch_size,
         )
         self.log(
-            "train_temporal_mmd_loss",
-            temporal_mmd_loss,
+            "train_temporal_lmmd_loss",
+            temporal_lmmd_loss,
             on_step=False,
             on_epoch=True,
             batch_size=batch_size,
@@ -533,8 +650,8 @@ class HADATCFormer(ClassificationModule):
                 f"loss={loss.detach().item():.4f} | "
                 f"cls={classification_loss.detach().item():.4f} | "
                 f"domain={adversarial_loss.detach().item():.4f} | "
-                f"mmd={mmd_loss.detach().item():.4f} | "
-                f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
+                f"lmmd={lmmd_loss.detach().item():.4f} | "
+                f"tlmmd={temporal_lmmd_loss.detach().item():.4f} | "
                 f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "
                 f"gap={target_gap.detach().item():.2f} | "
                 f"conf={target_confidence.detach().item():.2f} | "
