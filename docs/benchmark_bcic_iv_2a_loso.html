@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Benchmark BCIC-IV-2a Cross-subject / LOSO</title>
+<style>
+  @page { size: A4 landscape; margin: 1.35cm; }
+  body { font-family: "Liberation Sans", Arial, sans-serif; font-size: 10pt; line-height: 1.35; color: #172033; }
+  h1 { color: #17365d; font-size: 20pt; margin-bottom: 4px; }
+  h2 { color: #1f4e78; font-size: 14pt; margin-top: 20px; border-bottom: 1px solid #9fbad0; padding-bottom: 4px; }
+  h3 { color: #244f6f; font-size: 11.5pt; }
+  p { margin: 6px 0; }
+  .subtitle { color: #526071; font-size: 10pt; }
+  .notice { background: #fff2cc; border: 1px solid #d6b656; padding: 9px; margin: 12px 0; }
+  .good { background: #e2f0d9; }
+  .warn { background: #fff2cc; }
+  .unclear { background: #f4cccc; }
+  table { border-collapse: collapse; width: 100%; margin: 9px 0 15px; font-size: 8.5pt; }
+  th { background: #1f4e78; color: white; border: 1px solid #8ea9c1; padding: 6px; vertical-align: top; }
+  td { border: 1px solid #aab7c4; padding: 5px; vertical-align: top; }
+  tr:nth-child(even) td { background-color: #f6f8fb; }
+  ul, ol { margin-top: 4px; }
+  a { color: #0563c1; text-decoration: underline; }
+  .small { font-size: 8.5pt; color: #4d5966; }
+  .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+<h1>Benchmark BCIC-IV-2a: Cross-subject, LOSO và Domain Adaptation</h1>
+<p class="subtitle"><b>Phiên bản:</b> 03/09/2026 &nbsp; | &nbsp; <b>Mục đích:</b> lựa chọn baseline công bằng cho HADA/TCFormer</p>
+
+<div class="notice">
+  <b>Kết luận sử dụng:</b> Không xếp hạng chung các kết quả chỉ dựa trên phần trăm accuracy. Các nghiên cứu bên dưới dùng những protocol khác nhau: test session 2, test cả hai session, chỉ dùng session T, hoặc truy cập target không nhãn. Metric <i>balanced accuracy</i> cũng không được xem là tương đương tuyệt đối với accuracy thông thường.
+</div>
+
+<h2>1. Quy ước dữ liệu và protocol</h2>
+<table>
+  <tr><th>Thuật ngữ</th><th>Ý nghĩa trong BCIC-IV-2a</th><th>Số trial target điển hình</th></tr>
+  <tr><td>Session 1 / T</td><td>Phiên training, file dạng <code>A01T</code>. Có nhãn trong bản dữ liệu chính thức dành cho nghiên cứu.</td><td>288</td></tr>
+  <tr><td>Session 2 / E</td><td>Phiên evaluation, file dạng <code>A01E</code>.</td><td>288</td></tr>
+  <tr><td>Session-2-only LOSO</td><td>Train bằng session 1 của 8 source; đánh giá session 2 của subject target.</td><td>288</td></tr>
+  <tr><td>Complete-subject LOSO</td><td>Thông thường gộp cả hai session của source; giữ toàn bộ hai session của target để test.</td><td>576</td></tr>
+  <tr><td>Unsupervised DA/TTA</td><td>Không dùng nhãn target để tối ưu nhưng có quyền truy cập tín hiệu target không nhãn. Phải tách riêng khỏi strict LOSO không truy cập target.</td><td>Tùy bài</td></tr>
+</table>
+
+<h2>2. Bảng benchmark tổng hợp</h2>
+<table>
+  <tr>
+    <th>#</th><th>Mô hình</th><th>Năm / trạng thái</th><th>Kết quả BCIC-IV-2a</th><th>Metric</th>
+    <th>Nhóm bài toán</th><th>Train source</th><th>Target dùng khi adaptation?</th><th>Tập test target</th><th>Mức xác minh / ghi chú</th><th>Nguồn</th>
+  </tr>
+  <tr class="warn"><td>1</td><td>MVC-former Adaptation</td><td>2025</td><td><b>77,8%</b></td><td>Accuracy</td><td>Domain adaptation</td><td>Các subject source</td><td>Có, tham gia feature/domain alignment; tình trạng pseudo-label/label cần kiểm tra toàn văn</td><td>Chưa xác minh là session 2 hay cả hai session</td><td>Thấp–trung bình. Không ghi là strict LOSO.</td><td><a href="https://www.sciencedirect.com/science/article/pii/S0925231225015474">Neurocomputing / ScienceDirect</a></td></tr>
+  <tr class="warn"><td>2</td><td>CBraMod + key ingredients</td><td>ICLR 2025</td><td><b>74,05 ± 6,35%</b></td><td><b>Balanced accuracy</b></td><td>Subject-independent / LOSO</td><td>Có vẻ dữ liệu đầy đủ của source</td><td>Không mô tả như DA có target</td><td>Có vẻ cả session 1 và 2</td><td>Trung bình. Không phải session-2-only; metric khác accuracy thường.</td><td><a href="https://proceedings.iclr.cc/paper_files/paper/2025/file/bbbd6d915cb90be21c1254a82d45cedd-Paper-Conference.pdf">ICLR 2025 PDF</a></td></tr>
+  <tr class="good"><td>3</td><td>EEG-TriNet++</td><td>2026</td><td><b>72,3 ± 0,8%</b></td><td>Accuracy</td><td>LOSO subject-independent</td><td>Session 1 của source theo protocol chung</td><td>Không được mô tả là DA</td><td><b>Session 2 target</b></td><td>Khá cao. Bài nêu first session train, second session test; phần LOSO ít chi tiết hơn TCFormer.</td><td><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC13023433/">PMC full text</a></td></tr>
+  <tr class="warn"><td>4</td><td>EEG-CSANet</td><td>ICLR 2026 submission; chưa peer-review</td><td><b>69,68%</b></td><td>Accuracy</td><td>Subject-independent</td><td><b>Complete data</b> của 8 subject</td><td>Không mô tả là DA</td><td><b>Toàn bộ dữ liệu</b> subject thứ 9, tức cả hai session</td><td>Cao về split; chỉ một seed theo báo cáo. Không cùng protocol session-2-only.</td><td><a href="https://openreview.net/pdf?id=EyhcJBvES9">OpenReview PDF</a></td></tr>
+  <tr class="warn"><td>5</td><td>RA + IM-TTA (eegnet-v2)</td><td>2025/2026; repository result</td><td><b>67,83 ± 0,42%</b></td><td>Accuracy</td><td>Source-free test-time adaptation</td><td>8 subject, cả hai session theo README kết quả</td><td><b>Có, batch target không nhãn</b></td><td>Cả hai session target theo repository</td><td>Kết quả repository, chưa nên trình bày như bằng chứng bài báo peer-review.</td><td><a href="https://github.com/istiaqfuad/eegnet-v2/blob/main/RESULTS.md">eegnet-v2 RESULTS.md</a></td></tr>
+  <tr class="warn"><td>6</td><td>MCMTNet</td><td>2025; số liệu do EEG-CSANet báo cáo</td><td><b>66,31%</b></td><td>Accuracy</td><td>Subject-independent baseline</td><td>Cả hai session theo setup EEG-CSANet</td><td>Không mô tả là DA</td><td>Cả hai session target theo setup EEG-CSANet</td><td>Con số tái lập/so sánh, không nên gán thành protocol gốc của MCMTNet khi chưa kiểm tra bài gốc.</td><td><a href="https://openreview.net/pdf?id=EyhcJBvES9">EEG-CSANet, Table 4</a></td></tr>
+  <tr class="warn"><td>7</td><td>EEG-TransNet</td><td>2024; số liệu do EEG-CSANet báo cáo</td><td><b>65,73%</b></td><td>Accuracy</td><td>Subject-independent baseline</td><td>Cả hai session theo setup EEG-CSANet</td><td>Không mô tả là DA</td><td>Cả hai session target theo setup EEG-CSANet</td><td>Con số tái lập/so sánh, không nhất thiết là protocol trong bài EEG-TransNet gốc.</td><td><a href="https://openreview.net/pdf?id=EyhcJBvES9">EEG-CSANet, Table 4</a></td></tr>
+  <tr class="warn"><td>8</td><td>BARN-DA</td><td>2026</td><td><b>65,49 ± 11,64%</b></td><td>Accuracy</td><td>LOSO domain adaptation</td><td>8 source subject</td><td>Có target domain không nhãn theo DA</td><td>Có khả năng cả hai session (bài liệt kê 576 trial/subject)</td><td>Trung bình. Phần mô tả số trial trong bài có điểm cần thận trọng.</td><td><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC13115380/">PMC full text</a></td></tr>
+  <tr class="good"><td>9</td><td>TCFormer</td><td>Scientific Reports, 2025</td><td><b>63,0%</b></td><td>Accuracy</td><td>Strict cross-subject LOSO</td><td><b>Session 1</b> của 8 source</td><td><b>Không</b></td><td><b>Session 2</b> của held-out target</td><td><b>Rất cao.</b> Bài nói trực tiếp first-session source → second-session target.</td><td><a href="https://www.nature.com/articles/s41598-025-16219-7">Scientific Reports</a></td></tr>
+  <tr class="unclear"><td>10</td><td>TSMSNet</td><td>2026</td><td><b>61,18 ± 9,93%</b></td><td>Accuracy</td><td>LOSO-CV</td><td>Chưa xác minh session</td><td>Chưa xác minh</td><td>Chưa xác minh</td><td>Thấp. Không đưa vào xếp hạng session-matched trước khi đọc experimental setup đầy đủ/code.</td><td><a href="https://www.sciencedirect.com/science/article/pii/S1746809426016630">ScienceDirect</a></td></tr>
+  <tr class="warn"><td>11</td><td>CTNet</td><td>Scientific Reports, 2024</td><td><b>58,64%</b></td><td>Accuracy</td><td>Cross-subject</td><td>Có khả năng cả hai session</td><td>Không mô tả là DA</td><td>Có khả năng cả hai session target</td><td>Trung bình–thấp. Bài nhắc m = 5184 = 9×576 nhưng diễn đạt session và cross-subject chưa hoàn toàn nhất quán.</td><td><a href="https://www.nature.com/articles/s41598-024-71118-7">Scientific Reports</a></td></tr>
+  <tr class="warn"><td>12</td><td>CLTNet</td><td>2025</td><td><b>58,28%</b></td><td>Accuracy</td><td>Cross-subject / LOSO</td><td>File <code>AxxT</code> của 8 source</td><td>Không mô tả là DA</td><td><b>File AxxT / session 1</b> target</td><td>Khá cao dựa trên nhãn bảng A01T…A09T. Không phải session 2 và không phải cả hai session.</td><td><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11852626/">PMC full text</a></td></tr>
+  <tr class="unclear"><td>13</td><td>JFACPS</td><td>2025</td><td><b>Chưa xác minh mean</b></td><td>Accuracy (cần xác minh)</td><td>MMD + Riemannian tangent features + pseudo-label</td><td>Source subjects</td><td>Có, pseudo-label target</td><td>Chưa xác minh session split</td><td>Không dùng trong ranking cho đến khi trích được bảng kết quả và protocol đầy đủ.</td><td><a href="https://www.sciencedirect.com/science/article/pii/S0957417425009340">Expert Systems with Applications</a></td></tr>
+  <tr class="unclear"><td>14</td><td>Source-driven semantic style transfer</td><td>2026</td><td><b>Chưa xác minh mean</b></td><td>Accuracy (cần xác minh)</td><td>Cross-subject domain adaptation / style transfer</td><td>Source subjects</td><td>Có liên hệ source–target qua style-mixing; chi tiết cần toàn văn</td><td>Chưa xác minh session split</td><td>Không dùng trong ranking khi chưa có mean và split chắc chắn.</td><td><a href="https://www.sciencedirect.com/science/article/pii/S1568494625017958">Applied Soft Computing</a></td></tr>
+</table>
+
+<p class="small"><b>Mã màu:</b> xanh = phù hợp nhất với main metric session 2 của HADA; vàng = protocol/metric khác nên chỉ tham khảo; đỏ = chưa đủ bằng chứng để benchmark định lượng.</p>
+
+<h2 class="pagebreak">3. Benchmark nên dùng cho HADA</h2>
+<h3>3.1. Bảng chính: session-2-only, không truy cập target khi train/adaptation</h3>
+<table>
+  <tr><th>Mô hình</th><th>Accuracy</th><th>Train</th><th>Test</th><th>Mức so sánh với HADA</th></tr>
+  <tr><td>EEG-TriNet++</td><td><b>72,3 ± 0,8%</b></td><td>Session 1 source</td><td>Session 2 target</td><td>Khá trực tiếp; nên kiểm tra thêm code/supplement trước khi tuyên bố SOTA.</td></tr>
+  <tr><td>TCFormer</td><td><b>63,0%</b></td><td>Session 1 của 8 source</td><td>Session 2 held-out target</td><td><b>Đối chứng trực tiếp và rõ nhất</b> cho backbone/thiết lập hiện tại.</td></tr>
+</table>
+
+<h3>3.2. Bảng phụ: complete-subject LOSO</h3>
+<table>
+  <tr><th>Mô hình</th><th>Kết quả</th><th>Target test</th><th>Cảnh báo</th></tr>
+  <tr><td>CBraMod + key ingredients</td><td>74,05 ± 6,35%</td><td>Có vẻ cả hai session</td><td>Balanced accuracy, không phải accuracy thường.</td></tr>
+  <tr><td>EEG-CSANet</td><td>69,68%</td><td>Cả hai session</td><td>ICLR submission; một seed theo báo cáo.</td></tr>
+  <tr><td>MCMTNet</td><td>66,31%</td><td>Cả hai session</td><td>Kết quả trong bảng tái lập EEG-CSANet.</td></tr>
+  <tr><td>EEG-TransNet</td><td>65,73%</td><td>Cả hai session</td><td>Kết quả trong bảng tái lập EEG-CSANet.</td></tr>
+  <tr><td>CTNet</td><td>58,64%</td><td>Có khả năng cả hai session</td><td>Session split chưa được phát biểu đủ rõ.</td></tr>
+</table>
+
+<h3>3.3. Bảng riêng: phương pháp được truy cập target không nhãn</h3>
+<table>
+  <tr><th>Mô hình</th><th>Kết quả</th><th>Cơ chế target</th><th>Khuyến nghị báo cáo</th></tr>
+  <tr><td>MVC-former Adaptation</td><td>77,8%</td><td>Feature/domain alignment; conditional alignment cần kiểm tra label/pseudo-label</td><td>Ghi “domain adaptation”; chưa ghi strict LOSO hay UDA tuyệt đối.</td></tr>
+  <tr><td>RA + IM-TTA (eegnet-v2)</td><td>67,83 ± 0,42%</td><td>Batch target không nhãn tại test time</td><td>Ghi “repository result/source-free TTA”, không gọi là peer-reviewed paper result.</td></tr>
+  <tr><td>BARN-DA</td><td>65,49 ± 11,64%</td><td>Target domain không nhãn</td><td>Tách khỏi bảng no-target strict LOSO.</td></tr>
+  <tr><td>JFACPS</td><td>Chưa xác minh</td><td>MMD, tangent features và pseudo-label target</td><td>Chờ xác minh mean và session protocol.</td></tr>
+  <tr><td>Semantic style transfer</td><td>Chưa xác minh</td><td>Style transfer giữa domain</td><td>Chờ xác minh mean và session protocol.</td></tr>
+</table>
+
+<h2>4. Quy tắc báo cáo kết quả HADA</h2>
+<ol>
+  <li><b>Main result:</b> accuracy trung bình ± độ lệch chuẩn trên session 2 của target, đủ 9 folds LOSO và nhiều random seed.</li>
+  <li><b>Auxiliary result:</b> accuracy trên cả session 1+2 target phải ghi riêng. Không dùng con số này để tuyên bố vượt baseline session-2-only.</li>
+  <li><b>Nếu bật adaptation:</b> ghi rõ target session nào được truy cập, có dùng nhãn không, adaptation là offline hay online, và model parameters/batch statistics nào được cập nhật.</li>
+  <li><b>Không trộn metric:</b> báo accuracy, balanced accuracy và Cohen’s kappa ở các cột khác nhau.</li>
+  <li><b>Không chọn best epoch bằng test target:</b> nếu metric mỗi epoch dùng session 2 target, chỉ dùng để quan sát; lựa chọn checkpoint bằng validation source hoặc quy tắc được định trước để tránh test leakage.</li>
+  <li><b>Báo cả mean theo subject và pooled accuracy:</b> ưu tiên macro-average trên 9 subject để mỗi người có trọng số bằng nhau.</li>
+</ol>
+
+<h2>5. Mẫu bảng điền kết quả thực nghiệm HADA</h2>
+<table>
+  <tr><th>Biến thể</th><th>Target access</th><th>Target test</th><th>Accuracy (%)</th><th>Balanced acc. (%)</th><th>Kappa</th><th># Params</th><th>Seeds</th></tr>
+  <tr><td>TCFormer baseline</td><td>Không</td><td>Session 2</td><td>63,0 (paper)</td><td>—</td><td>Điền</td><td>Điền</td><td>5 trong paper</td></tr>
+  <tr><td>HADA no IM-TTA</td><td>Ghi rõ RA có dùng target statistics hay không</td><td>Session 2</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td></tr>
+  <tr><td>HADA + IM-TTA</td><td>Session 1 target không nhãn</td><td>Session 2</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td></tr>
+  <tr><td>HADA + IM-TTA</td><td>Session 1 target không nhãn</td><td>Session 1+2 (auxiliary)</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td></tr>
+  <tr><td>HADA hybrid Mamba</td><td>Điền</td><td>Session 2</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td></tr>
+  <tr><td>HADA full Mamba</td><td>Điền</td><td>Session 2</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td><td>Điền</td></tr>
+</table>
+
+<h2>6. Tài liệu nguồn</h2>
+<ol>
+  <li>Altaheri, H., Karray, F., Karimi, A.-H. (2025). <i>Temporal convolutional transformer for EEG based motor imagery decoding</i>. Scientific Reports. <a href="https://www.nature.com/articles/s41598-025-16219-7">https://www.nature.com/articles/s41598-025-16219-7</a></li>
+  <li>EEG-CSANet, ICLR 2026 submission. <a href="https://openreview.net/pdf?id=EyhcJBvES9">https://openreview.net/pdf?id=EyhcJBvES9</a></li>
+  <li>CBraMod, ICLR 2025 proceedings PDF. <a href="https://proceedings.iclr.cc/paper_files/paper/2025/file/bbbd6d915cb90be21c1254a82d45cedd-Paper-Conference.pdf">Conference paper PDF</a></li>
+  <li>EEG-TriNet++ full text. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC13023433/">https://pmc.ncbi.nlm.nih.gov/articles/PMC13023433/</a></li>
+  <li>CTNet (2024), Scientific Reports. <a href="https://www.nature.com/articles/s41598-024-71118-7">https://www.nature.com/articles/s41598-024-71118-7</a></li>
+  <li>CLTNet full text. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11852626/">https://pmc.ncbi.nlm.nih.gov/articles/PMC11852626/</a></li>
+  <li>BARN-DA full text. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC13115380/">https://pmc.ncbi.nlm.nih.gov/articles/PMC13115380/</a></li>
+  <li>MVC-former Adaptation. <a href="https://www.sciencedirect.com/science/article/pii/S0925231225015474">ScienceDirect record</a></li>
+  <li>TSMSNet. <a href="https://www.sciencedirect.com/science/article/pii/S1746809426016630">ScienceDirect record</a></li>
+  <li>JFACPS. <a href="https://www.sciencedirect.com/science/article/pii/S0957417425009340">ScienceDirect record</a></li>
+  <li>Source-driven semantic style transfer. <a href="https://www.sciencedirect.com/science/article/pii/S1568494625017958">ScienceDirect record</a></li>
+  <li>eegnet-v2 result repository. <a href="https://github.com/istiaqfuad/eegnet-v2/blob/main/RESULTS.md">GitHub RESULTS.md</a></li>
+</ol>
+
+<p class="small"><b>Ghi chú học thuật:</b> Báo cáo này là bảng kiểm tra protocol phục vụ thiết kế benchmark, không phải systematic review hoàn chỉnh. Những hàng “có vẻ”, “có khả năng” hoặc “chưa xác minh” phải được xác nhận lại từ full text, supplementary material hoặc code trước khi dùng trong tuyên bố SOTA.</p>
+</body>
+</html>

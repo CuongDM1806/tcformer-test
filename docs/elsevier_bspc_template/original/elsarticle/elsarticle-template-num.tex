@@ -61,35 +61,29 @@ motor imagery \sep electroencephalography \sep brain--computer interface \sep se
 \section{Introduction}
 \label{sec:introduction}
 
-Motor-imagery brain--computer interfaces (MI-BCIs) translate internally generated movement intentions into commands without requiring overt muscular activity. Their non-invasive electroencephalography (EEG) interface and millisecond temporal resolution make them attractive for neurorehabilitation, assistive communication, and human--machine control. Reliable decoding nevertheless remains difficult. MI-related sensorimotor rhythms, observed as event-related desynchronization and synchronization (ERD/ERS) \cite{pfurtscheller1999erd}, are weak, noisy, non-stationary, and distributed over both time and scalp location. More importantly for practical deployment, their statistical distributions vary markedly among subjects and between recording sessions. A model trained for one user can therefore lose accuracy on a new user, while collecting and labeling a separate calibration set for every user is slow and burdensome. Cross-subject decoding consequently requires two capabilities at once: learning discriminative spatial--temporal structure from limited EEG trials and remaining robust to a previously unseen subject distribution.
+Motor-imagery brain--computer interfaces (MI-BCIs) decode movement intentions from non-invasive electroencephalography (EEG), with applications in rehabilitation, assistive communication, and human--machine control. Their principal signatures, event-related desynchronization and synchronization, are weak, non-stationary, and distributed across time and electrodes \cite{pfurtscheller1999erd}. They also vary substantially among subjects and recording sessions. Consequently, a model trained on existing users often degrades on an unseen user, whereas acquiring labeled calibration trials for every user is time-consuming. Cross-subject decoding must therefore learn discriminative spatial--temporal structure from limited EEG while controlling inter-subject distribution shift without target labels.
 
-Early MI decoders addressed the first requirement through signal processing and shallow machine learning. Common spatial pattern (CSP) learns spatial filters that maximize the variance contrast between two classes and remains one of the most influential MI feature extractors \cite{ramoser2000optimal}. Its success also exposes its limitations: the learned projection is sensitive to the available training trials, conventional CSP is naturally binary, and performance depends strongly on the selected frequency interval. Filter-bank CSP (FBCSP) improved this pipeline by applying CSP to multiple sub-bands and selecting discriminative band-specific features \cite{ang2012filterbank}. Although effective and interpretable, CSP-family pipelines separate filtering, feature selection, and classification into manually designed stages. They do not learn task-dependent temporal, spectral, and spatial representations jointly, and their subject-specific covariance structure transfers poorly when the user changes.
+Classical MI pipelines rely on common spatial pattern (CSP), which maximizes class-specific variance, and filter-bank CSP (FBCSP), which extends this idea across frequency bands \cite{ramoser2000optimal,ang2012filterbank}. Although effective and interpretable, these methods separate filtering, feature extraction, and classification into manually designed stages; conventional CSP is also naturally binary and sensitive to the available trials and frequency range. Their subject-specific covariance structure can therefore transfer poorly when the user changes.
 
-End-to-end convolutional neural networks (CNNs) reduced this dependence on handcrafted features. Deep and shallow ConvNets demonstrated that temporal and spatial EEG filters can be learned directly from minimally processed signals \cite{schirrmeister2017deep}. EEGNet subsequently used depthwise and separable convolutions to encode frequency-specific spatial filters with a small parameter budget \cite{lawhern2018eegnet}. These designs provide useful inductive biases for EEG: short temporal kernels capture local oscillatory patterns, depthwise spatial kernels combine electrodes, and pooling suppresses small temporal translations. Multi-scale or filter-bank convolution further reflects the fact that MI information is not confined to a single temporal scale. However, a CNN represents distant time points only after stacking layers, enlarging kernels, or using dilation. Its local bias alone may therefore be insufficient to model the full evolution of event-related desynchronization and synchronization within a trial.
+End-to-end convolutional neural networks reduce this dependence on handcrafted processing. Deep and shallow ConvNets learn temporal and electrode filters directly from EEG, while EEGNet uses depthwise and separable convolutions to obtain compact frequency-specific spatial features \cite{schirrmeister2017deep,lawhern2018eegnet}. Multi-scale temporal kernels are especially relevant because MI information is not confined to one frequency or duration. However, convolutions connect distant time points only through additional depth, larger kernels, or dilation, which may be insufficient to characterize the full temporal evolution of a trial.
 
-Recent work has coupled convolution with attention or temporal sequence modules to capture local and global information jointly. EEG Conformer places self-attention after a convolutional tokenizer so that local temporal--spatial features can interact globally \cite{song2023eegconformer}. ATCNet combines attention, sliding temporal windows, and a temporal convolutional network (TCN), with dilated convolutions refining the time course of MI features \cite{altaheri2023atcnet}. More recently, TCFormer integrated a multi-kernel CNN, grouped-query Transformer layers, and a grouped TCN head \cite{altaheri2025tcformer}. This progression establishes a useful architectural principle: EEG-specific convolution should preserve local spectral and spatial structure, whereas a sequence encoder should capture global context. Yet self-attention explicitly constructs pairwise token interactions, giving quadratic time and memory complexity in sequence length \cite{vaswani2017attention}. This can be unnecessarily expensive for high-resolution or long-window EEG, and its flexible global operator can be data-hungry in the small-sample regimes typical of BCI experiments.
+Hybrid decoders therefore combine EEG-specific convolution with global sequence modeling. EEG Conformer applies self-attention after convolutional tokenization, ATCNet combines attention with a dilated temporal convolutional network (TCN), and TCFormer integrates a multi-kernel front-end, grouped-query Transformer layers, and a grouped TCN head \cite{song2023eegconformer,altaheri2023atcnet,altaheri2025tcformer}. These models demonstrate the value of combining local spectral--spatial priors with longer temporal context. Nevertheless, self-attention explicitly constructs pairwise token interactions and has quadratic sequence complexity \cite{vaswani2017attention}. This cost becomes undesirable for long, high-resolution EEG, while highly flexible attention operators may also be data-hungry in the small-sample regimes common in BCI studies.
 
-Architecture alone does not resolve inter-subject distribution shift. Domain generalization (DG) learns invariant representations from multiple labeled source subjects and deploys one model on an unseen target without accessing its data. Recent MI studies have explored spatial--temporal Transformers with DG \cite{liu2023stdg}, multi-source marginal and conditional alignment \cite{zhong2025eegdg}, and invariant spectral representations with correlation alignment \cite{zheng2025crosssubject}. DG is appealing for strict plug-and-play operation, but it cannot use the actual target distribution and may miss subject-specific shifts that were not represented by the sources. Domain adaptation (DA), in contrast, exploits unlabeled target trials while preserving a label-free target protocol. These settings must not be conflated: a method that observes unlabeled target EEG during training or adaptation is unsupervised DA rather than zero-shot DG.
+Architecture alone cannot remove subject shift. Target-free domain generalization learns invariant representations from source subjects \cite{liu2023stdg,zhong2025eegdg,zheng2025crosssubject}, whereas unsupervised domain adaptation (UDA) may additionally exploit unlabeled target EEG. The distinction is important: observing target signals without labels is UDA rather than zero-shot generalization. Existing UDA methods reduce covariance mismatch through Riemannian or Euclidean alignment \cite{zanini2018riemannian,he2020euclidean}, minimize feature discrepancy with MK-MMD \cite{long2015dan}, or promote domain confusion through gradient reversal \cite{ganin2016dann,tang2020cdan}. HADANet combines adversarial and MK-MMD alignment for MI-EEG \cite{wu2026hadanet}, while prototype-based methods additionally exploit local class structure \cite{zhang2024prototypeda}. These approaches remain vulnerable to negative transfer: marginal alignment may mix classes, and aligning only pooled trial features can overlook temporal mismatch.
 
-EEG domain adaptation has developed along complementary geometric, discrepancy-based, and adversarial directions. Riemannian transfer learning and Euclidean alignment reduce covariance mismatch before classification by re-centering or whitening trials in a common space \cite{zanini2018riemannian,he2020euclidean}. At the representation level, deep adaptation networks minimize a multi-kernel maximum mean discrepancy (MK-MMD) between source and target features \cite{long2015dan}. Domain-adversarial neural networks instead train a feature extractor to confuse a domain discriminator through gradient reversal \cite{ganin2016dann}; conditional adversarial variants use class predictions to preserve discriminative structure during alignment and have also been applied to MI-EEG \cite{tang2020cdan}. For cross-subject MI decoding, HADANet combines a hierarchical convolutional extractor and hybrid attention with joint adversarial and MK-MMD alignment \cite{wu2026hadanet}, and prototype-based adaptation networks additionally exploit local class information in the target domain \cite{zhang2024prototypeda}. These approaches are valuable but not risk-free. Global marginal alignment can mix class modes, and forcing a poorly matched or low-confidence target toward the sources can cause negative transfer. Moreover, aligning only the final trial vector may overlook a mismatch in the temporal representation from which that vector was produced.
+Residual shift may also be addressed at inference. Information-maximization methods encourage confident but globally diverse predictions without labels \cite{liang2020shot}, and TENT restricts adaptation to normalization parameters through entropy minimization \cite{wang2021tent}. Such constraints are attractive for EEG because target datasets are small and unrestricted fine-tuning can overfit or collapse to one predicted class. However, evaluation-session access must be disclosed explicitly, and labels must remain unavailable during adaptation and checkpoint selection.
 
-Test-time adaptation offers another opportunity after source training. Information-maximization methods encourage confident yet globally diverse target predictions without requiring labels \cite{liang2020shot}, while TENT showed that adapting only normalization statistics and affine parameters through entropy minimization can be an efficient response to distribution shift \cite{wang2021tent}. For EEG, unrestricted target fine-tuning would be hazardous because target datasets are small and model predictions can initially be unreliable. A constrained update space and a diversity term are therefore important safeguards against overfitting and single-class collapse.
+Selective state-space models offer a linear-complexity alternative to attention. S4 introduced structured long-range sequence modeling \cite{gu2022s4}, and Mamba made transition quantities input-dependent so that relevant information can be retained selectively \cite{gu2024mamba}. Recent MI decoders have combined convolution and Mamba \cite{guo2025mimamba,yang2025stmamba}, but primarily study architecture rather than leakage-controlled integration with target adaptation. Moreover, a generic state-space stack should complement, rather than replace, explicit temporal and electrode filtering. A purely forward scan also imposes unnecessary directionality when complete offline MI trials are available.
 
-Structured state-space models such as S4 provide a promising alternative to attention for modeling long sequences efficiently \cite{gu2022s4}. Building on this family, Mamba makes state-transition quantities input-dependent, enabling a recurrent state to selectively retain or discard information while maintaining linear scaling with sequence length \cite{gu2024mamba}. Such selective memory is well matched to EEG, where discriminative activity is sparse, temporally structured, and embedded in noise. Recent MI-EEG decoders have accordingly combined convolutional feature extractors with Mamba blocks \cite{guo2025mimamba,yang2025stmamba}. These studies focus primarily on decoder architecture, leaving open how a selective state-space encoder should be combined with unlabeled target adaptation under a leakage-controlled cross-subject protocol. Moreover, replacing an EEG decoder with a generic state-space stack would discard useful domain knowledge. A pure unidirectional recurrence also introduces a directional bias even though an offline MI trial is available in full, and a sequence module should not be expected to replace explicit electrode filtering or local temporal extraction.
+We therefore propose a target-aware framework coupling an EEG-specific encoder with hierarchical adaptation. Multi-kernel temporal and depthwise spatial convolutions extract local features; five alternating forward/backward selective state-space blocks model longer context; and a convolutional shortcut plus grouped TCN fuses local and global information. During training, subject-wise covariance alignment, a gradient-reversal discriminator, and trial- and temporal-level MK-MMD reduce target shift. At inference, information maximization updates only BatchNorm affine parameters using unlabeled evaluation-session EEG. Target labels remain hidden during preprocessing, training, checkpoint selection, and adaptation.
 
-Motivated by these observations, this paper proposes a hybrid, target-aware framework for cross-subject MI-EEG decoding. The model first applies three parallel temporal convolutions to the same EEG trial to capture complementary temporal scales. Their features are concatenated and processed by depthwise spatial convolution, which learns multiple electrode projections for each temporal feature. Grouped pointwise and temporal convolutions retain scale structure, and channel-group attention recalibrates the resulting branches. This convolutional representation is tokenized and passed through five lightweight selective state-space blocks. Their scan directions alternate forward and backward, allowing successive layers to incorporate both temporal directions without duplicating a bidirectional block at every depth. A direct convolutional shortcut is concatenated with the state-space output so that global contextualization does not erase local EEG evidence. Finally, a grouped TCN with increasing dilation refines multi-scale temporal dynamics before classification.
-
-The proposed framework couples this encoder with hierarchical unsupervised domain adaptation that extends the hybrid adversarial--MK-MMD alignment of HADANet \cite{wu2026hadanet}. First, per-subject covariance alignment is fitted only on the earlier target-adaptation data. During training, labeled source trials and unlabeled target-adaptation trials share the same feature extractor. A gradient-reversal discriminator promotes domain confusion, MK-MMD aligns pooled trial representations, and a lighter temporal MK-MMD aligns the time-averaged TCN feature sequences before trial aggregation. At inference time, information maximization updates only BatchNorm affine parameters using the unlabeled EEG from the evaluation session itself. Evaluation labels remain hidden throughout training, adaptation, preprocessing-statistic estimation, and checkpoint selection and are used only to compute final metrics.
-
-The main contributions of this work are summarized as follows:
+The main contributions are:
 \begin{itemize}
-    \item We develop an EEG-specific encoder that combines multi-kernel temporal filtering, depthwise electrode filtering, a local convolutional shortcut, five alternating-direction selective state-space blocks, and a grouped dilated TCN. The design preserves local spatial--spectral priors while modeling long-range temporal context without pairwise self-attention.
-    \item We introduce hierarchical cross-subject alignment that combines leakage-safe covariance normalization, adversarial domain confusion, final-representation MK-MMD, and temporal MK-MMD.
-    \item We incorporate a constrained source-free information-maximization stage in which only normalization affine parameters are adapted from unlabeled target trials, while a diversity objective discourages prediction collapse.
-    \item We formulate a reproducible leave-one-subject-out evaluation protocol that keeps target labels out of training, adaptation, checkpoint selection, and preprocessing-statistic estimation, thereby separating the proposed UDA setting clearly from both supervised target calibration and target-free DG.
+    \item an EEG encoder combining multi-scale convolution, alternating selective state-space modeling, local--global fusion, and a grouped dilated TCN;
+    \item hierarchical cross-subject adaptation through leakage-safe covariance normalization, adversarial learning, and trial- and temporal-level MK-MMD;
+    \item constrained label-free IM-TTA that updates only normalization affine parameters while preserving prediction diversity; and
+    \item a chronological LOSO protocol that separates source-only, UDA, and test-time adaptation settings without target-label leakage.
 \end{itemize}
-
-The remainder of this paper describes the datasets, model and adaptation objectives, leakage-controlled experimental protocol, planned result reporting, ablation design, discussion, and conclusions.
 
 \section{Datasets}
 \label{sec:datasets}
@@ -131,135 +125,91 @@ The Zhou2016 dataset contains four participants, each recorded in three sessions
 \section{Proposed Method}
 \label{sec:method}
 
-Figure~\ref{fig:architecture_overview} presents the complete learning and inference pipeline. The source and target streams share one encoder, while supervision and adaptation objectives branch only after representation extraction. The figure distinguishes joint UDA training on earlier target sessions, label-free information-maximization adaptation on the evaluation-session EEG at inference time, and subsequent scoring with labels that were withheld from both stages.
+Figure~\ref{fig:architecture_overview} summarizes one LOSO fold. A shared encoder processes labeled source trials and unlabeled target trials during Stage~1 UDA. After source-validation checkpoint selection, Stage~2 adapts only normalization parameters with unlabeled evaluation-session EEG; labels are revealed only for Stage~3 scoring.
 
 \begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/architecture_overview.pdf}
-    \caption{Overview of the proposed framework in one LOSO fold. Stage~1 trains the shared encoder with labeled source EEG and earlier unlabeled target EEG; Stage~2 performs label-free IM-TTA on the evaluation-session EEG; Stage~3 scores the adapted model using labels withheld from all preceding stages.}
+    \caption{Framework for one LOSO fold: joint source classification and target adaptation (Stage~1), label-free IM-TTA (Stage~2), and scoring with previously withheld labels (Stage~3).}
     \label{fig:architecture_overview}
 \end{figure*}
 
 \subsection{Problem formulation}
 
-Let $\mathcal{S}=\{(X_i^s,y_i^s)\}_{i=1}^{N_s}$ denote labeled trials from all source subjects, $\mathcal{T}_a=\{X_j^a\}_{j=1}^{N_a}$ the earlier unlabeled target sessions used during Stage~1 UDA, and $\mathcal{T}_e=\{X_j^e\}_{j=1}^{N_e}$ the later target sessions used for evaluation. A trial is represented as $X\in\mathbb{R}^{C\times T}$. In each LOSO fold, the model is trained with labeled $\mathcal{S}$ and unlabeled $\mathcal{T}_a$. After checkpoint selection, IM-TTA may use the signal values of $\mathcal{T}_e$ without labels; the evaluation labels are revealed only after adaptation to compute the reported metrics.
+Let $\mathcal{S}=\{(X_i^s,y_i^s)\}_{i=1}^{N_s}$ be labeled trials from the source subjects, $\mathcal{T}_a=\{X_j^a\}_{j=1}^{N_a}$ the earlier unlabeled target sessions used for UDA, and $\mathcal{T}_e=\{X_j^e\}_{j=1}^{N_e}$ the later target sessions used for evaluation, where $X\in\mathbb{R}^{C\times T}$. Training uses $\mathcal{S}$ and $\mathcal{T}_a$; IM-TTA may access only the signal values of $\mathcal{T}_e$, never their labels.
 
 \subsection{Leakage-safe signal alignment}
 \label{subsec:ra}
 
-The implementation optionally applies a separate Riemannian whitening operator to every subject. For one subject, covariance matrices are estimated from that subject's available adaptation or training trials with Oracle Approximating Shrinkage. Their affine-invariant Riemannian mean is denoted by $\bar{R}$. Every trial belonging to the same subject is transformed as
+A separate Riemannian whitening operator is optionally fitted for each subject. OAS trial covariances are summarized by their affine-invariant mean $\bar{R}$, and trials are transformed as
 \begin{equation}
-    \widetilde{X}=\bar{R}^{-1/2}X .
+    \widetilde{X}=\bar{R}^{-1/2}X.
 \end{equation}
-For a source subject, $\bar{R}$ is fitted using only that source subject's training sessions and then applied to its validation sessions. For the target subject, it is fitted only on $\mathcal{T}_a$ and then frozen before application to $\mathcal{T}_e$. This construction follows the motivation of Riemannian transfer and alignment methods \cite{zanini2018riemannian,he2020euclidean}. Evaluation-session signals are used by IM-TTA, but they do not update the covariance-alignment transform or the standardization statistics.
+A source transform is fitted on that subject's training sessions and applied to its validation sessions; the target transform is fitted on $\mathcal{T}_a$ and frozen before application to $\mathcal{T}_e$ \cite{zanini2018riemannian,he2020euclidean}. Evaluation-session data therefore update neither alignment nor standardization statistics.
 
-\subsection{Multi-scale temporal and spatial convolution}
+\subsection{Multi-scale convolutional encoder}
 \label{subsec:conv_frontend}
 
-The convolutional front-end and its tensor dimensions are detailed in Fig.~\ref{fig:encoder_detail}. Its output $H_c$ feeds both the selective state-space encoder (Section~\ref{subsec:ssm}) and a direct local shortcut; the two paths are reunited before the TCN (Section~\ref{subsec:tcn}).
+As detailed in Fig.~\ref{fig:encoder_detail}, three temporal convolutions with kernels of 20, 32, and 64 samples produce 32 maps each \cite{altaheri2025tcformer}. Their concatenated output is processed by depthwise convolution across all electrodes with depth multiplier two, average pooling, and dropout. A grouped pointwise projection reduces the 192 spatial maps to 48 channels (16 per temporal scale), followed by grouped temporal convolution and residual channel-group attention. The latter assigns one learned coefficient to each scale. A second pooling layer yields $H_c\in\mathbb{R}^{B\times48\times L}$.
 
 \begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/encoder_detail.pdf}
-    \caption{Multi-scale temporal--spatial convolutional front-end, illustrated for BCI IV-2a. Three temporal kernels are followed by depthwise electrode filtering, grouped channel reduction, grouped temporal refinement, and residual channel-group attention, producing the sequence $H_c$.}
+    \caption{Multi-scale temporal--spatial front-end. Three temporal branches, depthwise electrode filtering, grouped refinement, and channel-group attention produce $H_c$.}
     \label{fig:encoder_detail}
 \end{figure*}
-
-Following the multi-kernel temporal front-end of TCFormer \cite{altaheri2025tcformer}, the convolutional block first reshapes a mini-batch to $B\times 1\times C\times T$. Three temporal branches then process the same trial using kernels of length 20, 32, and 64 samples:
-\begin{equation}
-    H_k=\operatorname{BN}\!\left(\operatorname{Conv}_{1\times k}(X)\right),
-    \qquad k\in\{20,32,64\}.
-\end{equation}
-Asymmetric zero padding for even kernels preserves the original time length. Each branch produces 32 maps, and concatenation gives 96 maps while retaining the identity of the three scales.
-
-A depthwise convolution whose spatial kernel spans all $C$ electrodes is applied independently to every temporal map. With a depth multiplier of two, each of the 96 inputs learns two electrode projections, resulting in 192 maps. Batch normalization and ELU activation follow the spatial filter. Average pooling by eight and dropout reduce temporal resolution and regularize the representation. A grouped $1\times 1$ convolution then maps 192 channels to 48 channels, with 16 channels retained for each temporal-scale group. A grouped temporal convolution with kernel length 16 further refines each scale without mixing the groups.
-
-Channel-group attention assigns one data-dependent sigmoid coefficient to each temporal-scale group. Global average pooling is followed by grouped $1\times1$ projections $48\rightarrow12\rightarrow3$, ReLU, and sigmoid. Its output is used residually:
-\begin{equation}
-    H_{\mathrm{att}}=H+H\odot a(H),
-\end{equation}
-where the three coefficients in $a(H)$ are broadcast over the 16 channels in their corresponding groups. A second average-pooling layer with factor seven and dropout produces a sequence $H_c\in\mathbb{R}^{B\times48\times L}$.
 
 \subsection{Alternating selective state-space encoder}
 \label{subsec:ssm}
 
-Before sequence modeling, a $1\times1$ convolution, batch normalization, and SiLU activation mix the 48 convolutional channels. The sequence is then processed by five lightweight selective state-space blocks in the order forward--backward--forward--backward--forward. A backward block reverses the temporal axis before its recurrence and reverses the output afterward. Consequently, the stack incorporates evidence from both temporal directions while each individual block retains the parameter cost of a single scan. The internal structure of one block is shown in Fig.~\ref{fig:ssm_block}.
-
-\begin{figure*}[!htbp]
-    \centering
-    \includegraphics[width=\textwidth]{figures/ssm_block.pdf}
-    \caption{Structure of one selective SSM block. Backward (B) blocks reverse the time axis before the mixer and restore it afterwards; forward (F) blocks skip both flips.}
-    \label{fig:ssm_block}
-\end{figure*}
-
-Each block normalizes its input tokens and projects them into a value stream and a SiLU-gated stream. A causal depthwise temporal convolution of length three followed by SiLU supplies local context to the value stream, giving $u_t$. Following the diagonal state-space formulation used in structured SSMs \cite{gu2022s4}, the input-dependent step size $\Delta_t$ and state projections $B_t$ and $C_t$ parameterize a selective recurrence of the form
+After pointwise channel mixing, five selective state-space blocks scan in the order forward--backward--forward--backward--forward. A backward block reverses the temporal axis before and after its recurrence, providing bidirectional offline context without duplicating every block. Within each block, layer normalization, gated projections, and a causal depthwise convolution generate $u_t$. A diagonal selective recurrence then computes \cite{gu2022s4,gu2024mamba}
 \begin{align}
     A &= -\exp(A_{\log}), \\
     h_t &= \exp(\Delta_t A)\odot h_{t-1}
        + \Delta_t B_t\odot u_t, \\
     z_t &= C_t^\top h_t + d_{\mathrm{skip}}\odot u_t .
 \end{align}
-The block output is projected after modulation by the learned gate and added to the residual stream. The stable negative diagonal $A$ and input-dependent transition quantities implement a lightweight selective-memory mechanism inspired by Mamba \cite{gu2024mamba}. This is a simplified PyTorch implementation rather than the official Mamba block or its hardware-aware parallel selective-scan kernel. The code uses a state dimension of eight, dropout of 0.4, and a depth-dependent stochastic-depth schedule. Unlike pairwise self-attention, the recurrent scan has linear sequence-length scaling.
+Here $\Delta_t$, $B_t$, and $C_t$ depend on the input. The implementation uses state dimension eight, dropout 0.4, and depth-dependent stochastic depth. It is a lightweight PyTorch selective SSM rather than the official hardware-aware Mamba kernel, but retains linear scaling in sequence length.
 
-\subsection{Local--global fusion, TCN, and classification}
+\begin{figure*}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/ssm_block.pdf}
+    \caption{Selective SSM block. Backward blocks reverse and restore the temporal axis around the mixer; forward blocks omit these operations.}
+    \label{fig:ssm_block}
+\end{figure*}
+
+\subsection{Local--global fusion and classification}
 \label{subsec:tcn}
 
-The output of the fifth state-space block is reduced from 48 to 16 channels with a pointwise convolution. It is concatenated with the untouched 48-channel convolutional sequence $H_c$, yielding 64 channels. This shortcut protects local temporal--spatial evidence from being overwritten by the global sequence encoder. The fusion, TCN, and classification head are shown in Fig.~\ref{fig:tcn_head}.
+The state-space output is reduced from 48 to 16 channels and concatenated with the 48-channel shortcut $H_c$. Two residual grouped TCN blocks with kernel length four and dilations one and two refine the resulting 64-channel sequence. The mean of its last state and temporal average forms the trial representation. A norm-constrained grouped $1\times1$ classifier produces four group-wise logits, which are combined by learned softmax weights (Fig.~\ref{fig:tcn_head}).
 
 \begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/tcn_head.pdf}
-    \caption{Local--global fusion and TCN head. Top: the reduced SSM output is concatenated with the shortcut $H_c$ and refined by two residual TCN blocks before last--mean pooling and grouped classification. Bottom: structure of one residual TCN block.}
+    \caption{Local--global fusion, two-block grouped TCN, temporal aggregation, and grouped classification.}
     \label{fig:tcn_head}
 \end{figure*}
-
-Two residual TCN blocks then refine the fused sequence. Each block contains two causal grouped one-dimensional convolutions with kernel length four, batch normalization, ELU, and dropout. Dilations one and two enlarge the receptive field while preserving temporal order. The final trial representation is
-\begin{equation}
-    q=\frac{1}{2}\left(H_{\mathrm{TCN}}[:,:,-1]
-      +\frac{1}{L}\sum_{t=1}^{L}H_{\mathrm{TCN}}[:,:,t]\right),
-\end{equation}
-which balances the last causal state with the mean over the whole sequence. A grouped norm-constrained $1\times1$ classifier produces one class-logit contribution per feature group, and learned softmax weights combine the four group contributions.
 
 \subsection{Hierarchical unsupervised domain adaptation}
 \label{subsec:uda}
 
-The 64-dimensional pooled representation first passes through a residual feature aligner comprising layer normalization and a $64\rightarrow128\rightarrow64$ GELU multilayer perceptron with dropout 0.3 and a final layer normalization. Its residual scale is initialized to 0.1 so that adaptation begins close to the source-trained representation.
-
-As shown in Fig.~\ref{fig:architecture_overview}, temporal discrepancy is measured before trial aggregation, whereas pooled-feature discrepancy, adversarial domain confusion, and source classification act on the aligned trial vector. Only $\mathcal{L}_{\mathrm{cls}}$ consumes class labels, and the later information-maximization stage updates only normalization affine parameters.
-
-Three complementary losses are then computed. First, source cross-entropy preserves class discrimination:
+A residual $64\!\rightarrow\!128\!\rightarrow\!64$ feature aligner precedes classification and domain alignment. Source cross-entropy $\mathcal{L}_{\mathrm{cls}}$ maintains discrimination. A gradient-reversal discriminator provides domain loss $\mathcal{L}_{\mathrm{adv}}$ \cite{ganin2016dann}, while five-kernel MK-MMD aligns normalized source and target representations \cite{long2015dan}. It is applied both to pooled trial features ($\mathcal{L}_{\mathrm{mmd}}$) and to time-averaged TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$), giving
 \begin{equation}
-    \mathcal{L}_{\mathrm{cls}}
-    =-\frac{1}{N_s}\sum_i \log p_\theta(y_i^s\mid X_i^s).
-\end{equation}
-Second, a gradient-reversal layer connects pooled source and target features to a binary domain discriminator \cite{ganin2016dann}. The discriminator uses projections $64\rightarrow128\rightarrow64\rightarrow1$, LeakyReLU activations, and dropout 0.3. Its reversal coefficient follows
-\begin{equation}
-    \alpha(p)=\frac{2}{1+\exp(-10p)}-1,
-\end{equation}
-where $p$ is normalized training progress. The resulting binary cross-entropy is denoted $\mathcal{L}_{\mathrm{adv}}$.
-
-Third, MK-MMD measures source--target discrepancy using five Gaussian kernels with data-dependent bandwidth \cite{long2015dan}. Features are first normalized to unit $\ell_2$ norm, and the implementation removes within-domain diagonal terms to obtain an unbiased estimate when both mini-batches contain at least two trials. MK-MMD is evaluated on both the aligned trial vectors, giving $\mathcal{L}_{\mathrm{mmd}}$, and the time-averaged TCN feature sequences, giving $\mathcal{L}_{\mathrm{tmmd}}$. The temporal term introduces no additional trainable parameters and discourages alignment that matches only the final pooled vector.
-
-The complete training objective is
-\begin{equation}
-    \mathcal{L}
-    =\mathcal{L}_{\mathrm{cls}}
-     +\mathcal{L}_{\mathrm{adv}}
-     +0.5\,\mathcal{L}_{\mathrm{mmd}}
-     +0.1\,\mathcal{L}_{\mathrm{tmmd}}.
+    \mathcal{L}=\mathcal{L}_{\mathrm{cls}}+\mathcal{L}_{\mathrm{adv}}
+    +0.5\mathcal{L}_{\mathrm{mmd}}+0.1\mathcal{L}_{\mathrm{tmmd}}.
 \label{eq:total_loss}
 \end{equation}
-Only source labels contribute to Eq.~\eqref{eq:total_loss}; the target branch receives EEG samples without labels.
+Only $\mathcal{L}_{\mathrm{cls}}$ uses labels, all of which come from source subjects. The discriminator coefficient increases smoothly from zero to one with training progress.
 
 \subsection{Constrained information-maximization adaptation}
 \label{subsec:imtta}
 
-After source/UDA training, all model parameters are frozen except the affine weights and biases of BatchNorm layers. At inference time, five passes over the unlabeled evaluation-session set $\mathcal{T}_e$ are performed with Adam at a learning rate of $10^{-4}$. Let $p_j$ denote an evaluation-session prediction and $\bar{p}=N_e^{-1}\sum_j p_j$. The information-maximization objective is
+After checkpoint selection, all parameters except BatchNorm affine weights and biases are frozen. Five Adam passes over unlabeled $\mathcal{T}_e$ at learning rate $10^{-4}$ minimize
 \begin{equation}
     \mathcal{L}_{\mathrm{IM}}
-    =\frac{1}{N_e}\sum_j H(p_j)-H(\bar{p}).
+    =\frac{1}{N_e}\sum_j H(p_j)-H\!\left(\frac{1}{N_e}\sum_jp_j\right),
 \end{equation}
-The first term promotes confident predictions, whereas the second encourages a diverse target class marginal and reduces the risk of collapse to one class \cite{liang2020shot,wang2021tent}. This is a transductive, label-free test-time adaptation step: $\mathcal{T}_e$ signals are available to the adaptation objective, but their labels are withheld until adaptation has finished and predictions are scored. No evaluation label or evaluation metric is used to update the model or select a checkpoint.
+where the first term encourages confident predictions and the second preserves class diversity \cite{liang2020shot,wang2021tent}. No evaluation label or metric is used for adaptation or checkpoint selection.
 
 \section{Experimental Protocol}
 \label{sec:experiments}
@@ -315,7 +265,7 @@ Inference efficiency is measured after training on the same NVIDIA Tesla T4 GPU 
 
 Tables~\ref{tab:results_2a}--\ref{tab:results_zhou} group target-free source-only methods separately from methods that use unlabeled target EEG. Every baseline must use the same subject folds, chronological session allocation, and target-data access specified in Table~\ref{tab:protocol}. Stage~1 UDA methods may use the designated earlier target sessions without labels; methods evaluated with test-time adaptation may additionally use the later evaluation-session signals without labels immediately before prediction. Evaluation labels remain unavailable for training, adaptation, preprocessing, checkpoint selection, and hyperparameter selection. Published headline values obtained under incompatible splits or target-label access are not copied into the tables.
 
-The source-only group comprises three deep decoders that combine convolution with attention or temporal convolution: EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, and TCFormer \cite{altaheri2025tcformer}. These models receive no target EEG before final inference. The UDA group includes a gradient-reversal DANN baseline \cite{ganin2016dann}, an MK-MMD/DAN baseline \cite{long2015dan}, and conditional adversarial adaptation \cite{tang2020cdan}.
+The source-only group comprises three deep decoders that combine convolution with attention or temporal convolution: EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, and TCFormer \cite{altaheri2025tcformer}. These models receive no target EEG before final inference. The UDA group includes an MK-MMD/DAN baseline \cite{long2015dan}, and conditional adversarial adaptation \cite{tang2020cdan}.
 
 The proposed method is reported in three variants that share the same encoder and differ only in how much target EEG they use (Fig.~\ref{fig:architecture_overview}):
 \begin{itemize}
@@ -341,46 +291,46 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
 \label{tab:results_2a}
 \footnotesize
 \setlength{\tabcolsep}{1.8pt}
-\begin{tabular}{ll*{9}{c}}
+\begin{tabular}{ll*{8}{c}}
 \toprule
-\multirow{2}{*}{Subj.} &  & \multicolumn{4}{c}{Source-only} & \multicolumn{5}{c}{UDA} \\
-\cmidrule(lr){3-6}\cmidrule(lr){7-11}
- & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DANN\\\cite{ganin2016dann}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
+\multirow{2}{*}{Subj.} &  & \multicolumn{4}{c}{Source-only} & \multicolumn{4}{c}{UDA} \\
+\cmidrule(lr){3-6}\cmidrule(lr){7-10}
+ & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{78.82} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{71.76} \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{78.82} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{71.76} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{57.64} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{43.52} \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{57.64} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{43.52} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{93.75} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{91.67} \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{93.75} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{91.67} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{74.31} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{65.74} \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{74.31} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{65.74} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S5} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{65.62} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{54.17} \\
+\multirow{2}{*}{S5} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{65.62} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{54.17} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S6} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{66.67} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{55.56} \\
+\multirow{2}{*}{S6} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{66.67} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{55.56} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S7} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{85.42} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{80.56} \\
+\multirow{2}{*}{S7} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{85.42} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{80.56} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S8} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{84.38} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{79.17} \\
+\multirow{2}{*}{S8} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{84.38} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{79.17} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S9} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{75.69} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{67.59} \\
+\multirow{2}{*}{S9} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{75.69} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{67.59} \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{75.81} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{67.70} \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{75.81} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{67.70} \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{10.63} \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{14.20} \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & -- & -- & -- & -- & -- & \textbf{10.63} \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & \textbf{14.20} \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & -- & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -399,46 +349,46 @@ Table~\ref{tab:results_2b} reports the binary left- versus right-hand results fo
 \label{tab:results_2b}
 \footnotesize
 \setlength{\tabcolsep}{2.2pt}
-\begin{tabular}{ll*{9}{c}}
+\begin{tabular}{ll*{8}{c}}
 \toprule
-\multirow{2}{*}{Subj.} &  & \multicolumn{4}{c}{Source-only} & \multicolumn{5}{c}{UDA} \\
-\cmidrule(lr){3-6}\cmidrule(lr){7-11}
- & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DANN\\\cite{ganin2016dann}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
+\multirow{2}{*}{Subj.} &  & \multicolumn{4}{c}{Source-only} & \multicolumn{4}{c}{UDA} \\
+\cmidrule(lr){3-6}\cmidrule(lr){7-10}
+ & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S5} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S5} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S6} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S6} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S7} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S7} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S8} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S8} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S9} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S9} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- \\
+ & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & -- & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -446,42 +396,44 @@ Table~\ref{tab:results_2b} reports the binary left- versus right-hand results fo
 \subsection{Zhou2016}
 \label{subsec:results_zhou}
 
-Table~\ref{tab:results_zhou} reports the three-class results for the four Zhou2016 target subjects. With only four folds, the smallest attainable two-sided Wilcoxon $p$-value is 0.125; the $p$-values for this dataset are therefore reported for completeness but cannot reach conventional significance.
+Table~\ref{tab:results_zhou} reports the currently available source-only and no-IM-TTA results for the four Zhou2016 target subjects. Both populated variants are evaluated over all three target sessions and are therefore auxiliary all-session results rather than primary chronological comparisons. With only four folds, the smallest attainable two-sided Wilcoxon $p$-value is 0.125.
 
 \begin{table*}[!htbp]
 \centering
-\caption{Per-subject LOSO accuracy (\%) and Cohen's $\kappa$ multiplied by 100 on Zhou2016 (three classes). Ours-S: source-only; Ours-U: UDA without IM adaptation; Ours: UDA with IM adaptation (Section~\ref{subsec:baselines}). $p$: Wilcoxon signed-rank test of accuracy against Ours.}
+\caption{Per-subject LOSO accuracy (\%) and Cohen's $\kappa$ multiplied by 100 on Zhou2016 (three classes). Ours-S: source-only; Ours-U: UDA without IM adaptation; Ours: UDA with IM adaptation. The populated Ours-S and Ours-U values use the auxiliary all-three-session target view.}
 \label{tab:results_zhou}
 \footnotesize
-\setlength{\tabcolsep}{2.2pt}
-\begin{tabular}{ll*{9}{c}}
+\setlength{\tabcolsep}{1.8pt}
+\begin{tabular}{ll*{8}{c}}
 \toprule
-\multirow{2}{*}{Subj.} &  & \multicolumn{4}{c}{Source-only} & \multicolumn{5}{c}{UDA} \\
-\cmidrule(lr){3-6}\cmidrule(lr){7-11}
- & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DANN\\\cite{ganin2016dann}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
+\multirow{2}{*}{Subj.} &  & \multicolumn{4}{c}{Source-only} & \multicolumn{4}{c}{UDA} \\
+\cmidrule(lr){3-6}\cmidrule(lr){7-10}
+ & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{\textbf{Ours-S}\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{\textbf{Ours-U}\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & -- & $\mathbf{73.90}$ & -- & -- & $\mathbf{72.86}$ & -- \\
+ & $\kappa$ & -- & -- & -- & $\mathbf{60.86}$ & -- & -- & $\mathbf{59.29}$ & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & -- & $\mathbf{77.93}$ & -- & -- & $\mathbf{81.61}$ & -- \\
+ & $\kappa$ & -- & -- & -- & $\mathbf{66.90}$ & -- & -- & $\mathbf{72.41}$ & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & -- & $\mathbf{62.97}$ & -- & -- & $\mathbf{67.18}$ & -- \\
+ & $\kappa$ & -- & -- & -- & $\mathbf{44.41}$ & -- & -- & $\mathbf{50.77}$ & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & -- & $\mathbf{76.32}$ & -- & -- & $\mathbf{76.09}$ & -- \\
+ & $\kappa$ & -- & -- & -- & $\mathbf{64.48}$ & -- & -- & $\mathbf{64.14}$ & -- \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & $\mathbf{72.78}$ & -- & -- & $\mathbf{74.44}$ & -- \\
+ & $\kappa$ & -- & -- & -- & $\mathbf{59.20}$ & -- & -- & $\mathbf{61.70}$ & -- \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & -- & $\mathbf{5.84}$ & -- & -- & $\mathbf{5.23}$ & -- \\
+ & $\kappa$ & -- & -- & -- & $\mathbf{8.80}$ & -- & -- & $\mathbf{7.80}$ & -- \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & -- & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
+
+For the four-fold Ours-S run, mean all-session accuracy was $72.78\pm5.84\%$, mean Cohen's $\kappa$ was $59.20\pm8.80$ on the $\times100$ scale, and mean loss was $0.770\pm0.293$. The source-only model contained 96,812 trainable parameters. Training all folds required 48.38 minutes on a Kaggle NVIDIA Tesla T4, with a mean all-session test time of 1.01~s per subject and a pipeline-reported response time of 27.31~ms per trial. For the corresponding Ours-U run, mean all-session accuracy was $74.44\pm5.23\%$, mean Cohen's $\kappa$ was $61.70\pm7.80$, and mean loss was $0.763\pm0.194$. Ours-U contained 130,286 trainable parameters and required 70.61 minutes for all folds, with a mean test time of 0.99~s per subject and a response time of 26.88~ms per trial. These pipeline-reported response times are excluded from Table~\ref{tab:efficiency} because they were not obtained under that table's controlled T4 timing protocol.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
@@ -511,16 +463,14 @@ Ours-U                                    & -- & -- & -- & N/A \\
 \section{Ablation Study}
 \label{sec:ablation}
 
-The ablation study uses an auxiliary all-session target view: sessions 1--2 for BCI IV-2a, sessions 1--5 for BCI IV-2b, and sessions 1--3 for Zhou2016. The same label-free IM-TTA rule is applied, but performance is scored over the combined target sessions rather than only the chronologically later evaluation sessions. Because this view includes the earlier target sessions already available during Stage~1 UDA, it is easier than the primary evaluation and is confined to the ablation section.
-
-The ablations isolate both architectural and adaptation components: removal of covariance alignment; removal of channel-group attention; replacement of the alternating scans by forward-only scans; removal of the grouped TCN; source-only training without adversarial or MMD losses; removal of temporal MMD; and removal of information-maximization adaptation. Only one component is changed at a time, with the same subject folds, seed set, training budget, and source-validation checkpoint rule. Table~\ref{tab:ablation} reports both accuracy and $\kappa$ for each dataset.
+Table~\ref{tab:ablation} uses the auxiliary all-session target view (sessions 1--2 for BCI IV-2a, 1--5 for BCI IV-2b, and 1--3 for Zhou2016) and therefore remains separate from the primary chronological evaluation. Each run changes one component while preserving the folds, seeds, training budget, checkpoint rule, and label-free IM-TTA protocol. The variants remove Riemannian alignment, channel-group attention, alternating scans, the grouped TCN, adversarial/MMD alignment, temporal MMD, or IM-TTA, thereby separating architectural from adaptation gains.
 
 \begin{table*}[!htbp]
 \centering
 \caption{Ablation results under the auxiliary all-session protocol: mean accuracy (\%) and Cohen's $\kappa$ multiplied by 100; available Ours values are mean $\pm$ standard deviation across target subjects.}
 \label{tab:ablation}
-\footnotesize
-\setlength{\tabcolsep}{3.5pt}
+\scriptsize
+\setlength{\tabcolsep}{2.0pt}
 \begin{tabular}{lcccccc}
 \toprule
 \multirow{2}{*}{Configuration} & \multicolumn{2}{c}{BCI IV-2a} & \multicolumn{2}{c}{BCI IV-2b} & \multicolumn{2}{c}{Zhou2016} \\
@@ -535,7 +485,7 @@ Forward-only state-space scans       & -- & -- & -- & -- & -- & -- \\
 w/o grouped TCN                      & -- & -- & -- & -- & -- & -- \\
 w/o adversarial and MMD losses       & -- & -- & -- & -- & -- & -- \\
 w/o temporal MMD                     & -- & -- & -- & -- & -- & -- \\
-w/o information-maximization         & -- & -- & -- & -- & -- & -- \\
+w/o information-maximization         & -- & -- & -- & -- & $\mathbf{74.44 \pm 5.23}$ & $\mathbf{61.70 \pm 7.80}$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -543,20 +493,18 @@ w/o information-maximization         & -- & -- & -- & -- & -- & -- \\
 \section{Discussion}
 \label{sec:discussion}
 
-The experimental design separates chronological target access from the auxiliary all-session view. In the primary BCI IV-2a protocol, session~1 supplies unlabeled target EEG for Stage~1 UDA, while session~2 is withheld throughout model training and checkpoint selection, then used without labels for IM-TTA immediately before session-2 scoring. The auxiliary view instead scores the union of sessions~1 and~2 after adaptation and is reported only for diagnostic and ablation analysis. Target labels are absent during adaptation in both settings, but the evaluation populations differ and should not be compared as if they were identical.
+On BCI IV-2a, Ours achieved $75.81\pm10.63\%$ session-2 accuracy and $67.70\pm14.20$ Cohen's $\kappa$ on the $\times100$ scale. The large between-subject dispersion, including accuracies from 57.64\% to 93.75\%, shows that the mean does not describe every target equally well and motivates subject-wise reporting. The auxiliary sessions~1+2 result ($76.10\pm9.77\%$) is not directly comparable because it also scores the earlier session exposed without labels during Stage~1 UDA.
+For Zhou2016, Ours-S reached $72.78\pm5.84\%$ accuracy and $59.20\pm8.80$ Cohen's $\kappa$ over all three sessions, whereas the no-IM-TTA Ours-U variant reached $74.44\pm5.23\%$ and $61.70\pm7.80$, respectively. The resulting gains of 1.66 accuracy points and 2.50 $\kappa$ points quantify the contribution of Stage~1 UDA in this auxiliary all-session view; the contribution of IM-TTA remains unestablished until the complete Ours variant is evaluated.
 
-The proposed architecture is motivated by complementary inductive biases rather than by replacing every operation with a generic sequence model. Temporal kernels of different lengths capture local MI patterns; depthwise spatial convolution specializes electrode projections; and the state-space stack models longer dependencies with linear sequence scaling. Alternating scan directions are appropriate for offline trial decoding because the complete adaptation or test trial is available at inference time. They would not, however, be causal in a real-time sample-by-sample deployment. A causal online version should use forward scans only and should be evaluated with latency measured on the intended hardware.
 
-The adaptation losses also have distinct roles. Adversarial training changes features through a learned discriminator, whereas MK-MMD directly penalizes a kernel discrepancy. Their combination may be more robust than either mechanism alone, but marginal alignment can still bring different classes together. The temporal MMD term is deliberately assigned a smaller coefficient than final-feature MMD so that early temporal structure is regularized without dominating source classification.
+The architecture combines complementary biases: multi-scale and depthwise convolutions extract local spectral--spatial patterns, alternating selective scans provide linear-cost offline context, and the shortcut/TCN retains local evidence. Likewise, adversarial learning and MK-MMD provide learned and explicit distribution alignment, while the lower-weight temporal term regularizes sequence features. Their individual contributions must be established by the ablations rather than inferred from the complete result. Alternating scans are appropriate for offline trials but are non-causal; online deployment would require forward-only scans and hardware-specific latency evaluation.
 
-Several limitations must be stated when interpreting the current result. First, BCI IV-2b has only three EEG channels and Zhou2016 has only four participants, so uncertainty across subjects can be large. Second, the method is transductive at inference: IM-TTA uses the unlabeled EEG signals from the evaluation session before their predictions are scored, although their labels remain inaccessible. It is therefore neither target-free domain generalization nor a protocol in which evaluation signals are completely untouched before prediction. Third, the model contains dataset-specific training budgets and trial windows; fair comparison requires every baseline to receive the same unlabeled target access. Finally, repeated-seed runs, confidence intervals, and paired statistical tests are required before attributing a small improvement to the method rather than to stochastic training.
-
-Once the result tables are populated, the discussion should be extended with three evidence-based analyses: whether gains are consistent across subjects rather than driven by one fold; whether improvement remains after IM adaptation is removed; and whether the accuracy gain justifies additional parameters and adaptation time. These analyses are more informative than a single average accuracy and are necessary for a defensible comparison across the three datasets.
+The method remains transductive because IM-TTA accesses unlabeled evaluation-session signals before scoring, although labels remain hidden. It must therefore be compared only with methods receiving the same target access. Other limitations are the three-channel setting of BCI IV-2b, the four subjects in Zhou2016, dataset-specific windows and training budgets, and the currently incomplete repeated-seed and matched-baseline results. Final claims should be based on completed ablations, multiple seeds, paired tests, and adaptation-time measurements across all three datasets.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-This paper formulates a cross-subject MI-EEG decoder that combines an EEG-specific multi-scale convolutional front-end, depthwise electrode filtering, alternating selective state-space sequence blocks, a local shortcut, and a grouped dilated TCN. The training objective integrates source classification with adversarial, trial-level MK-MMD, and temporal MK-MMD alignment, followed at inference time by constrained information-maximization adaptation of normalization affine parameters on the unlabeled evaluation-session EEG. The chronological LOSO protocol keeps all target labels unavailable during training, adaptation, preprocessing-statistic estimation, and checkpoint selection. On BCI IV-2a, Ours achieved $75.81\pm10.63\%$ session-2 accuracy and a Cohen's $\kappa$ score of $67.70\pm14.20$ on the $\times100$ scale across the nine target subjects. Additional datasets, repeated-seed runs, and matched baseline comparisons remain necessary for broader quantitative conclusions.
+We presented a cross-subject MI-EEG framework combining multi-scale spatial--temporal convolution, alternating selective state-space blocks, local--global TCN fusion, hierarchical UDA, and constrained IM-TTA. Its chronological LOSO protocol excludes target labels from preprocessing, training, adaptation, and checkpoint selection. On BCI IV-2a, Ours obtained $75.81\pm10.63\%$ session-2 accuracy and $67.70\pm14.20$ Cohen's $\kappa$ on the $\times100$ scale. Complete-framework results on Zhou2016 and BCI IV-2b, matched baselines, repeated seeds, and ablations are required before drawing broader conclusions.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{references}
