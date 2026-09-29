@@ -166,10 +166,16 @@ def train_and_test(config):
         datamodule.all_target_dataset = None
         gc.collect()
 
-        # Optional source-free IM-TTA. The method consumes only target EEG;
-        # labels carried by the test loader are deliberately ignored.
-        if hasattr(model, "adapt_to_target"):
-            model.adapt_to_target(test_loader)
+        # This branch intentionally evaluates the best source-validation
+        # checkpoint without any test-time parameter adaptation.
+        if getattr(model, "im_tta_steps", 0) != 0:
+            raise RuntimeError(
+                "No-IM-TTA branch requires model.im_tta_steps == 0."
+            )
+        print(
+            "IM-TTA disabled; evaluating the restored best-validation checkpoint.",
+            flush=True,
+        )
 
         st_test = time.time()
         test_results = trainer.test(model, dataloaders=test_loader)
