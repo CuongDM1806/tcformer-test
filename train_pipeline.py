@@ -327,7 +327,7 @@ def parse_arguments():
     )        
     parser.add_argument("--dataset", type=str, default="bcic2a", 
         help="Name of the dataset to use."
-                        "Options: bcic2a, bcic2b, hgd, physionet, reh_mi, bcic3"
+                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, reh_mi, bcic3"
     )
     parser.add_argument("--loso", action="store_true", default=False, 
         help="Enable subject-independent (LOSO) mode"
@@ -357,7 +357,14 @@ def run():
     # Adjust training parameters based on LOSO setting
     if args.loso:
         config["dataset_name"] = args.dataset + "_loso" 
-        config["max_epochs"] = config["max_epochs_loso_hgd"] if args.dataset == "hgd" else config["max_epochs_loso"]
+        if args.dataset == "hgd":
+            config["max_epochs"] = config["max_epochs_loso_hgd"]
+        elif args.dataset == "zhou2016":
+            config["max_epochs"] = config.get(
+                "max_epochs_loso_zhou2016", config["max_epochs_loso"]
+            )
+        else:
+            config["max_epochs"] = config["max_epochs_loso"]
         config["model_kwargs"]["warmup_epochs"] = config["model_kwargs"]["warmup_epochs_loso"]
     else:
         if config.get("requires_loso", False):

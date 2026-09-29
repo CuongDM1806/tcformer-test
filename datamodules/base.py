@@ -155,6 +155,37 @@ class BaseDataModule(pl.LightningDataModule):
         return (transform(X_train), *(transform(array) for array in other_arrays))
 
     @staticmethod
+    def _euclidean_whitener(X, epsilon=1e-8):
+        """Return the EEG-SimpleConv Euclidean-alignment whitener.
+
+        The reference is the arithmetic mean of the uncentred trial spatial
+        covariance matrices, ``X_i X_i^T``. Labels are neither required nor
+        inspected. Fitting it on a held-out target is therefore transductive
+        unsupervised adaptation, not source-only preprocessing.
+        """
+        X64 = np.asarray(X, dtype=np.float64)
+        if X64.ndim != 3 or X64.shape[0] == 0:
+            raise ValueError("EA expects a non-empty [trials, channels, time] array.")
+        reference = np.einsum("nct,ndt->cd", X64, X64, optimize=True)
+        reference /= X64.shape[0]
+        reference = 0.5 * (reference + reference.T)
+        return BaseDataModule._spd_power(reference, -0.5, epsilon=epsilon)
+
+    @staticmethod
+    def _euclidean_align_many(X_reference, *other_arrays):
+        """Fit Euclidean alignment on one unlabeled domain and transform it."""
+        whitener = BaseDataModule._euclidean_whitener(X_reference)
+
+        def transform(array):
+            aligned = np.einsum("cd,ndt->nct", whitener, array, optimize=True)
+            return aligned.astype(array.dtype, copy=False)
+
+        return (
+            transform(X_reference),
+            *(transform(array) for array in other_arrays),
+        )
+
+    @staticmethod
     def _spd_power(matrix, exponent, epsilon=1e-8):
         """Raise a symmetric positive-definite matrix to a real power."""
         eigenvalues, eigenvectors = eigh(matrix)

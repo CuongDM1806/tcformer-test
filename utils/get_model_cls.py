@@ -1,6 +1,7 @@
 from models import (
     TCFormer,
     HADATCFormer,
+    FullMambaEAdaBN,
     ATCNet,
     BaseNet,
     # SST_DPN,
@@ -19,6 +20,7 @@ model_dict = dict(
     # SST_DPN=SST_DPN,
     TCFormer=TCFormer,
     HADATCFormer=HADATCFormer,
+    FullMambaEAdaBN=FullMambaEAdaBN,
     ATCNet=ATCNet,
     BaseNet=BaseNet,
     EEGConformer=EEGConformer,

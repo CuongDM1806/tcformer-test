@@ -68,6 +68,7 @@ class BCICIV2b(BaseDataModule):
 
 
 class BCICIV2bLOSO(BCICIV2b):
+    primary_test_label = "SESSIONS 4+5"
     val_dataset = None
 
     def __init__(self, preprocessing_dict: dict, subject_id: int):
@@ -103,6 +104,30 @@ class BCICIV2bLOSO(BCICIV2b):
         val_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in val_datasets]
         test_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in test_datasets]
         target_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in target_datasets]
+
+        if self.preprocessing_dict.get("euclidean_alignment", False):
+            print(
+                f"Applying session-wise EA for BCIC IV-2b LOSO target "
+                f"{self.subject_id}",
+                flush=True,
+            )
+            train_arrays = [
+                (BaseDataModule._euclidean_align_many(array[0])[0], array[1])
+                for array in train_arrays
+            ]
+            val_arrays = [
+                (BaseDataModule._euclidean_align_many(array[0])[0], array[1])
+                for array in val_arrays
+            ]
+            test_arrays = [
+                (BaseDataModule._euclidean_align_many(array[0])[0], array[1])
+                for array in test_arrays
+            ]
+            target_arrays = [
+                (BaseDataModule._euclidean_align_many(array[0])[0], array[1])
+                for array in target_arrays
+            ]
+
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
         y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
         X_val = np.concatenate([arr[0] for arr in val_arrays], axis=0)

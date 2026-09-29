@@ -175,6 +175,25 @@ class BCICIV2aLOSO(BCICIV2a):
         X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
         X_target, y_target = BaseDataModule._dataset_to_arrays(target_dataset)
 
+        if self.preprocessing_dict.get("euclidean_alignment", False):
+            # Match EEG-SimpleConv's offline protocol: estimate one unlabeled
+            # Euclidean reference independently for every recording session,
+            # including the held-out target sessions.
+            print(
+                f"Applying session-wise EA for LOSO target {self.subject_id}",
+                flush=True,
+            )
+            train_arrays = [
+                (BaseDataModule._euclidean_align_many(array[0])[0], array[1])
+                for array in train_arrays
+            ]
+            val_arrays = [
+                (BaseDataModule._euclidean_align_many(array[0])[0], array[1])
+                for array in val_arrays
+            ]
+            X_target = BaseDataModule._euclidean_align_many(X_target)[0]
+            X_test = BaseDataModule._euclidean_align_many(X_test)[0]
+
         if self.preprocessing_dict.get("riemannian_alignment", False):
             # Fit one reference per subject using only that subject's training
             # session. Source validation and held-out target test trials never
