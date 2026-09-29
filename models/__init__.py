@@ -1,5 +1,5 @@
 from .atcnet import ATCNet
-from .tcformer import TCFormer
+from .tcformer import TCFormer, FullMambaSourceOnly
 from .hada_tcformer import HADATCFormer
 from .basenet import BaseNet
 from .eegconformer import EEGConformer

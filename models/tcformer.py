@@ -667,6 +667,11 @@ class TCFormer(ClassificationModule):
         return measure_latency(TCFormer(22, 4), input_shape, device, warmup, runs)
     
 
+class FullMambaSourceOnly(TCFormer):
+    """Pure source-only Full-Mamba model with no adaptation components."""
+
+    pass
+
 if __name__ == "__main__":
     # Example usage: run benchmark with dummy input shape (batch, channels, time)
     C, T = 22, 1000  # adjust as needed

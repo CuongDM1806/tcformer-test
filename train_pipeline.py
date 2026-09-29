@@ -166,16 +166,33 @@ def train_and_test(config):
         datamodule.all_target_dataset = None
         gc.collect()
 
-        # This branch intentionally evaluates the best source-validation
-        # checkpoint without any test-time parameter adaptation.
-        if getattr(model, "im_tta_steps", 0) != 0:
-            raise RuntimeError(
-                "No-IM-TTA branch requires model.im_tta_steps == 0."
+        # Source-only runs must contain no domain-adaptation components and
+        # evaluate the restored checkpoint without test-time adaptation.
+        if not config.get("domain_adaptation", False):
+            forbidden_names = ("aligner", "discriminator", "gradient_reversal", "mmd")
+            adaptation_modules = [
+                name for name, _ in model.named_modules()
+                if name and any(token in name.lower() for token in forbidden_names)
+            ]
+            if adaptation_modules:
+                raise RuntimeError(
+                    "Source-only model unexpectedly contains domain-adaptation "
+                    f"modules: {adaptation_modules}"
+                )
+            print(
+                "Pure source-only evaluation: no RA, target training loader, "
+                "MMD, discriminator, or IM-TTA.",
+                flush=True,
             )
-        print(
-            "IM-TTA disabled; evaluating the restored best-validation checkpoint.",
-            flush=True,
-        )
+        else:
+            if getattr(model, "im_tta_steps", 0) != 0:
+                raise RuntimeError(
+                    "No-IM-TTA branch requires model.im_tta_steps == 0."
+                )
+            print(
+                "IM-TTA disabled; evaluating the restored best-validation checkpoint.",
+                flush=True,
+            )
 
         st_test = time.time()
         test_results = trainer.test(model, dataloaders=test_loader)
@@ -383,7 +400,7 @@ def run():
     else:
         if config.get("requires_loso", False):
             raise ValueError(
-                f"{config['model']} requires --loso to provide an unlabeled target domain."
+                f"{config['model']} requires the --loso evaluation protocol."
             )
         config["dataset_name"] = args.dataset
         config["max_epochs"] = config["max_epochs_2b"] if args.dataset == "bcic2b" else config["max_epochs"]

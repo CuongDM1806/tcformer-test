@@ -1,5 +1,6 @@
 from models import (
     TCFormer,
+    FullMambaSourceOnly,
     HADATCFormer,
     ATCNet,
     BaseNet,
@@ -18,6 +19,7 @@ from models import (
 model_dict = dict(
     # SST_DPN=SST_DPN,
     TCFormer=TCFormer,
+    FullMambaSourceOnly=FullMambaSourceOnly,
     HADATCFormer=HADATCFormer,
     ATCNet=ATCNet,
     BaseNet=BaseNet,
