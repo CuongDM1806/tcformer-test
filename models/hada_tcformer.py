@@ -271,12 +271,22 @@ class HADATCFormer(ClassificationModule):
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
 
+    @staticmethod
+    def _unpack_unlabeled_target(batch):
+        if isinstance(batch, Tensor):
+            return batch
+        if isinstance(batch, (tuple, list)) and len(batch) == 1:
+            return batch[0]
+        raise RuntimeError(
+            "IM-TTA requires an EEG-only loader; target labels must not be present."
+        )
+
     def adapt_to_target(self, target_loader):
         """Adapt BatchNorm affine parameters using unlabeled target trials.
 
         The information-maximization objective sharpens individual target
         predictions while maintaining a diverse batch-level class marginal.
-        Target labels may be present in the evaluation loader but are ignored.
+        The loader is required to expose EEG only and cannot carry target labels.
         """
         if self.im_tta_steps == 0:
             return None
@@ -324,9 +334,7 @@ class HADATCFormer(ClassificationModule):
                 sample_count = 0
                 with torch.no_grad():
                     for batch in target_loader:
-                        target_x = (
-                            batch[0] if isinstance(batch, (tuple, list)) else batch
-                        )
+                        target_x = self._unpack_unlabeled_target(batch)
                         target_x = target_x.to(device, non_blocking=True)
                         probabilities = self(target_x).softmax(dim=1)
                         batch_sum = probabilities.sum(dim=0)
@@ -351,7 +359,7 @@ class HADATCFormer(ClassificationModule):
                 conditional_sum = 0.0
                 second_pass_count = 0
                 for batch in target_loader:
-                    target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
+                    target_x = self._unpack_unlabeled_target(batch)
                     target_x = target_x.to(device, non_blocking=True)
                     logits = self.forward(target_x)
                     probabilities = logits.softmax(dim=1)

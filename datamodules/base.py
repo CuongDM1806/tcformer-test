@@ -121,6 +121,20 @@ class BaseDataModule(pl.LightningDataModule):
                           **({"prefetch_factor": 2} if test_num_workers > 0 else {}),
                         )
 
+    def test_adaptation_dataloader(self) -> DataLoader:
+        """Expose evaluation EEG without labels for test-time adaptation."""
+        if self.test_dataset is None:
+            raise RuntimeError("No target evaluation split is available.")
+        test_num_workers = self.preprocessing_dict.get("test_num_workers", 0)
+        return DataLoader(
+            UnlabeledDataset(self.test_dataset),
+            batch_size=self.preprocessing_dict["batch_size"],
+            num_workers=test_num_workers,
+            pin_memory=True,
+            persistent_workers=test_num_workers > 0,
+            **({"prefetch_factor": 2} if test_num_workers > 0 else {}),
+        )
+
     @staticmethod
     # Method 1 (per-channel & per-timepoint) across samples
     # def _z_scale(X, X_test):
