@@ -122,6 +122,7 @@ def train_and_test(config):
         # prepare_data/setup again. For LOSO this reloads every subject and can
         # exhaust Colab RAM. Reuse the already prepared test loader instead.
         test_loader = datamodule.test_dataloader()
+        adaptation_loader = datamodule.test_adaptation_dataloader()
         all_sessions_loader = (
             datamodule.all_target_dataloader()
             if datamodule.all_target_dataset is not None
@@ -134,10 +135,10 @@ def train_and_test(config):
         datamodule.all_target_dataset = None
         gc.collect()
 
-        # Optional source-free IM-TTA. The method consumes only target EEG;
-        # labels carried by the test loader are deliberately ignored.
+        # Optional source-free IM-TTA receives an EEG-only loader. The labeled
+        # test loader remains isolated until final scoring.
         if hasattr(model, "adapt_to_target"):
-            model.adapt_to_target(test_loader)
+            model.adapt_to_target(adaptation_loader)
 
         st_test = time.time()
         test_results = trainer.test(model, dataloaders=test_loader)
