@@ -174,6 +174,9 @@ def train_and_test(config):
         primary_test_label = getattr(
             datamodule_cls, "primary_test_label", "SESSION 2"
         )
+        auxiliary_test_label = getattr(
+            datamodule_cls, "auxiliary_test_label", "SESSIONS 1+2"
+        )
         print(
             f"\nTARGET SUBJECT {subject_id} {primary_test_label} RESULT | "
             f"acc={subject_acc * 100:.2f}% | "
@@ -210,7 +213,7 @@ def train_and_test(config):
             all_sessions_confmats.append(model.test_confmat.numpy().copy())
 
             print(
-                f"\nTARGET SUBJECT {subject_id} SESSION 1+2 RESULT "
+                f"\nTARGET SUBJECT {subject_id} {auxiliary_test_label} RESULT "
                 f"(AUXILIARY) | acc={all_sessions_acc * 100:.2f}% | "
                 f"loss={all_sessions_loss:.4f} | "
                 f"kappa={all_sessions_kappa:.4f} | "
@@ -247,14 +250,13 @@ def train_and_test(config):
             if all_sessions_loader is not None:
                 plot_confusion_matrix(
                     all_sessions_confmats[-1],
-                    save_path=(
-                        result_dir
-                        / f"confmats/confmat_subject_{subject_id}_sessions_1_2.png"
+                    save_path=result_dir / (
+                        f"confmats/confmat_subject_{subject_id}_all_sessions.png"
                     ),
                     class_names=datamodule_cls.class_names,
                     title=(
                         f"Confusion Matrix - Subject {subject_id} "
-                        "Sessions 1+2 (Auxiliary)"
+                        f"{auxiliary_test_label.title()} (Auxiliary)"
                     ),
                 )
 
@@ -269,7 +271,7 @@ def train_and_test(config):
             plot_curve(
                 metrics_callback.train_loss,
                 metrics_callback.val_all_sessions_loss,
-                "Loss (target sessions 1+2)",
+                f"Loss (target {auxiliary_test_label.lower()})",
                 subject_id,
                 result_dir / f"curves/subject_{subject_id}_all_sessions_loss.png",
             )
@@ -277,7 +279,7 @@ def train_and_test(config):
             plot_curve(
                 metrics_callback.train_acc,
                 metrics_callback.val_all_sessions_acc,
-                "Accuracy (target sessions 1+2)",
+                f"Accuracy (target {auxiliary_test_label.lower()})",
                 subject_id,
                 result_dir / f"curves/subject_{subject_id}_all_sessions_acc.png",
             )
@@ -293,7 +295,9 @@ def train_and_test(config):
         all_sessions_accs=all_sessions_accs,
         all_sessions_losses=all_sessions_losses,
         all_sessions_kappas=all_sessions_kappas,
-        all_sessions_test_times=all_sessions_test_times)
+        all_sessions_test_times=all_sessions_test_times,
+        primary_test_label=primary_test_label,
+        auxiliary_test_label=auxiliary_test_label)
     
     # plot the average if requested
     if config.get("plot_cm_average", True) and all_confmats:
@@ -307,9 +311,9 @@ def train_and_test(config):
         avg_all_sessions_cm = np.mean(np.stack(all_sessions_confmats), axis=0)
         plot_confusion_matrix(
             avg_all_sessions_cm,
-            save_path=result_dir / "confmats/avg_confusion_matrix_sessions_1_2.png",
+            save_path=result_dir / "confmats/avg_confusion_matrix_all_sessions.png",
             class_names=datamodule_cls.class_names,
-            title="Average Confusion Matrix - Target Sessions 1+2 (Auxiliary)",
+            title=f"Average Confusion Matrix - Target {auxiliary_test_label.title()} (Auxiliary)",
         )
 
 

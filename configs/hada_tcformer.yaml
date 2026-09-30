@@ -84,9 +84,8 @@ preprocessing:
     batch_size: 32
     num_workers: 2
     test_num_workers: 0
-    # DSAINet-compatible source split: reserve 20% from each source subject.
-    validation_fraction: 0.20
-    # Fit one reference per source train split and one on all unlabeled target trials.
+    # Fit source references on sessions 1--2 and the target reference on its
+    # unlabeled sessions 1--2; apply the frozen transforms to session 3.
     riemannian_alignment: true
     # 1250 samples is not compatible with the legacy InterAug chunking rule.
     # Preserve the complete native five-second epoch instead.
