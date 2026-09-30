@@ -93,6 +93,7 @@ preprocessing:
       weight_decay: 0.0001
 
 model: "HADATCFormer"
+run_name: "HADASimpleConvLiteDA"
 model_kwargs:
   F1: 32
   temp_kernel_lengths: [20, 32, 64]
@@ -101,7 +102,11 @@ model_kwargs:
   pool_length_1: 8
   pool_length_2: 7
   dropout_conv: 0.4
-  use_group_attn: true
+  # SimpleConv replaces only MultiKernelConvBlock. The five Mamba blocks,
+  # grouped TCN, Lite-DA heads, classifier, and IM-TTA remain unchanged.
+  use_group_attn: false
+  conv_frontend: simple_conv
+  simpleconv_kernel_lengths: [15, 7]
   # Legacy names retained by TCFormerModule for sequence depth and dropout.
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
   trans_depth: 5

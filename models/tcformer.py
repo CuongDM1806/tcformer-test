@@ -151,6 +151,62 @@ class MultiKernelConvBlock(nn.Module):
         return x.squeeze(2)
 # ------------------------------------------------------------------------------- #
 
+class SimpleConvStem(nn.Module):
+    """Lightweight sequential 1-D convolutional stem for raw EEG.
+
+    Electrodes are treated as input channels. Unlike ``MultiKernelConvBlock``,
+    this stem has no parallel temporal branches, depthwise spatial stage, or
+    channel-group attention. It preserves a temporal feature sequence for the
+    downstream selective SSM and grouped TCN instead of applying the global
+    average pooling used by the standalone EEG-SimpleConv classifier.
+    """
+
+    def __init__(
+        self,
+        n_channels: int,
+        hidden_channels: int,
+        out_channels: int,
+        kernel_lengths: tuple = (15, 7),
+        pool_lengths: tuple = (8, 7),
+        dropout: float = 0.4,
+    ):
+        super().__init__()
+        if len(kernel_lengths) != 2 or len(pool_lengths) != 2:
+            raise ValueError(
+                "SimpleConvStem expects two kernel lengths and two pool lengths."
+            )
+        if any(kernel <= 0 or kernel % 2 == 0 for kernel in kernel_lengths):
+            raise ValueError("SimpleConvStem kernel lengths must be positive and odd.")
+        if any(pool <= 0 for pool in pool_lengths):
+            raise ValueError("SimpleConvStem pool lengths must be positive.")
+
+        layers = []
+        in_channels = n_channels
+        for out_ch, kernel, pool in zip(
+            (hidden_channels, out_channels), kernel_lengths, pool_lengths
+        ):
+            layers.extend(
+                [
+                    nn.Conv1d(
+                        in_channels,
+                        out_ch,
+                        kernel_size=kernel,
+                        padding=kernel // 2,
+                        bias=False,
+                    ),
+                    nn.BatchNorm1d(out_ch),
+                    nn.ELU(),
+                    nn.MaxPool1d(pool),
+                    nn.Dropout(dropout),
+                ]
+            )
+            in_channels = out_ch
+        self.net = nn.Sequential(*layers)
+        glorot_weight_zero_bias(self)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.net(x)
+
 # ------------------------------------------------------------------------------- #
 class TCNBlock(nn.Module):
     def __init__(self, kernel_length: int = 4, n_filters: int = 32, dilation: int = 1,
@@ -506,6 +562,8 @@ class TCFormerModule(nn.Module):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            conv_frontend: str = "multi_kernel",
+            simpleconv_kernel_lengths: tuple = (15, 7),
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -515,9 +573,26 @@ class TCFormerModule(nn.Module):
 
         self.rearrange = Rearrange("b c seq -> b seq c")
 
-        self.conv_block = MultiKernelConvBlock(n_channels, temp_kernel_lengths, F1, D, 
-                                               pool_length_1, pool_length_2, dropout_conv, 
-                                               d_group, use_group_attn)
+        if conv_frontend == "multi_kernel":
+            self.conv_block = MultiKernelConvBlock(
+                n_channels, temp_kernel_lengths, F1, D,
+                pool_length_1, pool_length_2, dropout_conv,
+                d_group, use_group_attn,
+            )
+        elif conv_frontend == "simple_conv":
+            self.conv_block = SimpleConvStem(
+                n_channels=n_channels,
+                hidden_channels=F1,
+                out_channels=self.d_model,
+                kernel_lengths=tuple(simpleconv_kernel_lengths),
+                pool_lengths=(pool_length_1, pool_length_2),
+                dropout=dropout_conv,
+            )
+        else:
+            raise ValueError(
+                "conv_frontend must be either 'multi_kernel' or 'simple_conv', "
+                f"got {conv_frontend!r}."
+            )
         self.mix = nn.Sequential(
             nn.Conv1d(
                 in_channels=self.d_model,
@@ -636,6 +711,8 @@ class TCFormer(ClassificationModule):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            conv_frontend: str = "multi_kernel",
+            simpleconv_kernel_lengths: tuple = (15, 7),
             **kwargs
         ):
         model = TCFormerModule(
@@ -659,6 +736,8 @@ class TCFormer(ClassificationModule):
             sequence_block_types=sequence_block_types,
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
+            conv_frontend=conv_frontend,
+            simpleconv_kernel_lengths=simpleconv_kernel_lengths,
         )
         super().__init__(model, n_classes, **kwargs)
     

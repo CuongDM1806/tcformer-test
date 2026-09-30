@@ -32,12 +32,13 @@ CONFIG_DIR = Path(__file__).resolve().parent / "configs"
 def train_and_test(config):
      # Create result and checkpoints directories
     model_name = config["model"]
+    result_name = config.get("run_name", model_name)
     dataset_name = config["dataset_name"]
     seed = config["seed"]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M") # Format: YYYYMMDD_HHMM (e.g., 20250517_1530)
     result_dir = ( 
         Path(__file__).resolve().parent / 
-        f"results/{model_name}_{dataset_name}_seed-{seed}_aug-{config['preprocessing']['interaug']}"
+        f"results/{result_name}_{dataset_name}_seed-{seed}_aug-{config['preprocessing']['interaug']}"
         f"_GPU{config['gpu_id']}_{timestamp}"
     )   
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -269,7 +270,7 @@ def train_and_test(config):
             trainer.save_checkpoint(ckpt_path)
    
     # Summarize and save final results
-    write_summary(result_dir, model_name, dataset_name, subject_ids, param_count,
+    write_summary(result_dir, result_name, dataset_name, subject_ids, param_count,
         test_accs, test_losses, test_kappas, train_times, test_times, response_times,
         all_sessions_accs=all_sessions_accs,
         all_sessions_losses=all_sessions_losses,

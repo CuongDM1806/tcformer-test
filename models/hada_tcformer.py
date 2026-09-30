@@ -151,6 +151,8 @@ class HADATCFormer(ClassificationModule):
         sequence_block_types=None,
         mamba_d_state: int = 8,
         mamba_d_conv: int = 3,
+        conv_frontend: str = "multi_kernel",
+        simpleconv_kernel_lengths: tuple = (15, 7),
         aligner_hidden_dim: int = 8,
         domain_hidden_dim: int = 32,
         adaptation_dropout: float = 0.3,
@@ -184,6 +186,8 @@ class HADATCFormer(ClassificationModule):
             sequence_block_types=sequence_block_types,
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
+            conv_frontend=conv_frontend,
+            simpleconv_kernel_lengths=simpleconv_kernel_lengths,
         )
         super().__init__(model, n_classes, **kwargs)
         self.aligner = ResidualFeatureAligner(
