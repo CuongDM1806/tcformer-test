@@ -34,22 +34,42 @@ class GradientReversal(nn.Module):
 
 
 class ResidualFeatureAligner(nn.Module):
-    """Learn a domain-shift correction while preserving TCFormer features."""
+    """Apply a lightweight residual correction within each feature group."""
 
-    def __init__(self, feature_dim: int, hidden_dim: int, dropout: float):
+    def __init__(
+        self,
+        feature_dim: int,
+        n_groups: int,
+        hidden_dim: int,
+        dropout: float,
+    ):
         super().__init__()
-        self.correction = nn.Sequential(
-            nn.LayerNorm(feature_dim),
-            nn.Linear(feature_dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, feature_dim),
-            nn.LayerNorm(feature_dim),
+        if feature_dim % n_groups != 0:
+            raise ValueError("feature_dim must be divisible by n_groups.")
+        self.n_groups = n_groups
+        self.group_dim = feature_dim // n_groups
+        self.corrections = nn.ModuleList(
+            nn.Sequential(
+                nn.LayerNorm(self.group_dim),
+                nn.Linear(self.group_dim, hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_dim, self.group_dim),
+                nn.LayerNorm(self.group_dim),
+            )
+            for _ in range(n_groups)
         )
-        self.scale = nn.Parameter(torch.tensor(0.1))
+        self.scales = nn.Parameter(torch.full((n_groups,), 0.1))
 
     def forward(self, features: Tensor) -> Tensor:
-        return features + self.scale * self.correction(features)
+        groups = features.split(self.group_dim, dim=1)
+        aligned_groups = [
+            group + self.scales[index] * correction(group)
+            for index, (group, correction) in enumerate(
+                zip(groups, self.corrections)
+            )
+        ]
+        return torch.cat(aligned_groups, dim=1)
 
 
 class DomainDiscriminator(nn.Module):
@@ -59,10 +79,7 @@ class DomainDiscriminator(nn.Module):
             nn.Linear(feature_dim, hidden_dim),
             nn.LeakyReLU(0.2),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim // 2, 1),
+            nn.Linear(hidden_dim, 1),
         )
 
     def forward(self, features: Tensor) -> Tensor:
@@ -134,12 +151,11 @@ class HADATCFormer(ClassificationModule):
         sequence_block_types=None,
         mamba_d_state: int = 8,
         mamba_d_conv: int = 3,
-        aligner_hidden_dim: int = 128,
-        domain_hidden_dim: int = 128,
+        aligner_hidden_dim: int = 8,
+        domain_hidden_dim: int = 32,
         adaptation_dropout: float = 0.3,
         adversarial_weight: float = 1.0,
         mmd_weight: float = 0.5,
-        temporal_mmd_weight: float = 0.1,
         light_adaptation_factor: float = 0.25,
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
@@ -171,7 +187,10 @@ class HADATCFormer(ClassificationModule):
         )
         super().__init__(model, n_classes, **kwargs)
         self.aligner = ResidualFeatureAligner(
-            model.feature_dim, aligner_hidden_dim, adaptation_dropout
+            model.feature_dim,
+            model.n_groups + 1,
+            aligner_hidden_dim,
+            adaptation_dropout,
         )
         self.grl = GradientReversal()
         self.domain_discriminator = DomainDiscriminator(
@@ -180,7 +199,6 @@ class HADATCFormer(ClassificationModule):
         self.mmd_loss = MultiKernelMMDLoss()
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
-        self.temporal_mmd_weight = temporal_mmd_weight
         if not 0.0 < light_adaptation_factor <= 1.0:
             raise ValueError("light_adaptation_factor must be in (0, 1].")
         self.light_adaptation_factor = light_adaptation_factor
@@ -424,19 +442,10 @@ class HADATCFormer(ClassificationModule):
         )
         pooled_features = self.model.tcn_head.pool_temporal_features(temporal_features)
 
-        # Auxiliary alignment before temporal compression. It sees information
-        # from every TCN time position and introduces no trainable parameters.
-        temporal_mean_features = temporal_features.mean(dim=-1)
-        source_temporal_mean = temporal_mean_features[:source_count]
-        target_temporal_mean = temporal_mean_features[source_count:]
-        temporal_mmd_loss = self.mmd_loss(
-            source_temporal_mean, target_temporal_mean
-        )
-
-        all_features = pooled_features
-        all_features = self.aligner(all_features)
-        source_features = all_features[:source_count]
-        target_features = all_features[source_count:]
+        # Classification and MMD use lightweight group-preserving corrections.
+        aligned_features = self.aligner(pooled_features)
+        source_features = aligned_features[:source_count]
+        target_features = aligned_features[source_count:]
 
         source_logits = self.model.classify_features(source_features)
         with torch.no_grad():
@@ -450,11 +459,14 @@ class HADATCFormer(ClassificationModule):
         )
 
         alpha = self._grl_alpha()
-        domain_logits = self.domain_discriminator(self.grl(all_features, alpha))
+        # The small discriminator acts directly on pooled TCN features. This
+        # keeps the adversarial path from forcing the aligner to discard class
+        # information while still adapting the shared feature extractor.
+        domain_logits = self.domain_discriminator(self.grl(pooled_features, alpha))
         domain_targets = torch.cat(
             (
-                torch.zeros(source_count, 1, device=all_features.device),
-                torch.ones(target_features.size(0), 1, device=all_features.device),
+                torch.zeros(source_count, 1, device=pooled_features.device),
+                torch.ones(target_features.size(0), 1, device=pooled_features.device),
             ),
             dim=0,
         )
@@ -468,7 +480,6 @@ class HADATCFormer(ClassificationModule):
             * (
                 self.adversarial_weight * adversarial_loss
                 + self.mmd_weight * mmd_loss
-                + self.temporal_mmd_weight * temporal_mmd_loss
             )
         )
 
@@ -498,13 +509,6 @@ class HADATCFormer(ClassificationModule):
         self.log(
             "train_target_confidence",
             target_confidence,
-            on_step=False,
-            on_epoch=True,
-            batch_size=batch_size,
-        )
-        self.log(
-            "train_temporal_mmd_loss",
-            temporal_mmd_loss,
             on_step=False,
             on_epoch=True,
             batch_size=batch_size,
@@ -540,7 +544,6 @@ class HADATCFormer(ClassificationModule):
                 f"cls={classification_loss.detach().item():.4f} | "
                 f"domain={adversarial_loss.detach().item():.4f} | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
-                f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
                 f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "
                 f"gap={target_gap.detach().item():.2f} | "
                 f"conf={target_confidence.detach().item():.2f} | "

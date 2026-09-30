@@ -5,6 +5,7 @@ max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
 max_epochs_loso_hgd: 77
+max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
 domain_adaptation: true
@@ -72,6 +73,25 @@ preprocessing:
     model_overrides:
       im_tta_steps: 0
 
+  zhou2016:
+    # Zhou et al. (2016): 14 EEG channels, 250 Hz, 3 MI classes.
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    z_scale: true
+    start: 0.0
+    trial_duration: 5.0
+    batch_size: 32
+    num_workers: 2
+    test_num_workers: 0
+    # Fit source references on sessions 1--2 and the target reference on its
+    # unlabeled sessions 1--2; apply the frozen transforms to session 3.
+    riemannian_alignment: true
+    interaug: false
+    model_overrides:
+      lr: 0.001
+      weight_decay: 0.0001
+
 model: "HADATCFormer"
 model_kwargs:
   F1: 32
@@ -95,12 +115,15 @@ model_kwargs:
   kernel_length_tcn: 4
   dropout_tcn: 0.3
 
-  aligner_hidden_dim: 128
-  domain_hidden_dim: 128
+  # Four independent 16-D residual aligners with an 8-D bottleneck preserve
+  # the grouped TCN representation while keeping the DA head lightweight.
+  aligner_hidden_dim: 8
+  # Small discriminator: 64 -> 32 -> 1.
+  domain_hidden_dim: 32
   adaptation_dropout: 0.3
   adversarial_weight: 1.0
+  # A single pooled-feature MK-MMD; temporal MMD is intentionally disabled.
   mmd_weight: 0.5
-  temporal_mmd_weight: 0.1
   # High-gap, low-confidence target subjects use 25% of all DA losses.
   light_adaptation_factor: 0.25
   # Source-free target adaptation after HADA training. Only BatchNorm affine
