@@ -35,6 +35,7 @@ class BaseDataModule(pl.LightningDataModule):
     dataset = None
     train_dataset = None
     test_dataset = None
+    val_dataset = None
     target_dataset = None
     all_target_dataset = None
 
@@ -82,13 +83,14 @@ class BaseDataModule(pl.LightningDataModule):
         return {"source": source_loader, "target": self._target_train_dataloader()}
 
     def val_dataloader(self) -> DataLoader:
+        """Legacy fallback; LOSO datasets override this with their validation split."""
         session_2_loader = self.test_dataloader()
         if self.all_target_dataset is None:
             return session_2_loader
         return [session_2_loader, self.all_target_dataloader()]
 
     def all_target_dataloader(self) -> DataLoader:
-        """Evaluate the target subject on session 1 and session 2 together."""
+        """Evaluate an explicitly auxiliary target-session view after training."""
         test_num_workers = self.preprocessing_dict.get("test_num_workers", 0)
         return DataLoader(
             self.all_target_dataset,
@@ -111,6 +113,20 @@ class BaseDataModule(pl.LightningDataModule):
                           persistent_workers=test_num_workers > 0,
                           **({"prefetch_factor": 2} if test_num_workers > 0 else {}),
                         )
+
+    def test_adaptation_dataloader(self) -> DataLoader:
+        """Expose evaluation EEG without labels for test-time adaptation."""
+        if self.test_dataset is None:
+            raise RuntimeError("No target evaluation split is available.")
+        test_num_workers = self.preprocessing_dict.get("test_num_workers", 0)
+        return DataLoader(
+            UnlabeledDataset(self.test_dataset),
+            batch_size=self.preprocessing_dict["batch_size"],
+            num_workers=test_num_workers,
+            pin_memory=True,
+            persistent_workers=test_num_workers > 0,
+            **({"prefetch_factor": 2} if test_num_workers > 0 else {}),
+        )
 
     @staticmethod
     # Method 1 (per-channel & per-timepoint) across samples
