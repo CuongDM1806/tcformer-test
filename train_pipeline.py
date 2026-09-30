@@ -7,10 +7,12 @@ import os, time, yaml
 if os.environ.get("MPLBACKEND", "").startswith("module://matplotlib_inline"):
     os.environ["MPLBACKEND"] = "Agg"
 import numpy as np
+import torch
 from pathlib import Path
 from datetime import datetime
 from argparse import ArgumentParser
 from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.strategies import DDPStrategy
 # from torchviz import make_dot  # optional for graph visualization
 
@@ -32,12 +34,13 @@ CONFIG_DIR = Path(__file__).resolve().parent / "configs"
 def train_and_test(config):
      # Create result and checkpoints directories
     model_name = config["model"]
+    result_name = config.get("run_name", model_name)
     dataset_name = config["dataset_name"]
     seed = config["seed"]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M") # Format: YYYYMMDD_HHMM (e.g., 20250517_1530)
     result_dir = ( 
         Path(__file__).resolve().parent / 
-        f"results/{model_name}_{dataset_name}_seed-{seed}_aug-{config['preprocessing']['interaug']}"
+        f"results/{result_name}_{dataset_name}_seed-{seed}_aug-{config['preprocessing']['interaug']}"
         f"_GPU{config['gpu_id']}_{timestamp}"
     )   
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -73,6 +76,18 @@ def train_and_test(config):
         # Set seed for reproducibility
         seed_everything(config["seed"])
         metrics_callback = MetricsCallback()
+        best_checkpoint = ModelCheckpoint(
+            dirpath=result_dir / "checkpoints",
+            filename=(
+                f"subject_{subject_id}_best"
+                "-{epoch:03d}-{val_acc:.4f}"
+            ),
+            monitor="val_acc",
+            mode="max",
+            save_top_k=1,
+            save_last=False,
+            auto_insert_metric_name=False,
+        )
    
         # Initialize PyTorch Lightning Trainer
         trainer = Trainer(
@@ -87,8 +102,8 @@ def train_and_test(config):
             strategy = "auto" if config.get("gpu_id", 0) != -1 
                 else DDPStrategy(find_unused_parameters=True), 
             logger=False,
-            enable_checkpointing=False,
-            callbacks=[metrics_callback]
+            enable_checkpointing=True,
+            callbacks=[metrics_callback, best_checkpoint]
         )
 
         # Instantiate datamodule and model
@@ -106,15 +121,24 @@ def train_and_test(config):
         trainer.fit(model, datamodule=datamodule)
         train_times.append((time.time() - st_train) / 60) # minutes
 
-        if metrics_callback.best_model_state is None:
+        # Zhou2016 reports the model selected by labeled source validation,
+        # not the weights from the final epoch. Target labels remain unseen.
+        if not best_checkpoint.best_model_path:
             raise RuntimeError(
-                f"No val_acc was recorded for subject {subject_id}; "
-                "cannot evaluate the best-validation model."
+                f"No best validation checkpoint was produced for subject {subject_id}."
             )
-        model.load_state_dict(metrics_callback.best_model_state)
+        checkpoint = torch.load(
+            best_checkpoint.best_model_path,
+            map_location="cpu",
+            weights_only=False,
+        )
+        model.load_state_dict(checkpoint["state_dict"])
+        best_val_acc = float(best_checkpoint.best_model_score)
         print(
-            f"Restored best validation model for subject {subject_id}: "
-            f"val_acc={metrics_callback.best_val_acc:.4f}"
+            f"Loaded best source-validation checkpoint | "
+            f"subject={subject_id} | val_acc={best_val_acc * 100:.2f}% | "
+            f"path={best_checkpoint.best_model_path}",
+            flush=True,
         )
 
         # ---------------- TEST -----------------
@@ -150,6 +174,9 @@ def train_and_test(config):
         subject_kappa = float(subject_result["test_kappa"])
         primary_test_label = getattr(
             datamodule_cls, "primary_test_label", "SESSION 2"
+        )
+        auxiliary_test_label = getattr(
+            datamodule_cls, "auxiliary_test_label", "SESSIONS 1+2"
         )
         print(
             f"\nTARGET SUBJECT {subject_id} {primary_test_label} RESULT | "
@@ -187,7 +214,7 @@ def train_and_test(config):
             all_sessions_confmats.append(model.test_confmat.numpy().copy())
 
             print(
-                f"\nTARGET SUBJECT {subject_id} SESSION 1+2 RESULT "
+                f"\nTARGET SUBJECT {subject_id} {auxiliary_test_label} RESULT "
                 f"(AUXILIARY) | acc={all_sessions_acc * 100:.2f}% | "
                 f"loss={all_sessions_loss:.4f} | "
                 f"kappa={all_sessions_kappa:.4f} | "
@@ -224,14 +251,13 @@ def train_and_test(config):
             if all_sessions_loader is not None:
                 plot_confusion_matrix(
                     all_sessions_confmats[-1],
-                    save_path=(
-                        result_dir
-                        / f"confmats/confmat_subject_{subject_id}_sessions_1_2.png"
+                    save_path=result_dir / (
+                        f"confmats/confmat_subject_{subject_id}_all_sessions.png"
                     ),
                     class_names=datamodule_cls.class_names,
                     title=(
                         f"Confusion Matrix - Subject {subject_id} "
-                        "Sessions 1+2 (Auxiliary)"
+                        f"{auxiliary_test_label.title()} (Auxiliary)"
                     ),
                 )
 
@@ -246,7 +272,7 @@ def train_and_test(config):
             plot_curve(
                 metrics_callback.train_loss,
                 metrics_callback.val_all_sessions_loss,
-                "Loss (target sessions 1+2)",
+                f"Loss (target {auxiliary_test_label.lower()})",
                 subject_id,
                 result_dir / f"curves/subject_{subject_id}_all_sessions_loss.png",
             )
@@ -254,7 +280,7 @@ def train_and_test(config):
             plot_curve(
                 metrics_callback.train_acc,
                 metrics_callback.val_all_sessions_acc,
-                "Accuracy (target sessions 1+2)",
+                f"Accuracy (target {auxiliary_test_label.lower()})",
                 subject_id,
                 result_dir / f"curves/subject_{subject_id}_all_sessions_acc.png",
             )
@@ -265,12 +291,14 @@ def train_and_test(config):
             trainer.save_checkpoint(ckpt_path)
    
     # Summarize and save final results
-    write_summary(result_dir, model_name, dataset_name, subject_ids, param_count,
+    write_summary(result_dir, result_name, dataset_name, subject_ids, param_count,
         test_accs, test_losses, test_kappas, train_times, test_times, response_times,
         all_sessions_accs=all_sessions_accs,
         all_sessions_losses=all_sessions_losses,
         all_sessions_kappas=all_sessions_kappas,
-        all_sessions_test_times=all_sessions_test_times)
+        all_sessions_test_times=all_sessions_test_times,
+        primary_test_label=primary_test_label,
+        auxiliary_test_label=auxiliary_test_label)
     
     # plot the average if requested
     if config.get("plot_cm_average", True) and all_confmats:
@@ -284,9 +312,9 @@ def train_and_test(config):
         avg_all_sessions_cm = np.mean(np.stack(all_sessions_confmats), axis=0)
         plot_confusion_matrix(
             avg_all_sessions_cm,
-            save_path=result_dir / "confmats/avg_confusion_matrix_sessions_1_2.png",
+            save_path=result_dir / "confmats/avg_confusion_matrix_all_sessions.png",
             class_names=datamodule_cls.class_names,
-            title="Average Confusion Matrix - Target Sessions 1+2 (Auxiliary)",
+            title=f"Average Confusion Matrix - Target {auxiliary_test_label.title()} (Auxiliary)",
         )
 
 
@@ -301,7 +329,7 @@ def parse_arguments():
     )        
     parser.add_argument("--dataset", type=str, default="bcic2a", 
         help="Name of the dataset to use."
-                        "Options: bcic2a, bcic2b, hgd, physionet, reh_mi, bcic3"
+                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, reh_mi, bcic3"
     )
     parser.add_argument("--loso", action="store_true", default=False, 
         help="Enable subject-independent (LOSO) mode"
@@ -331,7 +359,14 @@ def run():
     # Adjust training parameters based on LOSO setting
     if args.loso:
         config["dataset_name"] = args.dataset + "_loso" 
-        config["max_epochs"] = config["max_epochs_loso_hgd"] if args.dataset == "hgd" else config["max_epochs_loso"]
+        if args.dataset == "hgd":
+            config["max_epochs"] = config["max_epochs_loso_hgd"]
+        elif args.dataset == "zhou2016":
+            config["max_epochs"] = config.get(
+                "max_epochs_loso_zhou2016", config["max_epochs_loso"]
+            )
+        else:
+            config["max_epochs"] = config["max_epochs_loso"]
         config["model_kwargs"]["warmup_epochs"] = config["model_kwargs"]["warmup_epochs_loso"]
     else:
         if config.get("requires_loso", False):
@@ -360,7 +395,9 @@ def run():
     elif args.no_interaug:
         config["preprocessing"]["interaug"] = False
     else:
-        config["preprocessing"]["interaug"] = config["interaug"]
+        config["preprocessing"]["interaug"] = config["preprocessing"].get(
+            "interaug", config["interaug"]
+        )
     config.pop("interaug", None)
 
     config["gpu_id"] = args.gpu_id

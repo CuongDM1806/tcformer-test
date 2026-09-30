@@ -5,6 +5,7 @@ max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
 max_epochs_loso_hgd: 77
+max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
 domain_adaptation: true
@@ -71,17 +72,46 @@ preprocessing:
     # Keep the IM-TTA implementation available, but skip it for PhysioNet.
     model_overrides:
       im_tta_steps: 0
+  zhou2016:
+    # Zhou et al. (2016): 14 EEG channels, 250 Hz, 3 MI classes.
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    z_scale: true
+    # The arrow/cue and motor-imagery period lasts exactly five seconds.
+    start: 0.0
+    trial_duration: 5.0
+    batch_size: 32
+    num_workers: 2
+    test_num_workers: 0
+    # Fit source references on sessions 1--2 and the target reference on its
+    # unlabeled sessions 1--2; apply the frozen transforms to session 3.
+    riemannian_alignment: true
+    # 1250 samples is not compatible with the legacy InterAug chunking rule.
+    # Preserve the complete native five-second epoch instead.
+    interaug: false
+    # Match the Zhou2016 optimizer settings reported for DSAINet.
+    model_overrides:
+      lr: 0.001
+      weight_decay: 0.0001
 
 model: "HADATCFormer"
+run_name: "HADASimpleConvMamba"
 model_kwargs:
   F1: 32
+  # Retained only to define three 16-channel partitions for the grouped TCN;
+  # SimpleConvStem itself has no parallel multi-kernel branches.
   temp_kernel_lengths: [20, 32, 64]
   d_group: 16
   D: 2
   pool_length_1: 8
   pool_length_2: 7
   dropout_conv: 0.4
-  use_group_attn: true
+  use_group_attn: false
+  # Lightweight sequential Conv1D stem. It keeps the same 48-channel output
+  # and 8x7 temporal downsampling expected by the Full-Mamba and grouped TCN.
+  conv_frontend: simple_conv
+  simpleconv_kernel_lengths: [15, 7]
   # Legacy names retained by TCFormerModule for sequence depth and dropout.
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
   trans_depth: 5
