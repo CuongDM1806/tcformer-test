@@ -100,9 +100,7 @@ class ClassificationModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        # BCIC-IV-2a LOSO exposes two evaluation views every epoch:
-        #   loader 0: target session 2 (the existing primary metric)
-        #   loader 1: target sessions 1+2 (a calibration-inclusive metric)
+        # Checkpoint selection uses labeled source validation only.
         mode = "val" if dataloader_idx == 0 else "val_all_sessions"
         loss, acc = self.shared_step(batch, batch_idx, mode=mode)
         return {f"{mode}_loss": loss, f"{mode}_acc": acc}

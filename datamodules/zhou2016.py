@@ -32,8 +32,9 @@ class Zhou2016LOSO(BaseDataModule):
 
     Sessions 1--2 of every source subject are labeled training data and
     session 3 is labeled source-only validation data. For the held-out target,
-    sessions 1--2 are exposed without labels only to Stage-1 HADA. Session 3
-    is reserved for label-free IM-TTA and primary scoring. A separate
+    sessions 1--2 form the optional unlabeled adaptation partition and are
+    consumed only when domain adaptation is enabled. Session 3 is reserved
+    for optional label-free test-time adaptation and primary scoring. A separate
     all-three-session loader is retained only as an explicitly auxiliary view.
     """
 
@@ -43,6 +44,7 @@ class Zhou2016LOSO(BaseDataModule):
     classes = 3
     primary_test_label = "SESSION 3"
     auxiliary_test_label = "ALL 3 SESSIONS"
+    all_sessions_test_label = auxiliary_test_label
 
     def __init__(self, preprocessing_dict: dict, subject_id: int):
         super().__init__(preprocessing_dict, subject_id)
