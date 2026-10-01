@@ -190,16 +190,28 @@ class BCICIV2aLOSO(BCICIV2a):
                 train_subjects, train_arrays, val_arrays
             ):
                 print(f"  RA source subject {source_id}", flush=True)
-                aligned_train, aligned_val = BaseDataModule._riemannian_align_many(
-                    train_array[0], val_array[0]
+                source_whitener = BaseDataModule._fit_riemannian_whitener(
+                    train_array[0]
+                )
+                aligned_train = BaseDataModule._apply_riemannian_whitener(
+                    source_whitener, train_array[0]
+                )
+                aligned_val = BaseDataModule._apply_riemannian_whitener(
+                    source_whitener, val_array[0]
                 )
                 aligned_train_arrays.append((aligned_train, train_array[1]))
                 aligned_val_arrays.append((aligned_val, val_array[1]))
             train_arrays = aligned_train_arrays
             val_arrays = aligned_val_arrays
             print(f"  RA target subject {self.subject_id}", flush=True)
-            X_target, X_test = BaseDataModule._riemannian_align_many(
-                X_target, X_test
+            target_whitener = BaseDataModule._fit_riemannian_whitener(X_target)
+            X_target = BaseDataModule._apply_riemannian_whitener(
+                target_whitener, X_target
+            )
+            # The frozen Session-1 whitener is applied independently to every
+            # Session-2 trial. Session 2 never contributes to RA fitting.
+            X_test = BaseDataModule._apply_riemannian_whitener(
+                target_whitener, X_test
             )
 
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
