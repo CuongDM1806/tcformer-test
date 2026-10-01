@@ -215,27 +215,52 @@ class BaseDataModule(pl.LightningDataModule):
         return mean
 
     @staticmethod
-    def _riemannian_whitener(X):
-        """Fit an OAS/Riemannian reference and return its inverse square root."""
+    def _fit_riemannian_whitener(X_adaptation):
+        """Fit an RA whitener exclusively from an adaptation split.
+
+        Evaluation trials must never be passed here. The fitted matrix is
+        frozen and can then be applied independently to future trials.
+        """
         covariances = np.stack(
-            [OAS().fit(trial.T.astype(np.float64)).covariance_ for trial in X],
+            [
+                OAS().fit(trial.T.astype(np.float64)).covariance_
+                for trial in X_adaptation
+            ],
             axis=0,
         )
         reference = BaseDataModule._riemannian_mean(covariances)
         return BaseDataModule._spd_power(reference, -0.5)
 
     @staticmethod
+    def _apply_riemannian_whitener(whitener, X):
+        """Apply one frozen RA whitener to a trial or a batch of trials."""
+        X = np.asarray(X)
+        if X.ndim == 2:
+            aligned = whitener @ X
+        elif X.ndim == 3:
+            aligned = np.einsum("cd,ndt->nct", whitener, X, optimize=True)
+        else:
+            raise ValueError(
+                "RA expects one [channels, time] trial or a "
+                "[trials, channels, time] batch."
+            )
+        return aligned.astype(X.dtype, copy=False)
+
+    @staticmethod
+    def _riemannian_whitener(X):
+        """Backward-compatible alias for fitting from reference trials."""
+        return BaseDataModule._fit_riemannian_whitener(X)
+
+    @staticmethod
     def _riemannian_align_many(X_reference, *other_arrays):
-        """Fit RA on reference trials and apply the same whitening to all splits."""
-        whitener = BaseDataModule._riemannian_whitener(X_reference)
-
-        def transform(array):
-            aligned = np.einsum("cd,ndt->nct", whitener, array, optimize=True)
-            return aligned.astype(array.dtype, copy=False)
-
+        """Fit on reference trials, then apply one frozen map to all splits."""
+        whitener = BaseDataModule._fit_riemannian_whitener(X_reference)
         return (
-            transform(X_reference),
-            *(transform(array) for array in other_arrays),
+            BaseDataModule._apply_riemannian_whitener(whitener, X_reference),
+            *(
+                BaseDataModule._apply_riemannian_whitener(whitener, array)
+                for array in other_arrays
+            ),
         )
     
     @staticmethod

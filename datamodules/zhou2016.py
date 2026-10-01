@@ -104,10 +104,14 @@ class Zhou2016LOSO(BaseDataModule):
             X_source_val, y_source_val = session_3
 
             if self.preprocessing_dict.get("riemannian_alignment", False):
-                X_source_train, X_source_val = (
-                    BaseDataModule._riemannian_align_many(
-                        X_source_train, X_source_val
-                    )
+                source_whitener = BaseDataModule._fit_riemannian_whitener(
+                    X_source_train
+                )
+                X_source_train = BaseDataModule._apply_riemannian_whitener(
+                    source_whitener, X_source_train
+                )
+                X_source_val = BaseDataModule._apply_riemannian_whitener(
+                    source_whitener, X_source_val
                 )
             source_train_arrays.append((X_source_train, y_source_train))
             source_val_arrays.append((X_source_val, y_source_val))
@@ -128,8 +132,12 @@ class Zhou2016LOSO(BaseDataModule):
         if self.preprocessing_dict.get("riemannian_alignment", False):
             # Fit only on the earlier target-adaptation sessions, then apply
             # the frozen transform to the held-out evaluation session.
-            X_target, X_test = BaseDataModule._riemannian_align_many(
-                X_target, X_test
+            target_whitener = BaseDataModule._fit_riemannian_whitener(X_target)
+            X_target = BaseDataModule._apply_riemannian_whitener(
+                target_whitener, X_target
+            )
+            X_test = BaseDataModule._apply_riemannian_whitener(
+                target_whitener, X_test
             )
 
         X_train = np.concatenate(

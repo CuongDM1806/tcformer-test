@@ -138,15 +138,27 @@ class BCICIV2bLOSO(BCICIV2b):
                 source_y = np.concatenate([arr[1] for arr in source_train], axis=0)
                 source_X_val = np.concatenate([arr[0] for arr in source_val], axis=0)
                 source_y_val = np.concatenate([arr[1] for arr in source_val], axis=0)
-                source_X, source_X_val = BaseDataModule._riemannian_align_many(
-                    source_X, source_X_val
+                source_whitener = BaseDataModule._fit_riemannian_whitener(
+                    source_X
+                )
+                source_X = BaseDataModule._apply_riemannian_whitener(
+                    source_whitener, source_X
+                )
+                source_X_val = BaseDataModule._apply_riemannian_whitener(
+                    source_whitener, source_X_val
                 )
                 aligned_train_arrays.append((source_X, source_y))
                 aligned_val_arrays.append((source_X_val, source_y_val))
             train_arrays = aligned_train_arrays
             val_arrays = aligned_val_arrays
-            X_target, X_test = BaseDataModule._riemannian_align_many(
-                X_target, X_test
+            target_whitener = BaseDataModule._fit_riemannian_whitener(X_target)
+            X_target = BaseDataModule._apply_riemannian_whitener(
+                target_whitener, X_target
+            )
+            # Sessions 4--5 are evaluation-only: apply the frozen Sessions
+            # 1--3 reference independently without refitting.
+            X_test = BaseDataModule._apply_riemannian_whitener(
+                target_whitener, X_test
             )
 
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
