@@ -1,7 +1,21 @@
-"""TCFormer with HADANet-style unsupervised domain adaptation.
+"""TCFormer with gap-adaptive unsupervised domain adaptation.
 
 Only source labels contribute to classification. Target batches contain EEG
-samples only and are used by the adversarial and MK-MMD alignment objectives.
+samples only and are used by the normalization statistics, the adversarial
+objective and MK-MMD.
+
+The domain-adaptation head has three switchable components:
+
+1. ``feature_alignment="group_dsbn"`` standardizes pooled features with
+   separate source/target statistics and a shared affine transform. The
+   correction therefore scales with the measured domain gap and has no
+   domain-specific trainable parameters. ``"residual"`` restores the Lite-DA
+   group-wise residual aligner for ablations.
+2. ``cross_group_rank > 0`` adds a zero-gated low-rank mixer that lets the
+   classifier exchange information between the temporal-kernel groups.
+3. ``adaptive_adversary=True`` scales the reversed gradient by the EMA of the
+   discriminator's balanced accuracy, so the feature extractor is pushed only
+   while the two domains are still separable.
 """
 
 import math
@@ -72,6 +86,76 @@ class ResidualFeatureAligner(nn.Module):
         return torch.cat(aligned_groups, dim=1)
 
 
+class DomainSpecificNorm(nn.Module):
+    """Standardize features with separate source and target statistics.
+
+    Statistics are kept per feature channel, so no information crosses the
+    grouped classifier's feature groups. The affine transform is shared by
+    both domains: the domain correction itself is parameter-free and is as
+    large as the measured difference between the two sets of statistics.
+    """
+
+    DOMAINS = ("source", "target")
+
+    def __init__(self, feature_dim: int, momentum: float = 0.1, eps: float = 1e-5):
+        super().__init__()
+        if not 0.0 < momentum <= 1.0:
+            raise ValueError("domain_norm_momentum must be in (0, 1].")
+        self.momentum = momentum
+        self.eps = eps
+        for domain in self.DOMAINS:
+            self.register_buffer(f"{domain}_mean", torch.zeros(feature_dim))
+            self.register_buffer(f"{domain}_var", torch.ones(feature_dim))
+        self.weight = nn.Parameter(torch.ones(feature_dim))
+        self.bias = nn.Parameter(torch.zeros(feature_dim))
+
+    def _buffers_for(self, domain: str) -> tuple[Tensor, Tensor]:
+        if domain not in self.DOMAINS:
+            raise ValueError(f"Unknown domain {domain!r}; expected {self.DOMAINS}.")
+        return getattr(self, f"{domain}_mean"), getattr(self, f"{domain}_var")
+
+    def standardize(self, features: Tensor, domain: str) -> Tensor:
+        running_mean, running_var = self._buffers_for(domain)
+        if self.training and features.size(0) > 1:
+            mean = features.mean(dim=0)
+            var = features.var(dim=0, unbiased=False)
+            with torch.no_grad():
+                running_mean.lerp_(mean.detach(), self.momentum)
+                running_var.lerp_(
+                    features.detach().var(dim=0, unbiased=True), self.momentum
+                )
+        else:
+            mean, var = running_mean, running_var
+        return (features - mean) / torch.sqrt(var + self.eps)
+
+    def affine(self, standardized: Tensor) -> Tensor:
+        return standardized * self.weight + self.bias
+
+    def forward(self, features: Tensor, domain: str) -> Tensor:
+        return self.affine(self.standardize(features, domain))
+
+    @torch.no_grad()
+    def set_statistics(self, domain: str, mean: Tensor, var: Tensor) -> None:
+        running_mean, running_var = self._buffers_for(domain)
+        running_mean.copy_(mean)
+        running_var.copy_(var)
+
+
+class LowRankCrossGroupMixer(nn.Module):
+    """Zero-gated low-rank exchange of information between feature groups."""
+
+    def __init__(self, feature_dim: int, rank: int):
+        super().__init__()
+        self.down = nn.Linear(feature_dim, rank, bias=False)
+        self.up = nn.Linear(rank, feature_dim, bias=False)
+        # The mixer starts as the identity; the gate opens only if the
+        # source classification loss benefits from cross-group information.
+        self.gate = nn.Parameter(torch.zeros(()))
+
+    def forward(self, features: Tensor) -> Tensor:
+        return features + self.gate * self.up(self.down(features))
+
+
 class DomainDiscriminator(nn.Module):
     def __init__(self, feature_dim: int, hidden_dim: int, dropout: float):
         super().__init__()
@@ -127,7 +211,7 @@ class MultiKernelMMDLoss(nn.Module):
 
 
 class HADATCFormer(ClassificationModule):
-    """HADANet-style UDA applied to the TCFormer representation."""
+    """Gap-adaptive UDA applied to the TCFormer representation."""
 
     def __init__(
         self,
@@ -151,12 +235,17 @@ class HADATCFormer(ClassificationModule):
         sequence_block_types=None,
         mamba_d_state: int = 8,
         mamba_d_conv: int = 3,
+        feature_alignment: str = "group_dsbn",
+        domain_norm_momentum: float = 0.1,
+        recalibrate_target_statistics: bool = True,
+        cross_group_rank: int = 0,
         aligner_hidden_dim: int = 8,
         domain_hidden_dim: int = 32,
         adaptation_dropout: float = 0.3,
         adversarial_weight: float = 1.0,
+        adaptive_adversary: bool = True,
+        adversary_ema_decay: float = 0.95,
         mmd_weight: float = 0.5,
-        light_adaptation_factor: float = 0.25,
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
         im_tta_diversity_weight: float = 1.0,
@@ -186,12 +275,34 @@ class HADATCFormer(ClassificationModule):
             mamba_d_conv=mamba_d_conv,
         )
         super().__init__(model, n_classes, **kwargs)
-        self.aligner = ResidualFeatureAligner(
-            model.feature_dim,
-            model.n_groups + 1,
-            aligner_hidden_dim,
-            adaptation_dropout,
+
+        if feature_alignment == "group_dsbn":
+            self.domain_norm = DomainSpecificNorm(
+                model.feature_dim, momentum=domain_norm_momentum
+            )
+            self.aligner = None
+        elif feature_alignment == "residual":
+            self.domain_norm = None
+            self.aligner = ResidualFeatureAligner(
+                model.feature_dim,
+                model.n_groups + 1,
+                aligner_hidden_dim,
+                adaptation_dropout,
+            )
+        else:
+            raise ValueError(
+                "feature_alignment must be 'group_dsbn' or 'residual', "
+                f"got {feature_alignment!r}."
+            )
+        if cross_group_rank < 0:
+            raise ValueError("cross_group_rank must be non-negative.")
+        self.cross_group_mixer = (
+            LowRankCrossGroupMixer(model.feature_dim, int(cross_group_rank))
+            if cross_group_rank > 0
+            else None
         )
+        self.recalibrate_target_statistics = bool(recalibrate_target_statistics)
+
         self.grl = GradientReversal()
         self.domain_discriminator = DomainDiscriminator(
             model.feature_dim, domain_hidden_dim, adaptation_dropout
@@ -199,9 +310,11 @@ class HADATCFormer(ClassificationModule):
         self.mmd_loss = MultiKernelMMDLoss()
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
-        if not 0.0 < light_adaptation_factor <= 1.0:
-            raise ValueError("light_adaptation_factor must be in (0, 1].")
-        self.light_adaptation_factor = light_adaptation_factor
+        self.adaptive_adversary = bool(adaptive_adversary)
+        if not 0.0 <= adversary_ema_decay < 1.0:
+            raise ValueError("adversary_ema_decay must be in [0, 1).")
+        self.adversary_ema_decay = float(adversary_ema_decay)
+
         if im_tta_steps < 0:
             raise ValueError("im_tta_steps must be non-negative.")
         if im_tta_lr <= 0.0:
@@ -211,82 +324,71 @@ class HADATCFormer(ClassificationModule):
         self.im_tta_steps = int(im_tta_steps)
         self.im_tta_lr = float(im_tta_lr)
         self.im_tta_diversity_weight = float(im_tta_diversity_weight)
-        self.log_every_n_batches = max(1, int(log_every_n_batches))
+        # 0 disables per-batch progress lines.
+        self.log_every_n_batches = max(0, int(log_every_n_batches))
         self._epoch_started_at = None
-        # One LOSO run has one target subject. These EMAs therefore summarize
-        # target-level transferability instead of reacting to a single batch.
+        # Validation scores labeled source trials; every other inference path
+        # (test, IM-TTA, prediction) sees the held-out target subject.
+        self._inference_domain = "target"
+        # One LOSO run has one target subject, so this EMA summarizes how
+        # separable that subject still is from the source pool.
         self.register_buffer(
-            "_target_gap_ema", torch.tensor(float("nan")), persistent=False
-        )
-        self.register_buffer(
-            "_target_confidence_ema", torch.tensor(float("nan")), persistent=False
+            "_domain_acc_ema", torch.tensor(float("nan")), persistent=False
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        features = self.aligner(self.model.extract_features(x))
-        return self.model.classify_features(features)
+    # ------------------------------------------------------------------ #
+    # Feature path
+    def _align(self, features: Tensor, domain: str) -> Tensor:
+        if self.domain_norm is not None:
+            return self.domain_norm(features, domain)
+        return self.aligner(features)
 
+    def _classify(self, aligned_features: Tensor) -> Tensor:
+        if self.cross_group_mixer is not None:
+            aligned_features = self.cross_group_mixer(aligned_features)
+        return self.model.classify_features(aligned_features)
+
+    def forward(self, x: Tensor, domain: str | None = None) -> Tensor:
+        domain = domain or self._inference_domain
+        return self._classify(self._align(self.model.extract_features(x), domain))
+
+    def on_validation_start(self):
+        self._inference_domain = "source"
+
+    def on_validation_end(self):
+        self._inference_domain = "target"
+
+    # ------------------------------------------------------------------ #
+    # Adversary schedule
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
         return 2.0 / (1.0 + math.exp(-10.0 * progress)) - 1.0
 
+    def _adversary_strength(self) -> float:
+        """Map discriminator balanced accuracy 0.5 -> 0 and 1.0 -> 1."""
+        if not self.adaptive_adversary:
+            return 1.0
+        if torch.isnan(self._domain_acc_ema):
+            return 0.0
+        return float(((self._domain_acc_ema - 0.5) / 0.5).clamp(0.0, 1.0))
+
     @torch.no_grad()
-    def _target_adaptation_gate(
-        self,
-        source_features: Tensor,
-        target_features: Tensor,
-        target_logits: Tensor,
-    ) -> tuple[Tensor, Tensor, Tensor]:
-        """Return a target-level normal/light DA gate and its diagnostics.
-
-        A target is treated as high-risk when its normalized domain gap is
-        larger than the within-domain feature spread while its prediction
-        confidence is in the lower half of the range between random guessing
-        and certainty. Fixed, dimensionless cutoffs keep tuning to a minimum.
-        """
-        source = F.normalize(source_features.detach(), p=2, dim=1)
-        target = F.normalize(target_features.detach(), p=2, dim=1)
-        source_center = source.mean(dim=0)
-        target_center = target.mean(dim=0)
-
-        center_distance = torch.linalg.vector_norm(source_center - target_center)
-        source_spread = torch.linalg.vector_norm(
-            source - source_center, dim=1
-        ).mean()
-        target_spread = torch.linalg.vector_norm(
-            target - target_center, dim=1
-        ).mean()
-        domain_gap = center_distance / (
-            0.5 * (source_spread + target_spread)
-        ).clamp_min(1e-6)
-
-        mean_confidence = target_logits.detach().softmax(dim=1).amax(dim=1).mean()
-        random_confidence = 1.0 / self.hparams.n_classes
-        normalized_confidence = (
-            (mean_confidence - random_confidence) / (1.0 - random_confidence)
-        ).clamp(0.0, 1.0)
-
-        ema_decay = 0.9
-        if torch.isnan(self._target_gap_ema):
-            self._target_gap_ema.copy_(domain_gap)
-            self._target_confidence_ema.copy_(normalized_confidence)
+    def _update_domain_accuracy(self, domain_logits: Tensor, source_count: int) -> Tensor:
+        predicted_target = domain_logits.squeeze(1) > 0
+        source_acc = (~predicted_target[:source_count]).float().mean()
+        target_acc = predicted_target[source_count:].float().mean()
+        balanced_acc = 0.5 * (source_acc + target_acc)
+        if torch.isnan(self._domain_acc_ema):
+            self._domain_acc_ema.copy_(balanced_acc)
         else:
-            self._target_gap_ema.lerp_(domain_gap, 1.0 - ema_decay)
-            self._target_confidence_ema.lerp_(
-                normalized_confidence, 1.0 - ema_decay
-            )
-
-        use_light_adaptation = (self._target_gap_ema > 1.0) & (
-            self._target_confidence_ema < 0.5
-        )
-        normal_gate = source_features.new_ones(())
-        light_gate = source_features.new_tensor(self.light_adaptation_factor)
-        gate = torch.where(use_light_adaptation, light_gate, normal_gate)
-        return gate, self._target_gap_ema.clone(), self._target_confidence_ema.clone()
+            self._domain_acc_ema.lerp_(balanced_acc, 1.0 - self.adversary_ema_decay)
+        return balanced_acc
 
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
 
+    # ------------------------------------------------------------------ #
+    # Target-side adaptation after training
     @staticmethod
     def _unpack_unlabeled_target(batch):
         if isinstance(batch, Tensor):
@@ -294,19 +396,71 @@ class HADATCFormer(ClassificationModule):
         if isinstance(batch, (tuple, list)) and len(batch) == 1:
             return batch[0]
         raise RuntimeError(
-            "IM-TTA requires an EEG-only loader; target labels must not be present."
+            "Target adaptation requires an EEG-only loader; target labels must "
+            "not be present."
         )
 
     def adapt_to_target(self, target_loader):
+        """Label-free adaptation to the held-out target trials.
+
+        IM-TTA (optional) updates BatchNorm affine parameters, then the target
+        statistics of the domain-specific normalization are re-estimated in a
+        single pass over the same unlabeled trials so they match the final
+        backbone. The loader exposes EEG only and cannot carry target labels.
+        """
+        self._inference_domain = "target"
+        stats = self._run_im_tta(target_loader) if self.im_tta_steps > 0 else None
+        if self.domain_norm is not None and self.recalibrate_target_statistics:
+            self._recalibrate_target_statistics(target_loader)
+        self.eval()
+        return stats
+
+    @torch.no_grad()
+    def _recalibrate_target_statistics(self, target_loader) -> None:
+        # eval() keeps dropout off. After IM-TTA the backbone BatchNorm layers
+        # have no running buffers and keep using target batch statistics,
+        # exactly as they will during the final test pass.
+        self.eval()
+        device = next(self.parameters()).device
+        feature_sum = None
+        feature_square_sum = None
+        sample_count = 0
+        for batch in target_loader:
+            target_x = self._unpack_unlabeled_target(batch).to(device, non_blocking=True)
+            features = self.model.extract_features(target_x).double()
+            batch_sum = features.sum(dim=0)
+            batch_square_sum = features.square().sum(dim=0)
+            if feature_sum is None:
+                feature_sum, feature_square_sum = batch_sum, batch_square_sum
+            else:
+                feature_sum += batch_sum
+                feature_square_sum += batch_square_sum
+            sample_count += target_x.size(0)
+        if sample_count < 2:
+            raise RuntimeError("Target statistics need at least two target trials.")
+
+        mean = feature_sum / sample_count
+        var = (feature_square_sum - sample_count * mean.square()) / (sample_count - 1)
+        previous_mean = self.domain_norm.target_mean.clone()
+        self.domain_norm.set_statistics(
+            "target", mean.float(), var.clamp_min(0.0).float()
+        )
+        shift = torch.linalg.vector_norm(mean.float() - previous_mean).item()
+        source_target_gap = torch.linalg.vector_norm(
+            self.domain_norm.source_mean - self.domain_norm.target_mean
+        ).item()
+        self.print(
+            f"Target DSBN statistics recalibrated | samples={sample_count} | "
+            f"mean_shift_vs_train={shift:.4f} | "
+            f"source_target_mean_gap={source_target_gap:.4f}"
+        )
+
+    def _run_im_tta(self, target_loader):
         """Adapt BatchNorm affine parameters using unlabeled target trials.
 
         The information-maximization objective sharpens individual target
         predictions while maintaining a diverse batch-level class marginal.
-        The loader is required to expose EEG only and cannot carry target labels.
         """
-        if self.im_tta_steps == 0:
-            return None
-
         self.eval()
         for parameter in self.parameters():
             parameter.requires_grad_(False)
@@ -424,6 +578,8 @@ class HADATCFormer(ClassificationModule):
         self.eval()
         return final_stats
 
+    # ------------------------------------------------------------------ #
+    # Training
     def training_step(self, batch, batch_idx):
         if not isinstance(batch, dict) or "source" not in batch or "target" not in batch:
             raise RuntimeError(
@@ -435,86 +591,106 @@ class HADATCFormer(ClassificationModule):
         target_x = batch["target"]
         source_count = source_x.size(0)
 
-        # A shared forward pass also gives BatchNorm both domains without ever
-        # reading target labels.
+        # A shared forward pass also gives the backbone BatchNorm both domains
+        # without ever reading target labels.
         temporal_features = self.model.extract_temporal_features(
             torch.cat((source_x, target_x), dim=0)
         )
         pooled_features = self.model.tcn_head.pool_temporal_features(temporal_features)
+        source_pooled = pooled_features[:source_count]
+        target_pooled = pooled_features[source_count:]
 
-        # Classification and MMD use lightweight group-preserving corrections.
-        aligned_features = self.aligner(pooled_features)
-        source_features = aligned_features[:source_count]
-        target_features = aligned_features[source_count:]
+        if self.domain_norm is not None:
+            # Each domain is standardized with its own statistics. Alignment
+            # losses see the parameter-free standardized features, so the
+            # shared affine transform cannot shrink features to fool the
+            # discriminator.
+            source_standardized = self.domain_norm.standardize(source_pooled, "source")
+            target_standardized = self.domain_norm.standardize(target_pooled, "target")
+            source_aligned = self.domain_norm.affine(source_standardized)
+            discriminator_features = torch.cat(
+                (source_standardized, target_standardized), dim=0
+            )
+            source_mmd_features = source_standardized
+            target_mmd_features = target_standardized
+        else:
+            # Lite-DA: residual aligner for classification/MMD, discriminator
+            # on the pooled backbone features.
+            source_aligned = self.aligner(source_pooled)
+            source_mmd_features = source_aligned
+            target_mmd_features = self.aligner(target_pooled)
+            discriminator_features = pooled_features
 
-        source_logits = self.model.classify_features(source_features)
-        with torch.no_grad():
-            target_logits = self.model.classify_features(target_features)
+        source_logits = self._classify(source_aligned)
         classification_loss = F.cross_entropy(source_logits, source_y)
 
-        adaptation_gate, target_gap, target_confidence = (
-            self._target_adaptation_gate(
-                source_features, target_features, target_logits
-            )
-        )
-
         alpha = self._grl_alpha()
-        # The small discriminator acts directly on pooled TCN features. This
-        # keeps the adversarial path from forcing the aligner to discard class
-        # information while still adapting the shared feature extractor.
-        domain_logits = self.domain_discriminator(self.grl(pooled_features, alpha))
+        adversary_strength = self._adversary_strength()
+        # The discriminator always learns with full weight, so its accuracy
+        # stays an honest separability estimate. Only the reversed gradient
+        # that reaches the feature extractor is scaled.
+        reversal_coefficient = alpha * adversary_strength
+        domain_logits = self.domain_discriminator(
+            self.grl(discriminator_features, reversal_coefficient)
+        )
         domain_targets = torch.cat(
             (
                 torch.zeros(source_count, 1, device=pooled_features.device),
-                torch.ones(target_features.size(0), 1, device=pooled_features.device),
+                torch.ones(target_pooled.size(0), 1, device=pooled_features.device),
             ),
             dim=0,
         )
         adversarial_loss = F.binary_cross_entropy_with_logits(
             domain_logits, domain_targets
         )
-        mmd_loss = self.mmd_loss(source_features, target_features)
+        domain_acc = self._update_domain_accuracy(domain_logits, source_count)
+        mmd_loss = self.mmd_loss(source_mmd_features, target_mmd_features)
         loss = (
             classification_loss
-            + adaptation_gate
-            * (
-                self.adversarial_weight * adversarial_loss
-                + self.mmd_weight * mmd_loss
-            )
+            + self.adversarial_weight * adversarial_loss
+            + self.mmd_weight * mmd_loss
         )
 
         acc = accuracy(
             source_logits, source_y, task="multiclass", num_classes=self.hparams.n_classes
         )
         batch_size = source_count
-        self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
-        self.log("train_acc", acc, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
-        self.log("train_cls_loss", classification_loss, on_step=False, on_epoch=True, batch_size=batch_size)
-        self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
-        self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
-        self.log(
-            "train_da_gate",
-            adaptation_gate,
-            on_step=False,
-            on_epoch=True,
-            batch_size=batch_size,
-        )
-        self.log(
-            "train_target_gap",
-            target_gap,
-            on_step=False,
-            on_epoch=True,
-            batch_size=batch_size,
-        )
-        self.log(
-            "train_target_confidence",
-            target_confidence,
-            on_step=False,
-            on_epoch=True,
-            batch_size=batch_size,
-        )
-        self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
+        log = dict(on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_loss", loss, prog_bar=True, **log)
+        self.log("train_acc", acc, prog_bar=True, **log)
+        self.log("train_cls_loss", classification_loss, **log)
+        self.log("train_domain_loss", adversarial_loss, **log)
+        self.log("train_mmd_loss", mmd_loss, **log)
+        self.log("train_domain_acc", domain_acc, **log)
+        self.log("train_adversary_strength", adversary_strength, **log)
+        self.log("grl_alpha", alpha, **log)
+        if self.cross_group_mixer is not None:
+            self.log("train_mixer_gate", self.cross_group_mixer.gate.detach(), **log)
 
+        if self.log_every_n_batches > 0:
+            self._print_progress(
+                batch_idx,
+                loss=loss,
+                classification_loss=classification_loss,
+                adversarial_loss=adversarial_loss,
+                mmd_loss=mmd_loss,
+                domain_acc=domain_acc,
+                adversary_strength=adversary_strength,
+                acc=acc,
+            )
+        return loss
+
+    def _print_progress(
+        self,
+        batch_idx,
+        loss,
+        classification_loss,
+        adversarial_loss,
+        mmd_loss,
+        domain_acc,
+        adversary_strength,
+        acc,
+    ):
         total_batches = self.trainer.num_training_batches
         current_batch = batch_idx + 1
         should_print = (
@@ -522,35 +698,37 @@ class HADATCFormer(ClassificationModule):
             or current_batch % self.log_every_n_batches == 0
             or current_batch == total_batches
         )
-        if should_print:
-            if self._epoch_started_at is None:
-                self._epoch_started_at = time.perf_counter()
-            elapsed = time.perf_counter() - self._epoch_started_at
-            seconds_per_batch = elapsed / current_batch
-            if isinstance(total_batches, int):
-                eta_seconds = seconds_per_batch * max(total_batches - current_batch, 0)
-                batch_progress = f"{current_batch}/{total_batches}"
-                eta_text = f"{eta_seconds / 60:.1f}m"
-            else:
-                batch_progress = f"{current_batch}/?"
-                eta_text = "?"
-            adaptation_mode = (
-                "light" if adaptation_gate.detach().item() < 1.0 else "normal"
-            )
-            self.print(
-                f"Epoch {self.current_epoch + 1}/{self.hparams.max_epochs} | "
-                f"Batch {batch_progress} | "
-                f"loss={loss.detach().item():.4f} | "
-                f"cls={classification_loss.detach().item():.4f} | "
-                f"domain={adversarial_loss.detach().item():.4f} | "
-                f"mmd={mmd_loss.detach().item():.4f} | "
-                f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "
-                f"gap={target_gap.detach().item():.2f} | "
-                f"conf={target_confidence.detach().item():.2f} | "
-                f"acc={acc.detach().item() * 100:.2f}% | "
-                f"elapsed={elapsed / 60:.1f}m | ETA={eta_text}"
-            )
-        return loss
+        if not should_print:
+            return
+        if self._epoch_started_at is None:
+            self._epoch_started_at = time.perf_counter()
+        elapsed = time.perf_counter() - self._epoch_started_at
+        seconds_per_batch = elapsed / current_batch
+        if isinstance(total_batches, int):
+            eta_seconds = seconds_per_batch * max(total_batches - current_batch, 0)
+            batch_progress = f"{current_batch}/{total_batches}"
+            eta_text = f"{eta_seconds / 60:.1f}m"
+        else:
+            batch_progress = f"{current_batch}/?"
+            eta_text = "?"
+        mixer_text = (
+            f"mix_gate={self.cross_group_mixer.gate.item():.3f} | "
+            if self.cross_group_mixer is not None
+            else ""
+        )
+        self.print(
+            f"Epoch {self.current_epoch + 1}/{self.hparams.max_epochs} | "
+            f"Batch {batch_progress} | "
+            f"loss={loss.detach().item():.4f} | "
+            f"cls={classification_loss.detach().item():.4f} | "
+            f"domain={adversarial_loss.detach().item():.4f} | "
+            f"mmd={mmd_loss.detach().item():.4f} | "
+            f"D_acc={domain_acc.item():.2f} | "
+            f"adv={adversary_strength:.2f} | "
+            f"{mixer_text}"
+            f"acc={acc.detach().item() * 100:.2f}% | "
+            f"elapsed={elapsed / 60:.1f}m | ETA={eta_text}"
+        )
 
     @staticmethod
     def benchmark(input_shape, device="cuda:0", warmup=100, runs=500):

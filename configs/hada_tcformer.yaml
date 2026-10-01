@@ -30,6 +30,11 @@ preprocessing:
     start: 0.0
     stop: -0.5
     batch_size: 48
+    # Per-subject RA. Each reference is fit on sessions 1-3 only; target
+    # sessions 4-5 are transformed with the frozen target reference.
+    riemannian_alignment: true
+    num_workers: 2
+    test_num_workers: 0
   bcic3:
     sfreq: 100
     low_cut: 0
@@ -115,17 +120,27 @@ model_kwargs:
   kernel_length_tcn: 4
   dropout_tcn: 0.3
 
-  # Four independent 16-D residual aligners with an 8-D bottleneck preserve
-  # the grouped TCN representation while keeping the DA head lightweight.
+  # (1) Domain-specific normalization: separate source/target statistics per
+  # feature channel with a shared affine. "residual" restores the Lite-DA
+  # group-wise residual aligner (uses aligner_hidden_dim) for ablations.
+  feature_alignment: group_dsbn
+  domain_norm_momentum: 0.1
+  # Re-estimate target statistics on the unlabeled evaluation trials after
+  # IM-TTA, the same transductive data IM-TTA already uses.
+  recalibrate_target_statistics: true
   aligner_hidden_dim: 8
-  # Small discriminator: 64 -> 32 -> 1.
+  # (2) Zero-gated low-rank cross-group mixer; 0 disables it.
+  cross_group_rank: 0
+  # Small discriminator: 64 -> 32 -> 1, on standardized features.
   domain_hidden_dim: 32
   adaptation_dropout: 0.3
   adversarial_weight: 1.0
-  # A single pooled-feature MK-MMD; temporal MMD is intentionally disabled.
+  # (3) Scale the reversed gradient by EMA balanced discriminator accuracy:
+  # 0.5 (domains inseparable) -> 0, 1.0 -> full strength.
+  adaptive_adversary: true
+  adversary_ema_decay: 0.95
+  # A single pooled-feature MK-MMD; (4) temporal MMD stays disabled.
   mmd_weight: 0.5
-  # High-gap, low-confidence target subjects use 25% of all DA losses.
-  light_adaptation_factor: 0.25
   # Source-free target adaptation after HADA training. Only BatchNorm affine
   # parameters are updated; target labels are never read.
   im_tta_steps: 5
