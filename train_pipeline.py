@@ -177,6 +177,9 @@ def train_and_test(config):
         primary_test_label = getattr(
             datamodule_cls, "primary_test_label", "SESSION 2"
         )
+        auxiliary_test_label = getattr(
+            datamodule_cls, "auxiliary_test_label", "SESSIONS 1+2"
+        )
         print(
             f"\nTARGET SUBJECT {subject_id} {primary_test_label} RESULT | "
             f"acc={subject_acc * 100:.2f}% | "
@@ -213,7 +216,7 @@ def train_and_test(config):
             all_sessions_confmats.append(model.test_confmat.numpy().copy())
 
             print(
-                f"\nTARGET SUBJECT {subject_id} SESSION 1+2 RESULT "
+                f"\nTARGET SUBJECT {subject_id} {auxiliary_test_label} RESULT "
                 f"(AUXILIARY) | acc={all_sessions_acc * 100:.2f}% | "
                 f"loss={all_sessions_loss:.4f} | "
                 f"kappa={all_sessions_kappa:.4f} | "
@@ -257,7 +260,7 @@ def train_and_test(config):
                     class_names=datamodule_cls.class_names,
                     title=(
                         f"Confusion Matrix - Subject {subject_id} "
-                        "Sessions 1+2 (Auxiliary)"
+                        f"{auxiliary_test_label.title()} (Auxiliary)"
                     ),
                 )
 
@@ -327,7 +330,7 @@ def parse_arguments():
     )        
     parser.add_argument("--dataset", type=str, default="bcic2a", 
         help="Name of the dataset to use."
-                        "Options: bcic2a, bcic2b, hgd, physionet, reh_mi, bcic3"
+                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, reh_mi, bcic3"
     )
     parser.add_argument("--loso", action="store_true", default=False, 
         help="Enable subject-independent (LOSO) mode"
@@ -357,7 +360,14 @@ def run():
     # Adjust training parameters based on LOSO setting
     if args.loso:
         config["dataset_name"] = args.dataset + "_loso" 
-        config["max_epochs"] = config["max_epochs_loso_hgd"] if args.dataset == "hgd" else config["max_epochs_loso"]
+        if args.dataset == "hgd":
+            config["max_epochs"] = config["max_epochs_loso_hgd"]
+        elif args.dataset == "zhou2016":
+            config["max_epochs"] = config.get(
+                "max_epochs_loso_zhou2016", config["max_epochs_loso"]
+            )
+        else:
+            config["max_epochs"] = config["max_epochs_loso"]
         config["model_kwargs"]["warmup_epochs"] = config["model_kwargs"]["warmup_epochs_loso"]
     else:
         if config.get("requires_loso", False):
@@ -386,7 +396,10 @@ def run():
     elif args.no_interaug:
         config["preprocessing"]["interaug"] = False
     else:
-        config["preprocessing"]["interaug"] = config["interaug"]
+        # A dataset block may disable augmentation (Zhou2016 runs without it).
+        config["preprocessing"]["interaug"] = config["preprocessing"].get(
+            "interaug", config["interaug"]
+        )
     config.pop("interaug", None)
 
     config["gpu_id"] = args.gpu_id

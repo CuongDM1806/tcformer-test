@@ -52,6 +52,110 @@ class ResidualFeatureAligner(nn.Module):
         return features + self.scale * self.correction(features)
 
 
+class AutoDIALFeatureNorm(nn.Module):
+    """Domain alignment layer with a learned mixing weight (AutoDIAL).
+
+    Source features are standardized with source statistics. Target features
+    are standardized with the moments of the mixture
+    ``alpha * target + (1 - alpha) * source``, where ``alpha`` in [0, 1] is
+    learned separately for every feature group. ``alpha -> 1`` recovers fully
+    domain-specific normalization (DSBN); ``alpha -> 0`` normalizes the target
+    with source statistics. A shared affine transform follows, so no
+    parameters are domain specific apart from the mixing weights.
+    """
+
+    def __init__(
+        self,
+        feature_dim: int,
+        n_groups: int,
+        momentum: float = 0.1,
+        eps: float = 1e-5,
+        alpha_init: float = 0.5,
+    ):
+        super().__init__()
+        if feature_dim % n_groups != 0:
+            raise ValueError("feature_dim must be divisible by n_groups.")
+        if not 0.0 < alpha_init < 1.0:
+            raise ValueError("autodial_alpha_init must be in (0, 1).")
+        self.group_size = feature_dim // n_groups
+        self.momentum = momentum
+        self.eps = eps
+        self.alpha_logit = nn.Parameter(
+            torch.full((n_groups,), math.log(alpha_init / (1.0 - alpha_init)))
+        )
+        self.weight = nn.Parameter(torch.ones(feature_dim))
+        self.bias = nn.Parameter(torch.zeros(feature_dim))
+        for domain in ("source", "target"):
+            self.register_buffer(f"{domain}_mean", torch.zeros(feature_dim))
+            self.register_buffer(f"{domain}_var", torch.ones(feature_dim))
+
+    def alpha(self, detach: bool = False) -> Tensor:
+        logit = self.alpha_logit.detach() if detach else self.alpha_logit
+        return torch.sigmoid(logit)
+
+    def _mix(self, alpha: Tensor, source_mean, source_var, target_mean, target_var):
+        a = alpha.repeat_interleave(self.group_size)
+        mean = a * target_mean + (1.0 - a) * source_mean
+        # Exact second moment of the two-component mixture.
+        var = (
+            a * target_var
+            + (1.0 - a) * source_var
+            + a * (1.0 - a) * (target_mean - source_mean).square()
+        )
+        return mean, var
+
+    def _normalize(self, features: Tensor, mean: Tensor, var: Tensor) -> Tensor:
+        standardized = (features - mean) / torch.sqrt(var + self.eps)
+        return standardized * self.weight + self.bias
+
+    @torch.no_grad()
+    def _update_running(self, domain: str, mean: Tensor, var: Tensor, count: int):
+        unbiased = var * count / max(count - 1, 1)
+        getattr(self, f"{domain}_mean").lerp_(mean, self.momentum)
+        getattr(self, f"{domain}_var").lerp_(unbiased, self.momentum)
+
+    def forward_pair(
+        self,
+        source: Tensor,
+        target: Tensor,
+        detach_alpha: bool = False,
+        update_stats: bool = True,
+    ) -> tuple[Tensor, Tensor]:
+        """Training path: batch statistics of both domains, as in BatchNorm."""
+        source_mean = source.mean(dim=0)
+        source_var = source.var(dim=0, unbiased=False)
+        target_mean = target.mean(dim=0)
+        target_var = target.var(dim=0, unbiased=False)
+        if update_stats:
+            self._update_running("source", source_mean, source_var, source.size(0))
+            self._update_running("target", target_mean, target_var, target.size(0))
+        mixed_mean, mixed_var = self._mix(
+            self.alpha(detach_alpha), source_mean, source_var, target_mean, target_var
+        )
+        return (
+            self._normalize(source, source_mean, source_var),
+            self._normalize(target, mixed_mean, mixed_var),
+        )
+
+    def forward(self, features: Tensor, domain: str) -> Tensor:
+        """Inference path: running statistics of the requested domain."""
+        if domain == "source":
+            return self._normalize(features, self.source_mean, self.source_var)
+        mean, var = self._mix(
+            self.alpha(detach=True),
+            self.source_mean,
+            self.source_var,
+            self.target_mean,
+            self.target_var,
+        )
+        return self._normalize(features, mean, var)
+
+    @torch.no_grad()
+    def set_target_statistics(self, mean: Tensor, var: Tensor) -> None:
+        self.target_mean.copy_(mean)
+        self.target_var.copy_(var)
+
+
 class DomainDiscriminator(nn.Module):
     def __init__(self, feature_dim: int, hidden_dim: int, dropout: float):
         super().__init__()
@@ -134,6 +238,11 @@ class HADATCFormer(ClassificationModule):
         sequence_block_types=None,
         mamba_d_state: int = 8,
         mamba_d_conv: int = 3,
+        feature_alignment: str = "none",
+        autodial_alpha_init: float = 0.5,
+        domain_norm_momentum: float = 0.1,
+        target_im_weight: float = 0.0,
+        recalibrate_target_statistics: bool = True,
         aligner_hidden_dim: int = 128,
         domain_hidden_dim: int = 128,
         adaptation_dropout: float = 0.3,
@@ -170,6 +279,27 @@ class HADATCFormer(ClassificationModule):
             mamba_d_conv=mamba_d_conv,
         )
         super().__init__(model, n_classes, **kwargs)
+        if feature_alignment not in ("none", "autodial"):
+            raise ValueError("feature_alignment must be 'none' or 'autodial'.")
+        if target_im_weight < 0.0:
+            raise ValueError("target_im_weight must be non-negative.")
+        # AutoDIAL normalizes the pooled features before the residual aligner.
+        # One mixing weight per feature group: three temporal-kernel groups
+        # from the CNN shortcut plus the selective-SSM group.
+        self.domain_norm = (
+            AutoDIALFeatureNorm(
+                model.feature_dim,
+                n_groups=model.n_groups + 1,
+                momentum=domain_norm_momentum,
+                alpha_init=autodial_alpha_init,
+            )
+            if feature_alignment == "autodial"
+            else None
+        )
+        self.target_im_weight = float(target_im_weight)
+        self.recalibrate_target_statistics = bool(recalibrate_target_statistics)
+        # Validation scores labeled source trials; every other pass sees target.
+        self._inference_domain = "target"
         self.aligner = ResidualFeatureAligner(
             model.feature_dim, aligner_hidden_dim, adaptation_dropout
         )
@@ -206,9 +336,36 @@ class HADATCFormer(ClassificationModule):
             "_target_confidence_ema", torch.tensor(float("nan")), persistent=False
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        features = self.aligner(self.model.extract_features(x))
-        return self.model.classify_features(features)
+    def _normalize(self, features: Tensor, domain: str) -> Tensor:
+        if self.domain_norm is None:
+            return features
+        return self.domain_norm(features, domain)
+
+    def forward(self, x: Tensor, domain: str | None = None) -> Tensor:
+        features = self.model.extract_features(x)
+        features = self._normalize(features, domain or self._inference_domain)
+        return self.model.classify_features(self.aligner(features))
+
+    def on_validation_start(self):
+        self._inference_domain = "source"
+
+    def on_validation_end(self):
+        self._inference_domain = "target"
+
+    def autodial_alpha(self) -> list[float] | None:
+        if self.domain_norm is None:
+            return None
+        return [round(float(a), 4) for a in self.domain_norm.alpha(detach=True)]
+
+    @staticmethod
+    def _information_maximization(logits: Tensor) -> Tensor:
+        """Mean conditional entropy minus the entropy of the batch marginal."""
+        probabilities = logits.softmax(dim=1)
+        log_probabilities = probabilities.clamp_min(1e-6).log()
+        conditional = -(probabilities * log_probabilities).sum(dim=1).mean()
+        marginal = probabilities.mean(dim=0)
+        marginal_entropy = -(marginal * marginal.clamp_min(1e-6).log()).sum()
+        return conditional - marginal_entropy
 
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
@@ -271,15 +428,63 @@ class HADATCFormer(ClassificationModule):
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
 
+    def on_train_epoch_end(self):
+        epoch = self.current_epoch + 1
+        if self.domain_norm is not None and (
+            epoch % 10 == 0 or epoch == int(self.hparams.max_epochs)
+        ):
+            self.print(f"Epoch {epoch} | AutoDIAL alpha: {self.autodial_alpha()}")
+
     def adapt_to_target(self, target_loader):
+        """Label-free adaptation to the target trials after training.
+
+        IM-TTA (optional) updates the backbone BatchNorm affine parameters.
+        The AutoDIAL target statistics are then re-estimated in one pass over
+        the same unlabeled trials so they match the adapted backbone. Target
+        labels may be present in the loader but are never read.
+        """
+        self._inference_domain = "target"
+        stats = self._run_im_tta(target_loader) if self.im_tta_steps > 0 else None
+        if self.domain_norm is not None:
+            if self.recalibrate_target_statistics:
+                self._recalibrate_target_statistics(target_loader)
+            self.print(f"AutoDIAL alpha per feature group: {self.autodial_alpha()}")
+        self.eval()
+        return stats
+
+    @torch.no_grad()
+    def _recalibrate_target_statistics(self, target_loader) -> None:
+        # eval() keeps dropout off. After IM-TTA the backbone BatchNorm layers
+        # use target batch statistics, exactly as in the final test pass.
+        self.eval()
+        device = next(self.parameters()).device
+        feature_sum, square_sum, count = None, None, 0
+        for batch in target_loader:
+            target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
+            features = self.model.extract_features(
+                target_x.to(device, non_blocking=True)
+            ).double()
+            if feature_sum is None:
+                feature_sum = features.sum(dim=0)
+                square_sum = features.square().sum(dim=0)
+            else:
+                feature_sum += features.sum(dim=0)
+                square_sum += features.square().sum(dim=0)
+            count += features.size(0)
+        if count < 2:
+            raise RuntimeError("AutoDIAL target statistics need two or more trials.")
+        mean = feature_sum / count
+        var = ((square_sum - count * mean.square()) / (count - 1)).clamp_min(0.0)
+        self.domain_norm.set_target_statistics(mean.float(), var.float())
+        self.print(f"AutoDIAL target statistics recalibrated | samples={count}")
+
+    def _run_im_tta(self, target_loader):
         """Adapt BatchNorm affine parameters using unlabeled target trials.
 
         The information-maximization objective sharpens individual target
         predictions while maintaining a diverse batch-level class marginal.
         Target labels may be present in the evaluation loader but are ignored.
         """
-        if self.im_tta_steps == 0:
-            return None
 
         self.eval()
         for parameter in self.parameters():
@@ -427,8 +632,28 @@ class HADATCFormer(ClassificationModule):
             source_temporal_mean, target_temporal_mean
         )
 
-        all_features = pooled_features
-        all_features = self.aligner(all_features)
+        source_pooled = pooled_features[:source_count]
+        target_pooled = pooled_features[source_count:]
+        target_task_features = None
+        if self.domain_norm is not None:
+            # Alignment losses use a detached mixing weight: they could always
+            # be lowered by alpha -> 1 (full DSBN), which would make alpha a
+            # trivial domain-gap minimizer. Alpha is therefore learned only
+            # from the task signals below (source CE and target InfoMax), as
+            # in AutoDIAL.
+            source_pooled, target_aligned_input = self.domain_norm.forward_pair(
+                source_pooled, target_pooled, detach_alpha=True
+            )
+            if self.target_im_weight > 0.0:
+                _, target_task_input = self.domain_norm.forward_pair(
+                    pooled_features[:source_count],
+                    target_pooled,
+                    update_stats=False,
+                )
+                target_task_features = self.aligner(target_task_input)
+            target_pooled = target_aligned_input
+
+        all_features = self.aligner(torch.cat((source_pooled, target_pooled), dim=0))
         source_features = all_features[:source_count]
         target_features = all_features[source_count:]
 
@@ -436,6 +661,11 @@ class HADATCFormer(ClassificationModule):
         with torch.no_grad():
             target_logits = self.model.classify_features(target_features)
         classification_loss = F.cross_entropy(source_logits, source_y)
+        target_im_loss = source_logits.new_zeros(())
+        if target_task_features is not None:
+            target_im_loss = self._information_maximization(
+                self.model.classify_features(target_task_features)
+            )
 
         adaptation_gate, target_gap, target_confidence = (
             self._target_adaptation_gate(
@@ -458,6 +688,7 @@ class HADATCFormer(ClassificationModule):
         mmd_loss = self.mmd_loss(source_features, target_features)
         loss = (
             classification_loss
+            + self.target_im_weight * target_im_loss
             + adaptation_gate
             * (
                 self.adversarial_weight * adversarial_loss
@@ -504,6 +735,10 @@ class HADATCFormer(ClassificationModule):
             batch_size=batch_size,
         )
         self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
+        if self.domain_norm is not None:
+            self.log("train_target_im_loss", target_im_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+            for group, value in enumerate(self.domain_norm.alpha(detach=True)):
+                self.log(f"autodial_alpha_g{group}", value, on_step=False, on_epoch=True, batch_size=batch_size)
 
         total_batches = self.trainer.num_training_batches
         current_batch = batch_idx + 1
