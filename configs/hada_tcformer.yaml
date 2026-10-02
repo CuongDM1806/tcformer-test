@@ -5,6 +5,7 @@ max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
 max_epochs_loso_hgd: 77
+max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
 domain_adaptation: true
@@ -72,6 +73,25 @@ preprocessing:
     model_overrides:
       im_tta_steps: 0
 
+  zhou2016:
+    # Zhou et al. (2016): 14 EEG channels, 250 Hz, 3 MI classes.
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    z_scale: true
+    start: 0.0
+    trial_duration: 5.0
+    batch_size: 32
+    num_workers: 2
+    test_num_workers: 0
+    # Fit source references on sessions 1--2 and the target reference on its
+    # unlabeled sessions 1--2; apply the frozen transforms to session 3.
+    riemannian_alignment: true
+    interaug: false
+    model_overrides:
+      lr: 0.001
+      weight_decay: 0.0001
+
 model: "HADATCFormer"
 model_kwargs:
   F1: 32
@@ -103,6 +123,21 @@ model_kwargs:
   temporal_mmd_weight: 0.1
   # High-gap, low-confidence target subjects use 25% of all DA losses.
   light_adaptation_factor: 0.25
+  # (A) GRL gradient routing. The discriminator still sees the aligned
+  # features and the backbone always receives the full reversed gradient;
+  # only the global aligner's share is scaled by rho in [0, 1].
+  #   none -> rho = 1 (Full-Mamba), fixed -> rho = grl_aligner_rho,
+  #   gap  -> rho = clamp(gap_EMA / grl_routing_tau, 0, 1), where gap is the
+  #           normalized source-target center distance of the pooled
+  #           backbone features (before the aligner).
+  grl_routing: gap
+  grl_aligner_rho: 1.0
+  grl_routing_tau: 1.0
+  # (B) Group-preserving residual path in parallel with the global aligner.
+  # It never receives the adversarial gradient (CE + MMD only); its per-group
+  # scales start at 0, so training starts from the Full-Mamba model.
+  group_aligner: true
+  group_aligner_hidden_dim: 8
   # Source-free target adaptation after HADA training. Only BatchNorm affine
   # parameters are updated; target labels are never read.
   im_tta_steps: 5

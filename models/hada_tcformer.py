@@ -33,6 +33,19 @@ class GradientReversal(nn.Module):
         return _GradientReversal.apply(x, alpha)
 
 
+class _GradientScale(torch.autograd.Function):
+    """Identity in the forward pass; scales the gradient by ``scale``."""
+
+    @staticmethod
+    def forward(ctx, x: Tensor, scale: float) -> Tensor:
+        ctx.scale = scale
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output: Tensor):
+        return ctx.scale * grad_output, None
+
+
 class ResidualFeatureAligner(nn.Module):
     """Learn a domain-shift correction while preserving TCFormer features."""
 
@@ -48,8 +61,50 @@ class ResidualFeatureAligner(nn.Module):
         )
         self.scale = nn.Parameter(torch.tensor(0.1))
 
+    def correction_term(self, features: Tensor) -> Tensor:
+        return self.scale * self.correction(features)
+
     def forward(self, features: Tensor) -> Tensor:
-        return features + self.scale * self.correction(features)
+        return features + self.correction_term(features)
+
+
+class GroupResidualAligner(nn.Module):
+    """Group-preserving residual correction (Lite-DA style).
+
+    Each feature group gets its own small residual MLP, so this path cannot
+    mix frequency bands. The per-group scales start at zero: the model starts
+    exactly at the Full-Mamba aligner and opens this path only if useful.
+    """
+
+    def __init__(self, feature_dim: int, n_groups: int, hidden_dim: int, dropout: float):
+        super().__init__()
+        if feature_dim % n_groups != 0:
+            raise ValueError("feature_dim must be divisible by n_groups.")
+        self.group_dim = feature_dim // n_groups
+        self.corrections = nn.ModuleList(
+            nn.Sequential(
+                nn.LayerNorm(self.group_dim),
+                nn.Linear(self.group_dim, hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_dim, self.group_dim),
+                nn.LayerNorm(self.group_dim),
+            )
+            for _ in range(n_groups)
+        )
+        self.scales = nn.Parameter(torch.zeros(n_groups))
+
+    def correction_term(self, features: Tensor) -> Tensor:
+        groups = features.split(self.group_dim, dim=1)
+        return torch.cat(
+            [
+                self.scales[index] * correction(group)
+                for index, (group, correction) in enumerate(
+                    zip(groups, self.corrections)
+                )
+            ],
+            dim=1,
+        )
 
 
 class DomainDiscriminator(nn.Module):
@@ -141,6 +196,11 @@ class HADATCFormer(ClassificationModule):
         mmd_weight: float = 0.5,
         temporal_mmd_weight: float = 0.1,
         light_adaptation_factor: float = 0.25,
+        grl_routing: str = "none",
+        grl_aligner_rho: float = 1.0,
+        grl_routing_tau: float = 1.0,
+        group_aligner: bool = False,
+        group_aligner_hidden_dim: int = 8,
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
         im_tta_diversity_weight: float = 1.0,
@@ -173,6 +233,25 @@ class HADATCFormer(ClassificationModule):
         self.aligner = ResidualFeatureAligner(
             model.feature_dim, aligner_hidden_dim, adaptation_dropout
         )
+        self.group_aligner = (
+            GroupResidualAligner(
+                model.feature_dim,
+                model.n_groups + 1,
+                group_aligner_hidden_dim,
+                adaptation_dropout,
+            )
+            if group_aligner
+            else None
+        )
+        if grl_routing not in ("none", "fixed", "gap"):
+            raise ValueError("grl_routing must be 'none', 'fixed' or 'gap'.")
+        if not 0.0 <= grl_aligner_rho <= 1.0:
+            raise ValueError("grl_aligner_rho must be in [0, 1].")
+        if grl_routing_tau <= 0.0:
+            raise ValueError("grl_routing_tau must be positive.")
+        self.grl_routing = grl_routing
+        self.grl_aligner_rho = float(grl_aligner_rho)
+        self.grl_routing_tau = float(grl_routing_tau)
         self.grl = GradientReversal()
         self.domain_discriminator = DomainDiscriminator(
             model.feature_dim, domain_hidden_dim, adaptation_dropout
@@ -205,10 +284,67 @@ class HADATCFormer(ClassificationModule):
         self.register_buffer(
             "_target_confidence_ema", torch.tensor(float("nan")), persistent=False
         )
+        self.register_buffer(
+            "_backbone_gap_ema", torch.tensor(float("nan")), persistent=False
+        )
+        self._epoch_diagnostics = {}
+
+    def _align(self, features: Tensor) -> tuple[Tensor, Tensor, Tensor | None]:
+        """Return aligned features and the global/group correction terms."""
+        global_correction = self.aligner.correction_term(features)
+        group_correction = (
+            self.group_aligner.correction_term(features)
+            if self.group_aligner is not None
+            else None
+        )
+        aligned = features + global_correction
+        if group_correction is not None:
+            aligned = aligned + group_correction
+        return aligned, global_correction, group_correction
 
     def forward(self, x: Tensor) -> Tensor:
-        features = self.aligner(self.model.extract_features(x))
+        features, _, _ = self._align(self.model.extract_features(x))
         return self.model.classify_features(features)
+
+    @staticmethod
+    def _normalized_gap(source_features: Tensor, target_features: Tensor) -> Tensor:
+        """Center distance over mean within-domain spread, on L2-normalized features."""
+        source = F.normalize(source_features.detach(), p=2, dim=1)
+        target = F.normalize(target_features.detach(), p=2, dim=1)
+        source_center = source.mean(dim=0)
+        target_center = target.mean(dim=0)
+        center_distance = torch.linalg.vector_norm(source_center - target_center)
+        source_spread = torch.linalg.vector_norm(
+            source - source_center, dim=1
+        ).mean()
+        target_spread = torch.linalg.vector_norm(
+            target - target_center, dim=1
+        ).mean()
+        return center_distance / (
+            0.5 * (source_spread + target_spread)
+        ).clamp_min(1e-6)
+
+    @torch.no_grad()
+    def _aligner_grl_share(
+        self, source_pooled: Tensor, target_pooled: Tensor
+    ) -> float:
+        """Share rho of the reversed gradient that reaches the global aligner.
+
+        The gap is measured on the backbone features, before the aligner, so
+        the aligner cannot lower its own adversarial pressure by aligning.
+        """
+        gap = self._normalized_gap(source_pooled, target_pooled)
+        if torch.isnan(self._backbone_gap_ema):
+            self._backbone_gap_ema.copy_(gap)
+        else:
+            self._backbone_gap_ema.lerp_(gap, 0.1)
+        if self.grl_routing == "none":
+            return 1.0
+        if self.grl_routing == "fixed":
+            return self.grl_aligner_rho
+        return float(
+            (self._backbone_gap_ema / self.grl_routing_tau).clamp(0.0, 1.0)
+        )
 
     def _grl_alpha(self) -> float:
         progress = self.current_epoch / max(int(self.hparams.max_epochs) - 1, 1)
@@ -228,21 +364,7 @@ class HADATCFormer(ClassificationModule):
         confidence is in the lower half of the range between random guessing
         and certainty. Fixed, dimensionless cutoffs keep tuning to a minimum.
         """
-        source = F.normalize(source_features.detach(), p=2, dim=1)
-        target = F.normalize(target_features.detach(), p=2, dim=1)
-        source_center = source.mean(dim=0)
-        target_center = target.mean(dim=0)
-
-        center_distance = torch.linalg.vector_norm(source_center - target_center)
-        source_spread = torch.linalg.vector_norm(
-            source - source_center, dim=1
-        ).mean()
-        target_spread = torch.linalg.vector_norm(
-            target - target_center, dim=1
-        ).mean()
-        domain_gap = center_distance / (
-            0.5 * (source_spread + target_spread)
-        ).clamp_min(1e-6)
+        domain_gap = self._normalized_gap(source_features, target_features)
 
         mean_confidence = target_logits.detach().softmax(dim=1).amax(dim=1).mean()
         random_confidence = 1.0 / self.hparams.n_classes
@@ -270,6 +392,37 @@ class HADATCFormer(ClassificationModule):
 
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
+        self._epoch_diagnostics = {}
+
+    def _accumulate_diagnostics(self, **values: float) -> None:
+        for name, value in values.items():
+            total, count = self._epoch_diagnostics.get(name, (0.0, 0))
+            self._epoch_diagnostics[name] = (total + float(value), count + 1)
+
+    def on_train_epoch_end(self):
+        # One compact line per epoch, independent of log_every_n_batches, so
+        # the routing behaviour can be checked on BCI 2a vs Zhou2016.
+        means = {
+            name: total / max(count, 1)
+            for name, (total, count) in self._epoch_diagnostics.items()
+        }
+        if not means:
+            return
+        group_scales = (
+            [round(float(v), 4) for v in self.group_aligner.scales.detach()]
+            if self.group_aligner is not None
+            else None
+        )
+        self.print(
+            f"[DA] epoch {self.current_epoch + 1}/{self.hparams.max_epochs} | "
+            f"routing={self.grl_routing} | rho={means['rho']:.3f} | "
+            f"backbone_gap={means['backbone_gap']:.3f} | "
+            f"aligned_gap={means['aligned_gap']:.3f} | "
+            f"conf={means['confidence']:.3f} | gate={means['gate']:.2f} | "
+            f"grl={means['grl_alpha']:.3f} | D_acc={means['domain_acc']:.3f} | "
+            f"global_scale={float(self.aligner.scale.detach()):.4f} | "
+            f"group_scales={group_scales}"
+        )
 
     def adapt_to_target(self, target_loader):
         """Adapt BatchNorm affine parameters using unlabeled target trials.
@@ -427,8 +580,9 @@ class HADATCFormer(ClassificationModule):
             source_temporal_mean, target_temporal_mean
         )
 
-        all_features = pooled_features
-        all_features = self.aligner(all_features)
+        all_features, global_correction, group_correction = self._align(
+            pooled_features
+        )
         source_features = all_features[:source_count]
         target_features = all_features[source_count:]
 
@@ -444,7 +598,23 @@ class HADATCFormer(ClassificationModule):
         )
 
         alpha = self._grl_alpha()
-        domain_logits = self.domain_discriminator(self.grl(all_features, alpha))
+        rho = self._aligner_grl_share(
+            pooled_features[:source_count], pooled_features[source_count:]
+        )
+        # The discriminator sees exactly the aligned features (same forward
+        # value as Full-Mamba). Only the backward pass is routed: the backbone
+        # gets the full reversed gradient, the global aligner a share rho, and
+        # the group-preserving path none at all (CE + MMD only).
+        discriminator_input = pooled_features + (
+            global_correction
+            if rho == 1.0
+            else _GradientScale.apply(global_correction, rho)
+        )
+        if group_correction is not None:
+            discriminator_input = discriminator_input + group_correction.detach()
+        domain_logits = self.domain_discriminator(
+            self.grl(discriminator_input, alpha)
+        )
         domain_targets = torch.cat(
             (
                 torch.zeros(source_count, 1, device=all_features.device),
@@ -468,6 +638,19 @@ class HADATCFormer(ClassificationModule):
 
         acc = accuracy(
             source_logits, source_y, task="multiclass", num_classes=self.hparams.n_classes
+        )
+        with torch.no_grad():
+            domain_acc = (
+                (domain_logits > 0).float() == domain_targets
+            ).float().mean()
+        self._accumulate_diagnostics(
+            rho=rho,
+            backbone_gap=self._backbone_gap_ema.item(),
+            aligned_gap=target_gap.item(),
+            confidence=target_confidence.item(),
+            gate=adaptation_gate.item(),
+            grl_alpha=alpha,
+            domain_acc=domain_acc.item(),
         )
         batch_size = source_count
         self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
@@ -504,6 +687,8 @@ class HADATCFormer(ClassificationModule):
             batch_size=batch_size,
         )
         self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_grl_aligner_rho", rho, on_step=False, on_epoch=True, batch_size=batch_size)
+        self.log("train_domain_acc", domain_acc, on_step=False, on_epoch=True, batch_size=batch_size)
 
         total_batches = self.trainer.num_training_batches
         current_batch = batch_idx + 1
