@@ -154,6 +154,7 @@ def train_and_test(config):
         # prepare_data/setup again. For LOSO this reloads every subject and can
         # exhaust Colab RAM. Reuse the already prepared test loader instead.
         test_loader = datamodule.test_dataloader()
+        adaptation_loader = datamodule.test_adaptation_dataloader()
         all_sessions_loader = (
             datamodule.all_target_dataloader()
             if datamodule.all_target_dataset is not None
@@ -166,16 +167,10 @@ def train_and_test(config):
         datamodule.all_target_dataset = None
         gc.collect()
 
-        # This branch intentionally evaluates the best source-validation
-        # checkpoint without any test-time parameter adaptation.
-        if getattr(model, "im_tta_steps", 0) != 0:
-            raise RuntimeError(
-                "No-IM-TTA branch requires model.im_tta_steps == 0."
-            )
-        print(
-            "IM-TTA disabled; evaluating the restored best-validation checkpoint.",
-            flush=True,
-        )
+        # Preserve Full-Mamba's source-free IM-TTA using an EEG-only loader.
+        # The labeled test loader remains isolated until final scoring.
+        if hasattr(model, "adapt_to_target"):
+            model.adapt_to_target(adaptation_loader)
 
         st_test = time.time()
         test_results = trainer.test(model, dataloaders=test_loader)

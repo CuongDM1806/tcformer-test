@@ -20,9 +20,8 @@ preprocessing:
     start: 0.0
     stop: 0.0
     batch_size: 48
-    # Per-subject OAS covariance + affine-invariant Riemannian whitening.
-    # Each whitener is fit on that subject's training session only.
-    riemannian_alignment: true
+    # No-RA ablation: retain the raw channel covariance geometry.
+    riemannian_alignment: false
   bcic2b:
     sfreq: 250
     low_cut: null
@@ -30,8 +29,8 @@ preprocessing:
     start: 0.0
     stop: -0.5
     batch_size: 48
-    # Fit one 3-channel whitening reference from sessions 1-3 per subject.
-    riemannian_alignment: true
+    # No-RA ablation: retain the raw channel covariance geometry.
+    riemannian_alignment: false
     num_workers: 2
     test_num_workers: 0
   bcic3:
@@ -90,8 +89,8 @@ preprocessing:
     test_num_workers: 0
     # DSAINet-compatible source split: reserve 20% from each source subject.
     validation_fraction: 0.20
-    # Fit one reference per source train split and one on all unlabeled target trials.
-    riemannian_alignment: true
+    # No-RA ablation: retain the raw channel covariance geometry.
+    riemannian_alignment: false
     # 1250 samples is not compatible with the legacy InterAug chunking rule.
     # Preserve the complete native five-second epoch instead.
     interaug: false
@@ -131,9 +130,9 @@ model_kwargs:
   temporal_mmd_weight: 0.1
   # High-gap, low-confidence target subjects use 25% of all DA losses.
   light_adaptation_factor: 0.25
-  # No-IM-TTA ablation: evaluate the restored best source-validation
-  # checkpoint directly, without adapting parameters on target test EEG.
-  im_tta_steps: 0
+  # Keep the Full-Mamba source-free test-time adaptation unchanged; this
+  # branch ablates only Riemannian Alignment.
+  im_tta_steps: 5
   im_tta_lr: 0.0001
   im_tta_diversity_weight: 1.0
   log_every_n_batches: 5
