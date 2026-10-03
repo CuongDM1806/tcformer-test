@@ -8,7 +8,9 @@ max_epochs_loso_hgd: 77
 max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
-domain_adaptation: true
+# No-DA ablation: train only on labeled source trials. Target data are used
+# only by label-free Riemannian alignment and IM-TTA.
+domain_adaptation: false
 
 z_scale: true
 interaug: true
@@ -20,8 +22,7 @@ preprocessing:
     start: 0.0
     stop: 0.0
     batch_size: 48
-    # No-RA ablation: retain the raw channel covariance geometry.
-    riemannian_alignment: false
+    riemannian_alignment: true
   bcic2b:
     sfreq: 250
     low_cut: null
@@ -29,8 +30,7 @@ preprocessing:
     start: 0.0
     stop: -0.5
     batch_size: 48
-    # No-RA ablation: retain the raw channel covariance geometry.
-    riemannian_alignment: false
+    riemannian_alignment: true
     num_workers: 2
     test_num_workers: 0
   bcic3:
@@ -89,8 +89,7 @@ preprocessing:
     test_num_workers: 0
     # DSAINet-compatible source split: reserve 20% from each source subject.
     validation_fraction: 0.20
-    # No-RA ablation: retain the raw channel covariance geometry.
-    riemannian_alignment: false
+    riemannian_alignment: true
     # 1250 samples is not compatible with the legacy InterAug chunking rule.
     # Preserve the complete native five-second epoch instead.
     interaug: false
@@ -125,13 +124,13 @@ model_kwargs:
   aligner_hidden_dim: 128
   domain_hidden_dim: 128
   adaptation_dropout: 0.3
-  adversarial_weight: 1.0
-  mmd_weight: 0.5
-  temporal_mmd_weight: 0.1
+  # No-DA ablation: disable every training-time domain-alignment objective.
+  adversarial_weight: 0.0
+  mmd_weight: 0.0
+  temporal_mmd_weight: 0.0
   # High-gap, low-confidence target subjects use 25% of all DA losses.
   light_adaptation_factor: 0.25
-  # Keep the Full-Mamba source-free test-time adaptation unchanged; this
-  # branch ablates only Riemannian Alignment.
+  # Keep label-free information-maximization test-time adaptation enabled.
   im_tta_steps: 5
   im_tta_lr: 0.0001
   im_tta_diversity_weight: 1.0

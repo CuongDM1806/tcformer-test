@@ -409,10 +409,39 @@ class HADATCFormer(ClassificationModule):
         return final_stats
 
     def training_step(self, batch, batch_idx):
+        # The no-domain-adaptation ablation receives the ordinary labeled
+        # source batch. It deliberately avoids forwarding target trials during
+        # training; RA preprocessing and label-free IM-TTA remain independent.
+        if isinstance(batch, (tuple, list)) and len(batch) == 2:
+            source_x, source_y = batch
+            source_features = self.aligner(self.model.extract_features(source_x))
+            source_logits = self.model.classify_features(source_features)
+            loss = F.cross_entropy(source_logits, source_y)
+            acc = accuracy(
+                source_logits,
+                source_y,
+                task="multiclass",
+                num_classes=self.hparams.n_classes,
+            )
+            batch_size = source_x.size(0)
+            self.log(
+                "train_loss", loss, prog_bar=True, on_step=False,
+                on_epoch=True, batch_size=batch_size,
+            )
+            self.log(
+                "train_acc", acc, prog_bar=True, on_step=False,
+                on_epoch=True, batch_size=batch_size,
+            )
+            self.log(
+                "train_cls_loss", loss, on_step=False, on_epoch=True,
+                batch_size=batch_size,
+            )
+            return loss
+
         if not isinstance(batch, dict) or "source" not in batch or "target" not in batch:
             raise RuntimeError(
-                "HADATCFormer requires LOSO UDA batches with 'source' and 'target'. "
-                "Run it with --loso and a UDA-enabled config."
+                "Expected either a labeled source batch or LOSO UDA batches "
+                "with 'source' and 'target'."
             )
 
         source_x, source_y = batch["source"]
