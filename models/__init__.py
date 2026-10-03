@@ -1,5 +1,7 @@
 from .atcnet import ATCNet
 from .tcformer import TCFormer, FullMambaSourceOnly
+# Unmodified upstream TCFormer (Altaheri et al., commit 7699d975).
+from .tcformer_original import TCFormer as TCFormerOriginal
 from .hada_tcformer import HADATCFormer
 from .basenet import BaseNet
 from .eegconformer import EEGConformer
