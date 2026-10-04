@@ -16,6 +16,7 @@ in the published paper.
 # Core Libraries
 import torch
 from torch import nn, Tensor
+from typing import List
 
 # Utility Libraries
 from einops import rearrange
@@ -386,6 +387,36 @@ class _TransformerBlock(nn.Module):
         return x
 
 
+@torch.jit.script
+def _scripted_selective_scan(
+    values: Tensor,
+    delta: Tensor,
+    A: Tensor,
+    B: Tensor,
+    C: Tensor,
+    D: Tensor,
+) -> Tensor:
+    """TorchScript form of the reference recurrence, preserving operation order."""
+    batch = values.size(0)
+    length = values.size(1)
+    d_model = values.size(2)
+    d_state = A.size(1)
+    state = values.new_zeros((batch, d_model, d_state))
+    outputs = torch.jit.annotate(List[Tensor], [])
+    for step in range(length):
+        dt = delta[:, step, :].unsqueeze(-1)
+        decay = torch.exp(dt * A.unsqueeze(0))
+        state = (
+            decay * state
+            + dt
+            * B[:, step, :].unsqueeze(1)
+            * values[:, step, :].unsqueeze(-1)
+        )
+        readout = (state * C[:, step, :].unsqueeze(1)).sum(dim=-1)
+        outputs.append(readout + D * values[:, step, :])
+    return torch.stack(outputs, dim=1)
+
+
 class _SelectiveSSMMixer(nn.Module):
     """Small, dependency-free Mamba-style selective state-space mixer.
 
@@ -394,12 +425,21 @@ class _SelectiveSSMMixer(nn.Module):
     state, while the diagonal negative A parameter keeps the recurrence stable.
     """
 
-    def __init__(self, d_model: int, d_state: int = 8, d_conv: int = 3):
+    def __init__(
+        self,
+        d_model: int,
+        d_state: int = 8,
+        d_conv: int = 3,
+        scan_mode: str = "sequential",
+    ):
         super().__init__()
         if d_state < 1 or d_conv < 1:
             raise ValueError("mamba_d_state and mamba_d_conv must be positive.")
+        if scan_mode not in {"sequential", "scripted"}:
+            raise ValueError("mamba_scan_mode must be 'sequential' or 'scripted'.")
         self.d_model = d_model
         self.d_state = d_state
+        self.scan_mode = scan_mode
         self.in_proj = nn.Linear(d_model, 2 * d_model, bias=False)
         self.local_conv = nn.Conv1d(
             d_model, d_model, d_conv, groups=d_model, padding=d_conv - 1
@@ -424,7 +464,19 @@ class _SelectiveSSMMixer(nn.Module):
         )
         delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
-        state = x.new_zeros(batch, self.d_model, self.d_state)
+        if self.scan_mode == "scripted":
+            y = _scripted_selective_scan(values, delta, A, B, C, self.D)
+        else:
+            y = self._sequential_scan(values, delta, A, B, C)
+        y = y * torch.nn.functional.silu(gate)
+        return self.out_proj(y)
+
+    def _sequential_scan(
+        self, values: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor
+    ) -> Tensor:
+        """Reference recurrence used by the original Full-Mamba branch."""
+        batch, length, _ = values.shape
+        state = values.new_zeros(batch, self.d_model, self.d_state)
         outputs = []
         for step in range(length):
             dt = delta[:, step, :].unsqueeze(-1)
@@ -437,11 +489,7 @@ class _SelectiveSSMMixer(nn.Module):
             )
             readout = (state * C[:, step, :].unsqueeze(1)).sum(dim=-1)
             outputs.append(readout + self.D * values[:, step, :])
-
-        y = torch.stack(outputs, dim=1)
-        y = y * torch.nn.functional.silu(gate)
-        return self.out_proj(y)
-
+        return torch.stack(outputs, dim=1)
 
 class _SelectiveSSMBlock(nn.Module):
     """Pre-norm residual selective SSM, optionally scanning time backwards."""
@@ -454,11 +502,12 @@ class _SelectiveSSMBlock(nn.Module):
         dropout: float = 0.4,
         drop_path_rate: float = 0.0,
         reverse: bool = False,
+        scan_mode: str = "sequential",
     ):
         super().__init__()
         self.reverse = reverse
         self.norm = nn.LayerNorm(d_model)
-        self.mixer = _SelectiveSSMMixer(d_model, d_state, d_conv)
+        self.mixer = _SelectiveSSMMixer(d_model, d_state, d_conv, scan_mode)
         self.dropout = nn.Dropout(dropout)
         self.drop_path = DropPath(drop_path_rate)
 
@@ -506,6 +555,7 @@ class TCFormerModule(nn.Module):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            mamba_scan_mode: str = "sequential",
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -557,6 +607,7 @@ class TCFormerModule(nn.Module):
                     self.d_model,
                     d_state=mamba_d_state,
                     d_conv=mamba_d_conv,
+                    scan_mode=mamba_scan_mode,
                     dropout=trans_dropout,
                     drop_path_rate=drop_rates[i].item(),
                     reverse=block_type == "mamba_backward",
@@ -636,6 +687,7 @@ class TCFormer(ClassificationModule):
             sequence_block_types=None,
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
+            mamba_scan_mode: str = "sequential",
             **kwargs
         ):
         model = TCFormerModule(
@@ -659,6 +711,7 @@ class TCFormer(ClassificationModule):
             sequence_block_types=sequence_block_types,
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
+            mamba_scan_mode=mamba_scan_mode,
         )
         super().__init__(model, n_classes, **kwargs)
     
