@@ -75,11 +75,15 @@ preprocessing:
   zhou2016:
     # Zhou et al. (2016): 14 EEG channels, 250 Hz, 3 MI classes.
     sfreq: 250
-    low_cut: null
-    high_cut: null
+    # Match the motor-imagery preprocessing used in the original study:
+    # retain the mu/beta range and exclude the first 0.5 s after cue onset.
+    # This also keeps the RA covariance reference focused on MI activity
+    # instead of broadband drift, cue transients, and high-frequency noise.
+    low_cut: 8.0
+    high_cut: 30.0
     z_scale: true
-    start: 0.0
-    trial_duration: 5.0
+    start: 0.5
+    trial_duration: 4.5
     batch_size: 32
     num_workers: 2
     test_num_workers: 0

@@ -17,7 +17,7 @@ def load_zhou2016(
     preprocessing_dict: Dict,
     verbose: str = "WARNING",
 ):
-    """Load Zhou2016 and create one exact five-second window per MI cue."""
+    """Load Zhou2016 and create one configured MI window per cue."""
     dataset = MOABBDataset(dataset_name="Zhou2016", subject_ids=subject_ids)
 
     preprocessors = [

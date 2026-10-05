@@ -145,10 +145,14 @@ class Zhou2016LOSO(BaseDataModule):
             [item[1] for item in source_val_arrays], axis=0
         )
 
+        trial_start = float(self.preprocessing_dict.get("start", 0.0))
+        trial_duration = float(
+            self.preprocessing_dict.get("trial_duration", 5.0)
+        )
         expected_timepoints = int(
             round(
                 self.preprocessing_dict["sfreq"]
-                * self.preprocessing_dict.get("trial_duration", 5.0)
+                * trial_duration
             )
         )
         for split_name, array in (
@@ -186,7 +190,8 @@ class Zhou2016LOSO(BaseDataModule):
 
         print(
             f"Zhou2016 LOSO target S{self.subject_id:02d} | "
-            f"5.0 s ({expected_timepoints} samples) | "
+            f"window={trial_start:.1f}-{trial_start + trial_duration:.1f} s "
+            f"({expected_timepoints} samples) | "
             f"source_train={len(y_train)} | source_val={len(y_val)} | "
             f"target_adaptation={len(X_target)} | "
             f"target_session_3_test={len(y_test)} | "
