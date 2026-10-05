@@ -87,9 +87,8 @@ preprocessing:
     batch_size: 32
     num_workers: 2
     test_num_workers: 0
-    # Fit source references on sessions 1--2 and the target reference on its
-    # unlabeled sessions 1--2; apply the frozen transforms to session 3.
-    riemannian_alignment: true
+    # Ablation: keep the MI-focused window/filtering but disable RA.
+    riemannian_alignment: false
     interaug: false
     model_overrides:
       lr: 0.001
