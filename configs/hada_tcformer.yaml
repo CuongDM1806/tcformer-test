@@ -141,7 +141,8 @@ model_kwargs:
   light_adaptation_factor: 1.0
   # Source-free target adaptation after HADA training. Only BatchNorm affine
   # parameters are updated; target labels are never read.
-  im_tta_steps: 5
+  # Ablation: keep RA and AutoDIAL target-statistics recalibration, disable IM-TTA.
+  im_tta_steps: 0
   im_tta_lr: 0.0001
   im_tta_diversity_weight: 1.0
   log_every_n_batches: 5
