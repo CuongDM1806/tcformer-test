@@ -417,6 +417,44 @@ def _scripted_selective_scan(
     return torch.stack(outputs, dim=1)
 
 
+def _parallel_selective_scan(
+    values: Tensor,
+    delta: Tensor,
+    A: Tensor,
+    B: Tensor,
+    C: Tensor,
+    D: Tensor,
+) -> Tensor:
+    """Closed-form (Mamba-2/SSD style) evaluation of the same recurrence.
+
+    Because A is diagonal, unrolling
+        h_t = exp(dt_t A) h_{t-1} + dt_t B_t x_t
+    gives
+        y_t = sum_{s<=t} C_t . exp(sum_{k=s+1..t} dt_k A) . dt_s B_s x_s + D x_t.
+
+    All time steps are computed at once with an [L, L] decay kernel, replacing
+    the per-step Python loop by a handful of large tensor ops. Memory grows as
+    O(L^2 * d_model * d_state), which is cheap for the short token sequences
+    produced by the pooled convolutional stem (L ~ 20).
+    """
+    length = values.size(1)
+    # cum_t = sum_{k<=t} dt_k A, so cum_t - cum_s = sum_{k=s+1..t} dt_k A.
+    cum = torch.cumsum(delta.unsqueeze(-1) * A, dim=1)  # [b, L, d, n]
+    segment = cum.unsqueeze(2) - cum.unsqueeze(1)  # [b, t, s, d, n]
+    # Mask future positions (s > t, where the exponent is positive) with -inf
+    # *before* exp so they contribute exactly 0 and cannot overflow.
+    causal = torch.tril(
+        torch.ones(length, length, dtype=torch.bool, device=values.device)
+    )
+    segment = segment.masked_fill(~causal[None, :, :, None, None], float("-inf"))
+    decay = torch.exp(segment)
+
+    cb = torch.einsum("btn,bsn->btsn", C, B)
+    kernel = torch.einsum("btsdn,btsn->btsd", decay, cb)
+    y = torch.einsum("btsd,bsd->btd", kernel, delta * values)
+    return y + D * values
+
+
 class _SelectiveSSMMixer(nn.Module):
     """Small, dependency-free Mamba-style selective state-space mixer.
 
@@ -435,8 +473,10 @@ class _SelectiveSSMMixer(nn.Module):
         super().__init__()
         if d_state < 1 or d_conv < 1:
             raise ValueError("mamba_d_state and mamba_d_conv must be positive.")
-        if scan_mode not in {"sequential", "scripted"}:
-            raise ValueError("mamba_scan_mode must be 'sequential' or 'scripted'.")
+        if scan_mode not in {"sequential", "scripted", "parallel"}:
+            raise ValueError(
+                "mamba_scan_mode must be 'sequential', 'scripted' or 'parallel'."
+            )
         self.d_model = d_model
         self.d_state = d_state
         self.scan_mode = scan_mode
@@ -464,7 +504,9 @@ class _SelectiveSSMMixer(nn.Module):
         )
         delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
-        if self.scan_mode == "scripted":
+        if self.scan_mode == "parallel":
+            y = _parallel_selective_scan(values, delta, A, B, C, self.D)
+        elif self.scan_mode == "scripted":
             y = _scripted_selective_scan(values, delta, A, B, C, self.D)
         else:
             y = self._sequential_scan(values, delta, A, B, C)
