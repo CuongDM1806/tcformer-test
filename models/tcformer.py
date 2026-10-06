@@ -417,6 +417,72 @@ def _scripted_selective_scan(
     return torch.stack(outputs, dim=1)
 
 
+def _parallel_selective_scan(
+    values: Tensor,
+    delta: Tensor,
+    A: Tensor,
+    B: Tensor,
+    C: Tensor,
+    D: Tensor,
+) -> Tensor:
+    """Closed-form (Mamba-2/SSD style) evaluation of the same recurrence.
+
+    Because A is diagonal, unrolling
+        h_t = exp(dt_t A) h_{t-1} + dt_t B_t x_t
+    gives
+        y_t = sum_{s<=t} C_t . exp(sum_{k=s+1..t} dt_k A) . dt_s B_s x_s + D x_t.
+
+    All time steps are computed at once with an [L, L] decay kernel, replacing
+    the per-step Python loop by a handful of large tensor ops. Memory grows as
+    O(L^2 * d_model * d_state), which is cheap for the short token sequences
+    produced by the pooled convolutional stem (L ~ 20).
+    """
+    length = values.size(1)
+    # cum_t = sum_{k<=t} dt_k A, so cum_t - cum_s = sum_{k=s+1..t} dt_k A.
+    cum = torch.cumsum(delta.unsqueeze(-1) * A, dim=1)  # [b, L, d, n]
+    segment = cum.unsqueeze(2) - cum.unsqueeze(1)  # [b, t, s, d, n]
+    # Mask future positions (s > t, where the exponent is positive) with -inf
+    # *before* exp so they contribute exactly 0 and cannot overflow.
+    causal = torch.tril(
+        torch.ones(length, length, dtype=torch.bool, device=values.device)
+    )
+    segment = segment.masked_fill(~causal[None, :, :, None, None], float("-inf"))
+    decay = torch.exp(segment)
+
+    cb = torch.einsum("btn,bsn->btsn", C, B)
+    kernel = torch.einsum("btsdn,btsn->btsd", decay, cb)
+    y = torch.einsum("btsd,bsd->btd", kernel, delta * values)
+    return y + D * values
+
+
+@torch.jit.script
+def _hoisted_selective_scan(
+    values: Tensor,
+    delta: Tensor,
+    A: Tensor,
+    B: Tensor,
+    C: Tensor,
+    D: Tensor,
+) -> Tensor:
+    """Same recurrence as the scripted scan with all state-independent work
+    (decay, input drive, readout) moved out of the time loop.
+
+    The loop body shrinks from ~10 small ops per step to one multiply-add,
+    which is what dominates CPU latency for the short (L ~ 20) sequences here.
+    Element-wise operation order is unchanged, so results are bit-identical.
+    """
+    dt = delta.unsqueeze(-1)  # [b, L, d, 1]
+    decay = torch.exp(dt * A)  # [b, L, d, n]
+    drive = dt * B.unsqueeze(2) * values.unsqueeze(-1)  # [b, L, d, n]
+    state = torch.zeros_like(drive[:, 0])
+    states = torch.jit.annotate(List[Tensor], [])
+    for step in range(values.size(1)):
+        state = decay[:, step] * state + drive[:, step]
+        states.append(state)
+    readout = (torch.stack(states, dim=1) * C.unsqueeze(2)).sum(dim=-1)
+    return readout + D * values
+
+
 class _SelectiveSSMMixer(nn.Module):
     """Small, dependency-free Mamba-style selective state-space mixer.
 
@@ -435,11 +501,17 @@ class _SelectiveSSMMixer(nn.Module):
         super().__init__()
         if d_state < 1 or d_conv < 1:
             raise ValueError("mamba_d_state and mamba_d_conv must be positive.")
-        if scan_mode not in {"sequential", "scripted"}:
-            raise ValueError("mamba_scan_mode must be 'sequential' or 'scripted'.")
+        if scan_mode not in {"sequential", "scripted", "parallel", "hoisted"}:
+            raise ValueError(
+                "mamba_scan_mode must be 'sequential', 'scripted', 'parallel' "
+                "or 'hoisted'."
+            )
         self.d_model = d_model
         self.d_state = d_state
         self.scan_mode = scan_mode
+        # The hoisted path also replaces the tiny depthwise Conv1d by k shifted
+        # multiply-adds (same weights), avoiding conv dispatch and transposes.
+        self.shift_conv = scan_mode == "hoisted"
         self.in_proj = nn.Linear(d_model, 2 * d_model, bias=False)
         self.local_conv = nn.Conv1d(
             d_model, d_model, d_conv, groups=d_model, padding=d_conv - 1
@@ -456,20 +528,42 @@ class _SelectiveSSMMixer(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         batch, length, _ = x.shape
         values, gate = self.in_proj(x).chunk(2, dim=-1)
-        values = self.local_conv(values.transpose(1, 2))[..., :length]
-        values = torch.nn.functional.silu(values.transpose(1, 2))
+        if self.shift_conv:
+            values = self._shifted_causal_conv(values)
+        else:
+            values = self.local_conv(values.transpose(1, 2))[..., :length]
+            values = values.transpose(1, 2)
+        values = torch.nn.functional.silu(values)
 
         delta_raw, B, C = torch.split(
             self.x_proj(values), [self.d_model, self.d_state, self.d_state], dim=-1
         )
         delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
-        if self.scan_mode == "scripted":
+        if self.scan_mode == "hoisted":
+            y = _hoisted_selective_scan(values, delta, A, B, C, self.D)
+        elif self.scan_mode == "parallel":
+            y = _parallel_selective_scan(values, delta, A, B, C, self.D)
+        elif self.scan_mode == "scripted":
             y = _scripted_selective_scan(values, delta, A, B, C, self.D)
         else:
             y = self._sequential_scan(values, delta, A, B, C)
         y = y * torch.nn.functional.silu(gate)
         return self.out_proj(y)
+
+    def _shifted_causal_conv(self, values: Tensor) -> Tensor:
+        """Causal depthwise conv on [b, L, d] as a sum of shifted products.
+
+        Equivalent to local_conv(values.transpose(1, 2))[..., :L].transpose(1, 2).
+        """
+        length = values.size(1)
+        weight = self.local_conv.weight[:, 0, :]  # [d, k]
+        kernel_size = weight.size(1)
+        padded = torch.nn.functional.pad(values, (0, 0, kernel_size - 1, 0))
+        out = self.local_conv.bias + padded[:, :length] * weight[:, 0]
+        for offset in range(1, kernel_size):
+            out = out + padded[:, offset:offset + length] * weight[:, offset]
+        return out
 
     def _sequential_scan(
         self, values: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor
