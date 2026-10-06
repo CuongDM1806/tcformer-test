@@ -36,11 +36,13 @@ preprocessing:
     test_num_workers: 0
   zhou2016:
     sfreq: 250
-    low_cut: null
-    high_cut: null
+    # Match the MI-focused Zhou2016 preprocessing used in our comparison.
+    low_cut: 8.0
+    high_cut: 30.0
     z_scale: true
-    start: 0.0
-    trial_duration: 5.0
+    # Exclude the initial cue transient and retain the 0.5--5.0 s MI interval.
+    start: 0.5
+    trial_duration: 4.5
     batch_size: 32
     num_workers: 2
     test_num_workers: 0
