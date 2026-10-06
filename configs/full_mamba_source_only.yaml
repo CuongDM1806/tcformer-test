@@ -69,8 +69,8 @@ model_kwargs:
   sequence_block_types: [mamba_forward, mamba_backward, mamba_forward, mamba_backward, mamba_forward]
   mamba_d_state: 8
   mamba_d_conv: 3
-  # Use the official CUDA selective-scan kernel; CPU paths fall back to scripted.
-  mamba_scan_mode: fused
+  # TorchScript removes Python-loop overhead without a custom CUDA extension.
+  mamba_scan_mode: scripted
   # Compile the inner network while preserving Lightning checkpoint keys.
   compile_model: true
   compile_mode: reduce-overhead
