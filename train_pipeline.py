@@ -149,6 +149,16 @@ def train_and_test(config):
             flush=True,
         )
 
+        # TorchInductor cannot compile the max-norm in-place weight projection
+        # under Lightning's inference_mode test loop. Compilation has already
+        # served its purpose during training; evaluation is short and safer in
+        # eager mode.
+        disable_compile_for_evaluation = getattr(
+            model, "disable_compile_for_evaluation", None
+        )
+        if callable(disable_compile_for_evaluation):
+            disable_compile_for_evaluation()
+
         # ---------------- TEST -----------------
         # Passing the datamodule to trainer.test() makes Lightning invoke
         # prepare_data/setup again. For LOSO this reloads every subject and can

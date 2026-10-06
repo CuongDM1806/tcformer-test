@@ -800,6 +800,17 @@ class FullMambaSourceOnly(TCFormer):
                 flush=True,
             )
 
+    def disable_compile_for_evaluation(self):
+        """Use eager forward for inference-mode evaluation after training."""
+        if not self.compile_model:
+            return
+        self.model._compiled_call_impl = None
+        self.compile_model = False
+        print(
+            "Disabled torch.compile for evaluation; using eager inference.",
+            flush=True,
+        )
+
 if __name__ == "__main__":
     # Example usage: run benchmark with dummy input shape (batch, channels, time)
     C, T = 22, 1000  # adjust as needed
