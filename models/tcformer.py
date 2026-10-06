@@ -774,6 +774,7 @@ class FullMambaSourceOnly(TCFormer):
         compile_model: bool = False,
         compile_mode: str = "default",
         compile_dynamic: bool = False,
+        compile_cudagraphs: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -781,10 +782,15 @@ class FullMambaSourceOnly(TCFormer):
         if self.compile_model:
             if not hasattr(self.model, "compile"):
                 raise RuntimeError("compile_model requires PyTorch 2.0 or newer.")
-            self.model.compile(mode=compile_mode, dynamic=compile_dynamic)
+            self.model.compile(
+                mode=compile_mode,
+                dynamic=compile_dynamic,
+                options={"triton.cudagraphs": bool(compile_cudagraphs)},
+            )
             print(
                 "Enabled torch.compile for FullMambaSourceOnly "
-                f"(mode={compile_mode}, dynamic={compile_dynamic}).",
+                f"(mode={compile_mode}, dynamic={compile_dynamic}, "
+                f"cudagraphs={bool(compile_cudagraphs)}).",
                 flush=True,
             )
 

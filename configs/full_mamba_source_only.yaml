@@ -73,8 +73,10 @@ model_kwargs:
   mamba_scan_mode: scripted
   # Compile the inner network while preserving Lightning checkpoint keys.
   compile_model: true
-  compile_mode: reduce-overhead
+  # CUDA Graphs conflict with the in-forward max-norm weight projection.
+  compile_mode: default
   compile_dynamic: false
+  compile_cudagraphs: false
 
   tcn_depth: 2
   kernel_length_tcn: 4
