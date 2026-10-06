@@ -4,6 +4,7 @@ Usage (from the repository root):
     python scripts/benchmark_scan_modes.py --channels 14 --samples 1125
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -11,6 +12,8 @@ import torch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Notebook kernels export an inline backend the venv matplotlib rejects.
+os.environ["MPLBACKEND"] = "Agg"
 
 from models.tcformer import TCFormerModule  # noqa: E402
 from utils.latency import measure_latency  # noqa: E402
