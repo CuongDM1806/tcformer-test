@@ -238,6 +238,7 @@ class HADATCFormer(ClassificationModule):
         sequence_block_types=None,
         mamba_d_state: int = 8,
         mamba_d_conv: int = 3,
+        mamba_scan_mode: str = "sequential",
         feature_alignment: str = "none",
         autodial_alpha_init: float = 0.5,
         domain_norm_momentum: float = 0.1,
@@ -277,6 +278,7 @@ class HADATCFormer(ClassificationModule):
             sequence_block_types=sequence_block_types,
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
+            mamba_scan_mode=mamba_scan_mode,
         )
         super().__init__(model, n_classes, **kwargs)
         if feature_alignment not in ("none", "autodial"):
