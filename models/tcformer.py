@@ -17,6 +17,13 @@ in the published paper.
 import torch
 from torch import nn, Tensor
 from typing import List
+import warnings
+
+try:
+    from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
+    import selective_scan_cuda  # noqa: F401 - verifies that the CUDA op exists
+except ImportError:
+    selective_scan_fn = None
 
 # Utility Libraries
 from einops import rearrange
@@ -435,11 +442,19 @@ class _SelectiveSSMMixer(nn.Module):
         super().__init__()
         if d_state < 1 or d_conv < 1:
             raise ValueError("mamba_d_state and mamba_d_conv must be positive.")
-        if scan_mode not in {"sequential", "scripted"}:
-            raise ValueError("mamba_scan_mode must be 'sequential' or 'scripted'.")
+        if scan_mode not in {"sequential", "scripted", "fused"}:
+            raise ValueError(
+                "mamba_scan_mode must be 'sequential', 'scripted', or 'fused'."
+            )
         self.d_model = d_model
         self.d_state = d_state
         self.scan_mode = scan_mode
+        if scan_mode == "fused" and selective_scan_fn is None:
+            warnings.warn(
+                "mamba-ssm is unavailable; fused scan will fall back to the "
+                "scripted reference implementation.",
+                RuntimeWarning,
+            )
         self.in_proj = nn.Linear(d_model, 2 * d_model, bias=False)
         self.local_conv = nn.Conv1d(
             d_model, d_model, d_conv, groups=d_model, padding=d_conv - 1
@@ -464,12 +479,40 @@ class _SelectiveSSMMixer(nn.Module):
         )
         delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
-        if self.scan_mode == "scripted":
+        if self.scan_mode == "fused" and values.is_cuda and selective_scan_fn:
+            y = self._fused_scan(values, delta, A, B, C, gate)
+            return self.out_proj(y)
+        if self.scan_mode in {"scripted", "fused"}:
             y = _scripted_selective_scan(values, delta, A, B, C, self.D)
         else:
             y = self._sequential_scan(values, delta, A, B, C)
         y = y * torch.nn.functional.silu(gate)
         return self.out_proj(y)
+
+    def _fused_scan(
+        self,
+        values: Tensor,
+        delta: Tensor,
+        A: Tensor,
+        B: Tensor,
+        C: Tensor,
+        gate: Tensor,
+    ) -> Tensor:
+        """Map the local tensor layout to the official fused scan interface."""
+        if selective_scan_fn is None:
+            raise RuntimeError("The mamba-ssm selective scan extension is unavailable.")
+        # selective_scan_fn uses (batch, channel, time). B and C are shared
+        # across channels, matching their (batch, state, time) interface.
+        return selective_scan_fn(
+            values.transpose(1, 2).contiguous(),
+            delta.transpose(1, 2).contiguous(),
+            A.float(),
+            B.transpose(1, 2).contiguous(),
+            C.transpose(1, 2).contiguous(),
+            D=self.D.float(),
+            z=gate.transpose(1, 2).contiguous(),
+            delta_softplus=False,
+        ).transpose(1, 2)
 
     def _sequential_scan(
         self, values: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor
@@ -725,7 +768,25 @@ class TCFormer(ClassificationModule):
 class FullMambaSourceOnly(TCFormer):
     """Pure source-only Full-Mamba model with no adaptation components."""
 
-    pass
+    def __init__(
+        self,
+        *args,
+        compile_model: bool = False,
+        compile_mode: str = "default",
+        compile_dynamic: bool = False,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.compile_model = bool(compile_model)
+        if self.compile_model:
+            if not hasattr(self.model, "compile"):
+                raise RuntimeError("compile_model requires PyTorch 2.0 or newer.")
+            self.model.compile(mode=compile_mode, dynamic=compile_dynamic)
+            print(
+                "Enabled torch.compile for FullMambaSourceOnly "
+                f"(mode={compile_mode}, dynamic={compile_dynamic}).",
+                flush=True,
+            )
 
 if __name__ == "__main__":
     # Example usage: run benchmark with dummy input shape (batch, channels, time)
