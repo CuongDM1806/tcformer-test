@@ -50,6 +50,7 @@ def main():
         "transformer (TCFormer)": None,
         "mamba scripted": "scripted",
         "mamba parallel": "parallel",
+        "mamba hoisted": "hoisted",
     }
     devices = ["cpu"] + (["cuda:0"] if torch.cuda.is_available() else [])
 
@@ -57,10 +58,14 @@ def main():
     x = torch.randn(4, args.channels, args.samples)
     scripted = build(model_kwargs, args.channels, args.classes, "scripted").eval()
     parallel = build(model_kwargs, args.channels, args.classes, "parallel").eval()
+    hoisted = build(model_kwargs, args.channels, args.classes, "hoisted").eval()
     parallel.load_state_dict(scripted.state_dict())
+    hoisted.load_state_dict(scripted.state_dict())
     with torch.no_grad():
-        max_diff = (scripted(x) - parallel(x)).abs().max().item()
-    print(f"max |scripted - parallel| logits = {max_diff:.2e}", flush=True)
+        reference = scripted(x)
+        for name, model in (("parallel", parallel), ("hoisted", hoisted)):
+            max_diff = (reference - model(x)).abs().max().item()
+            print(f"max |scripted - {name}| logits = {max_diff:.2e}", flush=True)
 
     for device in devices:
         for batch_size in args.batch_sizes:

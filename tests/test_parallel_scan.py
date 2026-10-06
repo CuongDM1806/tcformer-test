@@ -1,12 +1,13 @@
 import copy
 import time
 
+import pytest
 import torch
 
 from models.tcformer import _SelectiveSSMMixer
 
 
-def _make_pair(d_model=48, d_state=8, d_conv=3):
+def _make_pair(d_model=48, d_state=8, d_conv=3, mode="parallel"):
     torch.manual_seed(7)
     reference = _SelectiveSSMMixer(
         d_model=d_model,
@@ -15,12 +16,14 @@ def _make_pair(d_model=48, d_state=8, d_conv=3):
         scan_mode="sequential",
     )
     parallel = copy.deepcopy(reference)
-    parallel.scan_mode = "parallel"
+    parallel.scan_mode = mode
+    parallel.shift_conv = mode == "hoisted"
     return reference, parallel
 
 
-def test_parallel_scan_matches_reference_forward_and_backward():
-    reference, parallel = _make_pair()
+@pytest.mark.parametrize("mode", ["parallel", "hoisted"])
+def test_parallel_scan_matches_reference_forward_and_backward(mode):
+    reference, parallel = _make_pair(mode=mode)
     # Make the learned decays large so long-range decay products are exercised.
     with torch.no_grad():
         for model in (reference, parallel):
@@ -52,8 +55,9 @@ def test_parallel_scan_matches_reference_forward_and_backward():
         )
 
 
-def test_parallel_scan_handles_single_step_sequence():
-    reference, parallel = _make_pair()
+@pytest.mark.parametrize("mode", ["parallel", "hoisted"])
+def test_parallel_scan_handles_single_step_sequence(mode):
+    reference, parallel = _make_pair(mode=mode)
     x = torch.randn(2, 1, 48)
     torch.testing.assert_close(parallel(x), reference(x), rtol=1e-6, atol=1e-7)
 
@@ -77,3 +81,22 @@ def test_parallel_scan_cpu_benchmark_smoke():
 
     print({**timings, "speedup": timings["sequential"] / timings["parallel"]})
     assert timings["parallel"] < timings["sequential"], timings
+
+
+def test_hoisted_scan_is_faster_than_scripted_on_cpu_batch_one():
+    scripted, hoisted = _make_pair(mode="hoisted")
+    scripted.scan_mode = "scripted"
+    x = torch.randn(1, 20, 48)
+    timings = {}
+    with torch.inference_mode():
+        for name, model in (("scripted", scripted), ("hoisted", hoisted)):
+            model.eval()
+            for _ in range(20):
+                model(x)
+            start = time.perf_counter()
+            for _ in range(200):
+                model(x)
+            timings[name] = time.perf_counter() - start
+
+    print({**timings, "speedup": timings["scripted"] / timings["hoisted"]})
+    assert timings["hoisted"] < timings["scripted"], timings
