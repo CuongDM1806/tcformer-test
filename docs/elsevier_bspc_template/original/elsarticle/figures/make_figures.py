@@ -289,9 +289,10 @@ def encoder_detail(png=None):
     """Figure 2: multi-scale temporal-spatial convolutional front-end."""
     fig, ax = new_figure(70.0)
 
-    # Main pipeline: one left-to-right row ------------------------------------------
+    # (a) Main pipeline: one left-to-right row --------------------------------------
     panel(ax, 1, 35, 178, 34,
-          "Multi-scale temporal–spatial convolution  (BCI IV-2a: C = 22 electrodes)")
+          "(a)  Multi-scale temporal–spatial convolution  "
+          "(BCI IV-2a: C = 22 electrodes)")
     cy, bh = 51.0, 22.0
     y0 = cy - bh / 2
     inp = Box(ax, 4, cy - 6, 14, 12, "EEG", [], "data", dims="[B, C, T]")
@@ -307,8 +308,8 @@ def encoder_detail(png=None):
     grouped = Box(ax, 100, y0, 24, bh, "Grouped\nconvolutions",
                   ["1×1: 192 → 48", "1×16 temporal"], "conv", body_pt=5.5,
                   dims="[B, 48, T/8]")
-    cga = Box(ax, 129, y0, 19, bh, "Channel-\ngroup\nattention", [], "conv",
-              title_pt=6.5)
+    cga = Box(ax, 129, y0, 19, bh, "Channel-group\nattention", ["see (b)"],
+              "conv", title_pt=6.0, body_pt=5.0, lw=1.1)
     out = Box(ax, 153, y0, 24, bh, "AvgPool 7", [r"output $H_c$"], "data",
               dims="[B, 48, L]")
 
@@ -326,24 +327,26 @@ def encoder_detail(png=None):
     for a, b in ((cat, spatial), (spatial, grouped), (grouped, cga), (cga, out)):
         arrow(ax, [a.r(), b.l()])
 
-    # Zoomed channel-group attention ----------------------------------------------------
-    ix0, ix1, iy0, iy1 = 22.0, 158.0, 2.0, 30.0
-    panel(ax, ix0, iy0, ix1 - ix0, iy1 - iy0, "Channel-group attention (residual)",
-          color=ACCENT["conv"], fill="#FAFCFB", label_pt=6.0)
-    zoom = dict(color="#9AA5B1", lw=0.45, ls=(0, (1.5, 1.2)))
-    ax.add_line(Line2D([cga.x, ix0 + 30], [cga.y, iy1], zorder=0.5, **zoom))
-    ax.add_line(Line2D([cga.x + cga.w, ix1], [cga.y, iy1], zorder=0.5, **zoom))
+    # (b) Channel-group attention detail: full-width panel below (a) --------------
+    ix0, ix1, iy0, iy1 = 1.0, 179.0, 2.0, 30.0
+    panel(ax, ix0, iy0, ix1 - ix0, iy1 - iy0,
+          "(b)  Channel-group attention  (residual; one weight per temporal scale)",
+          color=ACCENT["conv"], fill="#FAFCFB", label_pt=6.5)
+    # Straight call-out from the block in (a) to its detail in (b).
+    arrow(ax, [(cga.cx, cga.y), (cga.cx, iy1)], color=ACCENT["conv"],
+          ls=(0, (2.0, 1.4)))
 
-    main_y, att_y, sbh = 20.0, 10.0, 7.0
-    label(ax, ix0 + 3.0, main_y, "$H$", pt=7, color=INK)
-    start_x = ix0 + 5.0
-    fork_x = ix0 + 8.0
-    gap = Box(ax, 34, att_y - sbh / 2, 12, sbh, "GAP", [], "conv", title_pt=6.0)
-    fc1 = Box(ax, 50, att_y - sbh / 2, 21, sbh, None, ["1×1, 48 → 12"], "conv")
-    relu = Box(ax, 75, att_y - sbh / 2, 11, sbh, "ReLU", [], "conv", title_pt=6.0)
-    fc2 = Box(ax, 90, att_y - sbh / 2, 20, sbh, None, ["1×1, 12 → 3"], "conv")
-    sig = Box(ax, 114, att_y - sbh / 2, 8, sbh, "σ", [], "conv", title_pt=6.5)
-    mul_x, add_x = 134.0, 144.0
+    main_y, att_y, sbh = 19.0, 9.5, 7.0
+    label(ax, 6.0, main_y, "$H$", pt=7, color=INK)
+    start_x, fork_x = 9.0, 14.0
+    gap = Box(ax, 19, att_y - sbh / 2, 12, sbh, "GAP", [], "conv", title_pt=6.0)
+    fc1 = Box(ax, 36, att_y - sbh / 2, 29, sbh, None,
+              ["grouped 1×1, 48 → 12"], "conv")
+    relu = Box(ax, 70, att_y - sbh / 2, 12, sbh, "ReLU", [], "conv", title_pt=6.0)
+    fc2 = Box(ax, 87, att_y - sbh / 2, 27, sbh, None,
+              ["grouped 1×1, 12 → 3"], "conv")
+    sig = Box(ax, 119, att_y - sbh / 2, 9, sbh, "σ", [], "conv", title_pt=6.5)
+    mul_x, add_x = 158.0, 168.0
 
     arrow(ax, [(start_x, main_y), (add_x - 2.0, main_y)])
     dot(ax, fork_x, main_y)
@@ -353,12 +356,13 @@ def encoder_detail(png=None):
     operator(ax, mul_x, att_y, "×")
     operator(ax, add_x, main_y, "+")
     arrow(ax, [sig.r(), (mul_x - 2.0, att_y)])
-    label(ax, (sig.x + sig.w + mul_x - 2.0) / 2, att_y + 2.0, "$a(H)$", pt=5.5,
-          color=INK)
+    label(ax, (sig.x + sig.w + mul_x - 2.0) / 2, att_y + 2.2,
+          r"$a(H)\in\mathbb{R}^3$, ×16 per group", pt=5.0, color=INK)
     dot(ax, mul_x, main_y)
     arrow(ax, [(mul_x, main_y), (mul_x, att_y + 2.0)])
     arrow(ax, [(mul_x + 2.0, att_y), (add_x, att_y), (add_x, main_y - 2.0)])
-    arrow(ax, [(add_x + 2.0, main_y), (ix1 - 2.5, main_y)])
+    arrow(ax, [(add_x + 2.0, main_y), (ix1 - 3.0, main_y)])
+    label(ax, ix1 - 3.0, main_y + 2.2, "$H'$", pt=6.5, color=INK, ha="right")
 
     save(fig, "encoder_detail", png)
 

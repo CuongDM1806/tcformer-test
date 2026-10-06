@@ -154,7 +154,7 @@ As detailed in Fig.~\ref{fig:encoder_detail}, three temporal convolutions with k
 \begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/encoder_detail.pdf}
-    \caption{Multi-scale temporal--spatial front-end. Three temporal branches, depthwise electrode filtering, grouped refinement, and channel-group attention produce $H_c$.}
+    \caption{Multi-scale temporal--spatial front-end. (a) Three temporal branches, depthwise electrode filtering, grouped refinement, and channel-group attention produce $H_c$. (b) Channel-group attention: grouped $1\times1$ squeeze--excitation yields one sigmoid weight per temporal scale, which rescales that scale's 16 channels and is added residually.}
     \label{fig:encoder_detail}
 \end{figure*}
 
