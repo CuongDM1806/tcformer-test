@@ -30,6 +30,10 @@ preprocessing:
     start: 0.0
     stop: -0.5
     batch_size: 48
+    # Strict per-subject RA: fit each source reference on sessions 1--3 and
+    # the target reference on its unlabeled sessions 1--3. Sessions 4--5 are
+    # transformed with the corresponding frozen reference for evaluation.
+    riemannian_alignment: true
   bcic3:
     sfreq: 100
     low_cut: 0

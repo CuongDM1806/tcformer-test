@@ -111,7 +111,54 @@ class BCICIV2bLOSO(BCICIV2b):
         y_test = np.concatenate([arr[1] for arr in test_arrays], axis=0)
         X_target = np.concatenate([arr[0] for arr in target_arrays], axis=0)
 
+        if self.preprocessing_dict.get("riemannian_alignment", False):
+            # Fit one independent reference per source subject using only
+            # sessions 1--3, then apply it unchanged to sessions 4--5.
+            # The held-out subject follows the same clean protocol: its
+            # unlabeled sessions 1--3 provide the target reference, while
+            # evaluation sessions 4--5 never contribute to the fit.
+            print(
+                f"Applying strict per-subject RA for BCIC IV-2b LOSO target "
+                f"{self.subject_id} (references = sessions 1-3)",
+                flush=True,
+            )
+            aligned_train_arrays = []
+            aligned_val_arrays = []
+            for source_index, source_id in enumerate(train_subjects):
+                print(f"  RA source subject {source_id}", flush=True)
+                train_start = 3 * source_index
+                val_start = 2 * source_index
+                source_train_arrays = train_arrays[train_start:train_start + 3]
+                source_val_arrays = val_arrays[val_start:val_start + 2]
+                source_X = np.concatenate(
+                    [arr[0] for arr in source_train_arrays], axis=0
+                )
+                source_y = np.concatenate(
+                    [arr[1] for arr in source_train_arrays], axis=0
+                )
+                source_X_val = np.concatenate(
+                    [arr[0] for arr in source_val_arrays], axis=0
+                )
+                source_y_val = np.concatenate(
+                    [arr[1] for arr in source_val_arrays], axis=0
+                )
+                source_X, source_X_val = BaseDataModule._riemannian_align_many(
+                    source_X, source_X_val
+                )
+                aligned_train_arrays.append((source_X, source_y))
+                aligned_val_arrays.append((source_X_val, source_y_val))
+
+            train_arrays = aligned_train_arrays
+            val_arrays = aligned_val_arrays
+            X_target, X_test = BaseDataModule._riemannian_align_many(
+                X_target, X_test
+            )
+
         # scale data
+        X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
+        y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
+        X_val = np.concatenate([arr[0] for arr in val_arrays], axis=0)
+        y_val = np.concatenate([arr[1] for arr in val_arrays], axis=0)
         if self.preprocessing_dict["z_scale"]:
             X, X_val, X_target, X_test = BaseDataModule._z_scale_many(
                 X, X_val, X_target, X_test
