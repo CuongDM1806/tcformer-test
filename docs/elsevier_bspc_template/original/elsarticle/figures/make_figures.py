@@ -13,6 +13,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
@@ -20,13 +21,17 @@ FIGURE_DIR = Path(__file__).resolve().parent
 MM = 1 / 25.4
 WIDTH = 180.0
 
+# Liberation Sans is metric-compatible with Arial (same layout) on Linux.
+_INSTALLED = {f.name for f in font_manager.fontManager.ttflist}
+SANS = "Arial" if "Arial" in _INSTALLED else "Liberation Sans"
+
 plt.rcParams.update({
     "font.family": "sans-serif",
-    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+    "font.sans-serif": [SANS, "Helvetica", "DejaVu Sans"],
     "mathtext.fontset": "custom",
-    "mathtext.rm": "Arial",
-    "mathtext.it": "Arial:italic",
-    "mathtext.bf": "Arial:bold",
+    "mathtext.rm": SANS,
+    "mathtext.it": f"{SANS}:italic",
+    "mathtext.bf": f"{SANS}:bold",
     "mathtext.cal": "cmsy10",
     "pdf.fonttype": 42,
     "ps.fonttype": 42,
@@ -173,73 +178,87 @@ def architecture_overview(png=None):
     # Stage 1: UDA training ---------------------------------------------------------
     panel(ax, 1, 29, 178, 64,
           "Stage 1  UDA training  (labeled source + unlabeled target EEG)")
-    src = Box(ax, 4, 72, 24, 11, "Source EEG", [r"labeled $(X^s, y^s)$"], "data",
+    src = Box(ax, 3, 72, 23, 11, "Source EEG", [r"labeled $(X^s, y^s)$"], "data",
               body_pt=sub)
-    tgt = Box(ax, 4, 57, 24, 11, "Target EEG", [r"unlabeled $X^t$"], "data",
-              body_pt=sub)
-    ra = Box(ax, 33, 57, 20, 26, "Riemannian\nalignment", ["per subject"],
+    tgt = Box(ax, 3, 57, 23, 11, "Target EEG",
+              [r"unlabeled $X^t\in\mathcal{T}_a$"], "data", body_pt=sub)
+    ra = Box(ax, 30, 57, 17, 26, "Riemannian\nalignment", ["per subject"],
              "adapt", body_pt=sub)
     arrow(ax, [src.r(), (ra.x, src.cy)])
     arrow(ax, [tgt.r(), (ra.x, tgt.cy)])
 
-    panel(ax, 58, 55, 77, 29, r"Shared encoder $f_\theta$", color=ACCENT["conv"],
+    panel(ax, 51, 55, 73, 29, r"Shared encoder $f_\theta$", color=ACCENT["conv"],
           fill="#FAFCFB")
     cy, bh = 67.0, 15.0
-    cnn = Box(ax, 61, cy - bh / 2, 22, bh, "Multi-scale\nCNN",
+    cnn = Box(ax, 54, cy - bh / 2, 20, bh, "Multi-scale\nCNN",
               ["temporal + spatial"], "conv", body_pt=sub)
-    ssm = Box(ax, 87, cy - bh / 2, 22, bh, "Bidirectional\nSSM × 5",
+    ssm = Box(ax, 78, cy - bh / 2, 20, bh, "Bidirectional\nSSM × 5",
               ["F–B–F–B–F scans"], "ssm", body_pt=sub)
-    tcn = Box(ax, 113, cy - bh / 2, 19, bh, "TCN", ["+ CNN shortcut"], "fuse",
+    tcn = Box(ax, 102, cy - bh / 2, 19, bh, "TCN", ["+ CNN shortcut"], "fuse",
               body_pt=sub)
-    align = Box(ax, 139, cy - bh / 2, 18, bh, "Feature\naligner",
-                ["residual MLP"], "adapt", body_pt=sub)
-    cls = Box(ax, 161, cy - bh / 2, 16, bh, "Classifier", [], "neutral",
-              title_pt=6.5)
+    autodial = Box(ax, 127, cy - bh / 2, 18, bh, "AutoDIAL",
+                   ["mixes source/target", r"stats; $\alpha$ from $\mathcal{L}_{IM}^{t}$"],
+                   "adapt", body_pt=5.0)
+    align = Box(ax, 148, cy - bh / 2, 14, bh, "Feature\naligner",
+                ["residual"], "adapt", body_pt=sub)
+    cls = Box(ax, 165, cy - bh / 2, 14, bh, "Classifier", [], "neutral",
+              title_pt=6.0)
     arrow(ax, [(ra.x + ra.w, cy), cnn.l()])
-    for a, b in ((cnn, ssm), (ssm, tcn), (tcn, align), (align, cls)):
+    for a, b in ((cnn, ssm), (ssm, tcn), (tcn, autodial), (autodial, align),
+                 (align, cls)):
         arrow(ax, [a.r(), b.l()])
 
     # Losses
     ly, lh = 40, 10
-    tmmd = Box(ax, 87, ly, 22, lh, r"$\mathcal{L}_{tmmd}$",
+    tmmd = Box(ax, 80, ly, 19, lh, r"$\mathcal{L}_{tmmd}$",
                ["temporal MMD"], "loss", title_pt=7.5, body_pt=sub)
-    adv = Box(ax, 113, ly, 19, lh, r"$\mathcal{L}_{adv}$",
+    adv = Box(ax, 104, ly, 19, lh, r"$\mathcal{L}_{adv}$",
                ["GRL domain loss"], "loss", title_pt=7.5, body_pt=sub)
-    mmd = Box(ax, 139, ly, 18, lh, r"$\mathcal{L}_{mmd}$",
+    mmd = Box(ax, 127, ly, 18, lh, r"$\mathcal{L}_{mmd}$",
                ["trial MMD"], "loss", title_pt=7.5, body_pt=sub)
-    lcls = Box(ax, 161, ly, 16, lh, r"$\mathcal{L}_{cls}$",
+    lim = Box(ax, 149, ly, 14, lh, r"$\mathcal{L}_{IM}^{t}$",
+              ["target IM"], "loss", title_pt=7.5, body_pt=sub)
+    lcls = Box(ax, 165.5, ly, 13, lh, r"$\mathcal{L}_{cls}$",
                ["source CE"], "loss", title_pt=7.5, body_pt=sub)
 
     tap_x = tcn.x + 4
     arrow(ax, [(tap_x, tcn.y), (tap_x, 52.5), (tmmd.cx, 52.5), tmmd.t()], **aux)
-    arrow(ax, [align.b(), mmd.t()], **aux)
-    arrow(ax, [(align.cx, 53.0), (adv.cx + 1.5, 53.0), (adv.cx + 1.5, adv.y + lh)],
+    align_tap = align.x + 3
+    arrow(ax, [(align_tap, align.y), (align_tap, 53.0), (mmd.cx, 53.0), mmd.t()],
           **aux)
-    dot(ax, align.cx, 53.0, MUTED)
-    arrow(ax, [cls.b(), lcls.t()], **aux)
+    arrow(ax, [(mmd.cx, 53.0), (adv.cx, 53.0), adv.t()], **aux)
+    dot(ax, mmd.cx, 53.0, MUTED)
+    cls_tap = cls.cx
+    arrow(ax, [cls.b(), (cls.cx, ly + lh)], **aux)
+    arrow(ax, [(cls_tap, 52.0), (lim.cx, 52.0), lim.t()], **aux)
+    dot(ax, cls_tap, 52.0, MUTED)
 
-    total = Box(ax, 20, 31.5, 56, 10, "Total loss",
-                [r"$\mathcal{L}_{cls}+\mathcal{L}_{adv}+0.5\,\mathcal{L}_{mmd}"
-                 r"+0.1\,\mathcal{L}_{tmmd}$"], "loss", title_pt=6.0, body_pt=6.5)
+    total = Box(ax, 4, 31.5, 72, 10, "Total loss",
+                [r"$\mathcal{L}_{cls}+0.1\,\mathcal{L}_{IM}^{t}+\mathcal{L}_{adv}"
+                 r"+0.5\,\mathcal{L}_{mmd}+0.1\,\mathcal{L}_{tmmd}$"], "loss",
+                title_pt=6.0, body_pt=6.5)
     bus_y = total.cy
-    for box in (tmmd, adv, mmd, lcls):
+    for box in (tmmd, adv, mmd, lim, lcls):
         arrow(ax, [box.b(), (box.cx, bus_y)], color=red, head=False)
     arrow(ax, [(lcls.cx, bus_y), (total.x + total.w, bus_y)], color=red)
 
     # Stage 2 and Stage 3 -------------------------------------------------------------
     panel(ax, 1, 8, 110, 19, "Stage 2  Target adaptation (after training)")
-    s2a = Box(ax, 4, 10, 26, 10, "Target EEG", ["unlabeled"], "data",
-              title_pt=6.5, body_pt=sub)
+    s2a = Box(ax, 4, 10, 26, 10, "Evaluation EEG",
+              [r"unlabeled $\mathcal{T}_e$"], "data", title_pt=6.5, body_pt=sub)
     s2b = Box(ax, 36, 10, 34, 10, "Frozen model",
-              [r"update only BN $\gamma,\beta$"], "neutral", title_pt=6.5, body_pt=sub)
+              [r"update only BN $\gamma,\beta$;",
+               "re-estimate AutoDIAL target stats"], "neutral", title_pt=6.5,
+              body_pt=5.0)
     s2c = Box(ax, 76, 10, 32, 10, r"InfoMax  $\mathcal{L}_{IM}$",
               ["confident + diverse"], "loss", title_pt=6.5, body_pt=sub)
     arrow(ax, [s2a.r(), s2b.l()])
     arrow(ax, [s2c.l(), s2b.r()], color=red)
 
     panel(ax, 114, 8, 65, 19, "Stage 3  Inference")
-    s3a = Box(ax, 117, 10, 26, 10, "Test EEG", ["held-out sessions"], "locked",
-              title_pt=6.5, body_pt=sub)
+    s3a = Box(ax, 117, 10, 26, 10, "Evaluation EEG",
+              [r"$\mathcal{T}_e$, labels for scoring"], "locked",
+              title_pt=6.5, body_pt=5.0)
     s3b = Box(ax, 150, 10, 26, 10, r"Prediction $\hat{y}$", [], "neutral",
               title_pt=6.5)
     arrow(ax, [s3a.r(), s3b.l()])
