@@ -782,11 +782,17 @@ class FullMambaSourceOnly(TCFormer):
         if self.compile_model:
             if not hasattr(self.model, "compile"):
                 raise RuntimeError("compile_model requires PyTorch 2.0 or newer.")
-            self.model.compile(
-                mode=compile_mode,
-                dynamic=compile_dynamic,
-                options={"triton.cudagraphs": bool(compile_cudagraphs)},
-            )
+            compile_kwargs = {"dynamic": compile_dynamic}
+            if compile_cudagraphs:
+                compile_kwargs["mode"] = compile_mode
+            else:
+                if compile_mode != "default":
+                    raise ValueError(
+                        "compile_cudagraphs=false requires compile_mode=default "
+                        "because torch.compile does not accept mode and options together."
+                    )
+                compile_kwargs["options"] = {"triton.cudagraphs": False}
+            self.model.compile(**compile_kwargs)
             print(
                 "Enabled torch.compile for FullMambaSourceOnly "
                 f"(mode={compile_mode}, dynamic={compile_dynamic}, "
