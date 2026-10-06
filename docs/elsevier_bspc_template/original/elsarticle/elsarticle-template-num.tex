@@ -411,37 +411,37 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
 \cmidrule(lr){3-6}\cmidrule(lr){7-10}
  & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{\textbf{Ours-S}\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{\textbf{Ours-U}\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & 68.00 & 72.00 & -- & -- & 74.67 & $\mathbf{82.00}$ \\
- & $\kappa$ & -- & -- & 52.00 & 58.00 & -- & -- & 62.00 & $\mathbf{73.00}$ \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & 68.00 & 72.00 & -- & -- & 79.33 & $\mathbf{82.00}$ \\
+ & $\kappa$ & -- & -- & 52.00 & 58.00 & -- & -- & 69.00 & $\mathbf{73.00}$ \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & $\mathbf{78.67}$ & $\mathbf{78.67}$ & -- & -- & 64.67 & 70.00 \\
- & $\kappa$ & -- & -- & $\mathbf{68.00}$ & $\mathbf{68.00}$ & -- & -- & 47.00 & 55.00 \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & 78.67 & 78.67 & -- & -- & $\mathbf{84.67}$ & 70.00 \\
+ & $\kappa$ & -- & -- & 68.00 & 68.00 & -- & -- & $\mathbf{77.00}$ & 55.00 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & 66.67 & $\mathbf{71.33}$ & -- & -- & 62.67 & 66.67 \\
- & $\kappa$ & -- & -- & 50.00 & $\mathbf{57.00}$ & -- & -- & 44.00 & 50.00 \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & 66.67 & 71.33 & -- & -- & $\mathbf{87.33}$ & 66.67 \\
+ & $\kappa$ & -- & -- & 50.00 & 57.00 & -- & -- & $\mathbf{81.00}$ & 50.00 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & $\mathbf{80.67}$ & 78.67 & -- & -- & 76.67 & 77.33 \\
- & $\kappa$ & -- & -- & $\mathbf{71.00}$ & 68.00 & -- & -- & 65.00 & 66.00 \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & $\mathbf{80.67}$ & 78.67 & -- & -- & 78.00 & 77.33 \\
+ & $\kappa$ & -- & -- & $\mathbf{71.00}$ & 68.00 & -- & -- & 67.00 & 66.00 \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & 73.50 & $\mathbf{75.17}$ & -- & -- & 69.67 & 74.00 \\
- & $\kappa$ & -- & -- & 60.25 & $\mathbf{62.75}$ & -- & -- & 54.50 & 61.00 \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & 73.50 & 75.17 & -- & -- & $\mathbf{82.33}$ & 74.00 \\
+ & $\kappa$ & -- & -- & 60.25 & 62.75 & -- & -- & $\mathbf{73.50}$ & 61.00 \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & 6.22 & 3.51 & -- & -- & 6.08 & 6.02 \\
- & $\kappa$ & -- & -- & 9.34 & 5.26 & -- & -- & 9.12 & 9.03 \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & 6.22 & 3.51 & -- & -- & 3.82 & 6.02 \\
+ & $\kappa$ & -- & -- & 9.34 & 5.26 & -- & -- & 5.70 & 9.03 \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & 1.0000 & 0.8750 & -- & -- & 0.1250 & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & 1.0000 & 0.8750 & -- & -- & 0.3750 & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-Ours reached $74.00\pm6.02\%$ accuracy and $61.00\pm9.03$ Cohen's $\kappa$. The matched TCFormer baseline obtained $73.50\pm6.22\%$ and $60.25\pm9.34$, respectively ($p=1.0000$). IM-TTA improved every fold over Ours-U ($69.67\pm6.08\%$; $p=0.1250$). Ours-S obtained the highest mean accuracy, $75.17\pm3.51\%$ ($\kappa=62.75\pm5.26$), but it was statistically indistinguishable from Ours ($p=0.8750$). As an auxiliary diagnostic only, TCFormer obtained $75.91\pm4.65\%$ accuracy and $63.90\pm7.00$ Cohen's $\kappa$ when all three target sessions were pooled.
+Ours reached $74.00\pm6.02\%$ accuracy and $61.00\pm9.03$ Cohen's $\kappa$. The matched TCFormer baseline obtained $73.50\pm6.22\%$ and $60.25\pm9.34$, respectively ($p=1.0000$). Ours-U, which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, obtained the highest mean accuracy, $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$); its four-fold difference from Ours was not significant ($p=0.3750$). Ours-S achieved $75.17\pm3.51\%$ ($\kappa=62.75\pm5.26$; $p=0.8750$). As an auxiliary diagnostic only, TCFormer obtained $75.91\pm4.65\%$ accuracy and $63.90\pm7.00$ Cohen's $\kappa$ when all three target sessions were pooled.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
 
 Table~\ref{tab:efficiency} reports trainable parameters, Stage~1 training time, and CPU response time. Ours-S is smaller because it omits the AutoDIAL layer, aligner, and domain discriminator; RA and IM-TTA do not change parameter count.
 
-Because the token sequence after temporal pooling is short (20 tokens on Zhou2016), a step-by-step selective scan is dominated by per-operation dispatch overhead rather than arithmetic. The Zhou2016 Ours-S run therefore uses a loop-hoisted scan: $\exp(\Delta_t A)$, $\Delta_t B_t\odot u_t$, and the $C_t$ readout are computed for all time steps outside the recurrence, leaving one multiply--add per step, and the causal depthwise convolution is evaluated as shifted multiply--adds. This reorganization changes neither the model nor its parameters (output logits agree with the per-step scan to within $10^{-8}$). It reduced the Ours-S training time from 11.13 to 6.29~min per fold and the CPU response time from 27.80 to 13.36~ms, comparable to TCFormer (5.89~min and 15.97~ms). The remaining Ours rows have not yet been re-measured with this implementation.
+Because the token sequence after temporal pooling is short (20 tokens on Zhou2016), a step-by-step selective scan is dominated by per-operation dispatch overhead rather than arithmetic. The Zhou2016 Ours-S, Ours-U, and w/o-RA runs therefore use a loop-hoisted scan: $\exp(\Delta_t A)$, $\Delta_t B_t\odot u_t$, and the $C_t$ readout are computed for all time steps outside the recurrence, leaving one multiply--add per step, and the causal depthwise convolution is evaluated as shifted multiply--adds. This reorganization changes neither the model nor its parameters (output logits agree with the per-step scan to within $10^{-8}$). Ours-S required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms for Ours-U and 11.66~min and 18.88~ms for w/o RA. The remaining Zhou2016 Ours rows have not yet been re-measured with this implementation.
 
 \begin{table*}[!htbp]
 \centering
@@ -470,8 +470,8 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
 \multirow{6}{*}{Zhou2016}
  & TCFormer    & 125.6 & 5.89  & 15.97 \\
  & Ours-S$^{\dagger}$ & 96.8  & 6.29  & 13.36 \\
- & Ours-U      & 130.3 & 15.63 & 25.61 \\
- & Ours w/o RA & 130.3 & 16.14 & 33.83 \\
+ & Ours-U$^{\dagger}$      & 130.4 & 11.42 & 14.65 \\
+ & Ours w/o RA$^{\dagger}$ & 130.4 & 11.66 & 18.88 \\
  & Ours w/o DA & 130.3 & 11.06 & 31.23 \\
  & \textbf{Ours} & \textbf{130.3} & \textbf{15.20} & \textbf{28.99} \\
 \bottomrule
@@ -502,18 +502,18 @@ Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
  & $\kappa$ & $66.80\pm20.70$ & $\mathbf{67.20\pm20.10}$ & $66.20\pm22.90$ & $63.40\pm22.60$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Acc. & $74.00\pm6.02$ & $\mathbf{77.00\pm3.00}$ & $76.33\pm3.79$ & $69.67\pm6.08$ \\
- & $\kappa$ & $61.00\pm9.03$ & $\mathbf{65.50\pm4.50}$ & $64.50\pm5.70$ & $54.50\pm9.12$ \\
+ & Acc. & $74.00\pm6.02$ & $\mathbf{84.00\pm3.16}$ & $76.33\pm3.79$ & $82.33\pm3.82$ \\
+ & $\kappa$ & $61.00\pm9.03$ & $\mathbf{76.00\pm4.70}$ & $64.50\pm5.70$ & $73.50\pm5.70$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$) and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, no-RA ($77.00\%$) and no-DA ($76.33\%$) exceeded the complete model ($74.00\%$), but neither four-fold difference was significant ($p=0.5000$ and $p=0.6250$). Thus, alignment was beneficial on BCI IV-2a but dataset-dependent on BCI IV-2b and Zhou2016.
+On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$) and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, no-RA ($84.00\%$), no-IM ($82.33\%$), and no-DA ($76.33\%$) exceeded the complete model ($74.00\%$); with only four folds, none of these differences was significant ($p=0.1250$, $0.3750$, and $0.6250$, respectively). Thus, alignment was beneficial on BCI IV-2a but dataset-dependent on BCI IV-2b and Zhou2016.
 
 \section{Discussion}
 \label{sec:discussion}
 
-The results show that adaptation is dataset dependent. The complete framework produced a clear gain on BCI IV-2a, whereas its improvement on BCI IV-2b was modest. On Zhou2016, IM-TTA recovered the degradation introduced by Stage~1 UDA, but source-only training and the variants without RA or DA remained competitive. The latter outcome may reflect the small four-subject sample, long inter-session gaps, and subject-specific spectral variation. Filtering to 8--30~Hz and excluding the first 0.5~s are therefore important for making Zhou2016 covariance alignment focus on MI-related activity rather than broadband drift and cue transients; further repeated-seed experiments are still required to establish whether this resolves the observed RA sensitivity.
+The results show that adaptation is dataset dependent. The complete framework produced a clear gain on BCI IV-2a, whereas its improvement on BCI IV-2b was modest. On Zhou2016, the variants without RA or IM-TTA outperformed the complete configuration, while source-only and no-DA training also remained competitive. This outcome may reflect the small four-subject sample, long inter-session gaps, and subject-specific spectral variation. Although filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients, repeated-seed experiments are still required to establish the stability of the observed RA and IM-TTA sensitivity.
 
 Architecturally, multi-scale and depthwise convolutions preserve local spectral--spatial evidence, while alternating selective scans and the TCN model complementary long- and short-range dynamics. The alternating scans exploit complete offline trials and are non-causal; online use would require forward-only processing and device-specific latency validation.
 
