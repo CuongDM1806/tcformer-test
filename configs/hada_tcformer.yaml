@@ -20,9 +20,8 @@ preprocessing:
     start: 0.0
     stop: 0.0
     batch_size: 48
-    # Per-subject OAS covariance + affine-invariant Riemannian whitening.
-    # Each whitener is fit on that subject's training session only.
-    riemannian_alignment: true
+    # No-RA ablation: keep preprocessing unchanged but disable whitening.
+    riemannian_alignment: false
   bcic2b:
     sfreq: 250
     low_cut: null
@@ -30,6 +29,8 @@ preprocessing:
     start: 0.0
     stop: -0.5
     batch_size: 48
+    # No-RA ablation for the three-channel BCI IV-2b setting.
+    riemannian_alignment: false
   bcic3:
     sfreq: 100
     low_cut: 0
@@ -113,6 +114,8 @@ model_kwargs:
   sequence_block_types: [mamba_forward, mamba_backward, mamba_forward, mamba_backward, mamba_forward]
   mamba_d_state: 8
   mamba_d_conv: 3
+  # Compile the reference recurrence with TorchScript; weights/equations unchanged.
+  mamba_scan_mode: scripted
   tcn_depth: 2
   kernel_length_tcn: 4
   dropout_tcn: 0.3
