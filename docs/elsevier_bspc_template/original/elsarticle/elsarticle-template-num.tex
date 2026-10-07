@@ -53,7 +53,7 @@
                    country={[Country]}}
 
 \begin{abstract}
-Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. This study proposes a domain-adaptive framework that couples a multi-scale convolutional front-end with bidirectional selective state-space blocks to capture both local and long-range temporal patterns, and reduces subject shift through hierarchical alignment, including a learned source--target normalization layer and label-free test-time adaptation. The framework was evaluated on three public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. On BCI Competition IV-2a, it reached a mean accuracy of 75.81\%, significantly higher than its source-only variant (64.35\%; $p=0.0039$) and its variant without test-time adaptation (72.15\%; $p=0.0078$). It also achieved 84.09\% on BCI Competition IV-2b and 84.33\% on Zhou2016, where it outperformed a matched TCFormer baseline on all four target subjects. Ablation studies showed that the contribution of each adaptation component depends on the dataset. These results indicate that combining selective state-space modeling with learned, hierarchical alignment improves cross-subject MI decoding without target labels.
+Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. This study proposes a domain-adaptive framework that couples a multi-scale convolutional front-end with bidirectional selective state-space blocks to capture both local and long-range temporal patterns, and reduces subject shift through hierarchical alignment, including a learned source--target normalization layer and label-free test-time adaptation. The framework was evaluated on three public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. On BCI Competition IV-2a, it reached a mean accuracy of 76.12\%, significantly higher than its source-only variant (64.35\%; $p=0.0039$) and its variant without test-time adaptation (72.15\%; $p=0.0039$). It also achieved 84.09\% on BCI Competition IV-2b and 84.33\% on Zhou2016, where it outperformed a matched TCFormer baseline on all four target subjects. Ablation studies showed that the contribution of each adaptation component depends on the dataset. These results indicate that combining selective state-space modeling with learned, hierarchical alignment improves cross-subject MI decoding without target labels.
 \end{abstract}
 
 \begin{keyword}
@@ -290,45 +290,45 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
 \cmidrule(lr){3-6}\cmidrule(lr){7-10}
  & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & -- & 68.06 & -- & -- & \textbf{79.17} & 78.82 \\
- & $\kappa$ & -- & -- & -- & 57.41 & -- & -- & \textbf{72.22} & 71.76 \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & -- & 68.06 & -- & -- & 79.17 & \textbf{79.51} \\
+ & $\kappa$ & -- & -- & -- & 57.41 & -- & -- & 72.22 & \textbf{72.69} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & -- & 51.04 & -- & -- & 47.57 & \textbf{57.64} \\
- & $\kappa$ & -- & -- & -- & 34.72 & -- & -- & 30.09 & \textbf{43.52} \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & -- & 51.04 & -- & -- & 47.57 & \textbf{52.43} \\
+ & $\kappa$ & -- & -- & -- & 34.72 & -- & -- & 30.09 & \textbf{36.57} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & -- & 86.46 & -- & -- & 92.71 & \textbf{93.75} \\
- & $\kappa$ & -- & -- & -- & 81.94 & -- & -- & 90.28 & \textbf{91.67} \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & -- & 86.46 & -- & -- & 92.71 & \textbf{93.40} \\
+ & $\kappa$ & -- & -- & -- & 81.94 & -- & -- & 90.28 & \textbf{91.20} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & -- & 61.11 & -- & -- & 73.61 & \textbf{74.31} \\
- & $\kappa$ & -- & -- & -- & 48.15 & -- & -- & 64.81 & \textbf{65.74} \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & -- & 61.11 & -- & -- & 73.61 & \textbf{73.96} \\
+ & $\kappa$ & -- & -- & -- & 48.15 & -- & -- & 64.81 & \textbf{65.28} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S5} & Acc. & -- & -- & -- & 64.24 & -- & -- & 57.64 & \textbf{65.62} \\
- & $\kappa$ & -- & -- & -- & 52.31 & -- & -- & 43.52 & \textbf{54.17} \\
+\multirow{2}{*}{S5} & Acc. & -- & -- & -- & 64.24 & -- & -- & 57.64 & \textbf{69.44} \\
+ & $\kappa$ & -- & -- & -- & 52.31 & -- & -- & 43.52 & \textbf{59.26} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S6} & Acc. & -- & -- & -- & 39.58 & -- & -- & 59.72 & \textbf{66.67} \\
- & $\kappa$ & -- & -- & -- & 19.44 & -- & -- & 46.30 & \textbf{55.56} \\
+\multirow{2}{*}{S6} & Acc. & -- & -- & -- & 39.58 & -- & -- & 59.72 & \textbf{65.97} \\
+ & $\kappa$ & -- & -- & -- & 19.44 & -- & -- & 46.30 & \textbf{54.63} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S7} & Acc. & -- & -- & -- & 72.92 & -- & -- & 82.29 & \textbf{85.42} \\
- & $\kappa$ & -- & -- & -- & 63.89 & -- & -- & 76.39 & \textbf{80.56} \\
+\multirow{2}{*}{S7} & Acc. & -- & -- & -- & 72.92 & -- & -- & 82.29 & \textbf{88.89} \\
+ & $\kappa$ & -- & -- & -- & 63.89 & -- & -- & 76.39 & \textbf{85.19} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S8} & Acc. & -- & -- & -- & 73.61 & -- & -- & 82.64 & \textbf{84.38} \\
- & $\kappa$ & -- & -- & -- & 64.81 & -- & -- & 76.85 & \textbf{79.17} \\
+\multirow{2}{*}{S8} & Acc. & -- & -- & -- & 73.61 & -- & -- & 82.64 & \textbf{86.11} \\
+ & $\kappa$ & -- & -- & -- & 64.81 & -- & -- & 76.85 & \textbf{81.48} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S9} & Acc. & -- & -- & -- & 62.15 & -- & -- & 73.96 & \textbf{75.69} \\
- & $\kappa$ & -- & -- & -- & 49.54 & -- & -- & 65.28 & \textbf{67.59} \\
+\multirow{2}{*}{S9} & Acc. & -- & -- & -- & 62.15 & -- & -- & 73.96 & \textbf{75.35} \\
+ & $\kappa$ & -- & -- & -- & 49.54 & -- & -- & 65.28 & \textbf{67.13} \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & 64.35 & -- & -- & 72.15 & \textbf{75.81} \\
- & $\kappa$ & -- & -- & -- & 52.50 & -- & -- & 62.90 & \textbf{67.70} \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & 64.35 & -- & -- & 72.15 & \textbf{76.12} \\
+ & $\kappa$ & -- & -- & -- & 52.50 & -- & -- & 62.90 & \textbf{68.20} \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & -- & 12.77 & -- & -- & 13.58 & \textbf{10.63} \\
- & $\kappa$ & -- & -- & -- & 17.00 & -- & -- & 18.10 & \textbf{14.20} \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & -- & 12.77 & -- & -- & 13.58 & \textbf{11.96} \\
+ & $\kappa$ & -- & -- & -- & 17.00 & -- & -- & 18.10 & \textbf{15.90} \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & -- & 0.0039 & -- & -- & 0.0078 & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & -- & 0.0039 & -- & -- & 0.0039 & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-Ours achieved $75.81\pm10.63\%$ accuracy and $67.70\pm14.20$ Cohen's $\kappa$, outperforming Ours-S ($64.35\pm12.77\%$) and Ours-U ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ and $p=0.0078$, respectively); IM-TTA improved eight of the nine target folds. As an auxiliary diagnostic only, Ours-U obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
+Ours achieved $76.12\pm11.96\%$ accuracy and $68.20\pm15.90$ Cohen's $\kappa$, outperforming Ours-S ($64.35\pm12.77\%$) and Ours-U ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ for each comparison); IM-TTA improved all nine target folds. As an auxiliary diagnostic only, Ours-U obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
 
 
 \subsection{BCI Competition IV-2b}
@@ -446,8 +446,8 @@ Table~\ref{tab:ablation} follows the primary chronological protocol. ``w/o DA'' 
 Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
 \midrule
 \multirow{2}{*}{BCI IV-2a}
- & Acc. & $\mathbf{75.81\pm10.63}$ & $70.29\pm11.60$ & $71.37\pm11.60$ & $72.15\pm13.58$ \\
- & $\kappa$ & $\mathbf{67.70\pm14.20}$ & $60.40\pm15.50$ & $61.80\pm15.50$ & $62.90\pm18.10$ \\
+ & Acc. & $\mathbf{76.12\pm11.96}$ & $70.29\pm11.60$ & $71.37\pm11.60$ & $72.15\pm13.58$ \\
+ & $\kappa$ & $\mathbf{68.20\pm15.90}$ & $60.40\pm15.50$ & $61.80\pm15.50$ & $62.90\pm18.10$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
  & Acc. & $\mathbf{84.09\pm10.42}$ & $83.58\pm10.46$ & $83.11\pm11.47$ & $83.97\pm10.71$ \\
@@ -460,7 +460,7 @@ Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
 \end{tabular}
 \end{table*}
 
-On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $70.29\%$ ($p=0.0742$) and $71.37\%$ ($p=0.0078$), respectively. On BCI IV-2b, the complete model ($84.09\%$) was slightly above no-IM ($83.97\%$; $p=1.0000$), no-RA ($83.58\%$; $p=0.2578$), and no-DA ($83.11\%$; $p=0.1328$). On Zhou2016, the complete model ($84.33\%$) was slightly above no-RA ($84.00\%$), no-DA ($82.50\%$), and no-IM ($82.33\%$); with only four folds, none of these differences can be significant (the smallest attainable $p$ is 0.125; $p=0.2500$ for no-DA and $0.6250$ for no-IM). Thus, the complete framework was best on all three datasets, although its BCI IV-2b variants were statistically indistinguishable.
+On BCI IV-2a, removing RA, Stage~1 DA, or IM-TTA reduced accuracy from $76.12\%$ to $70.29\%$ ($p=0.0391$), $71.37\%$ ($p=0.0039$), and $72.15\%$ ($p=0.0039$), respectively. On BCI IV-2b, the complete model ($84.09\%$) was slightly above no-IM ($83.97\%$; $p=1.0000$), no-RA ($83.58\%$; $p=0.2578$), and no-DA ($83.11\%$; $p=0.1328$). On Zhou2016, the complete model ($84.33\%$) was slightly above no-RA ($84.00\%$), no-DA ($82.50\%$), and no-IM ($82.33\%$); with only four folds, none of these differences can be significant (the smallest attainable $p$ is 0.125; $p=0.2500$ for no-DA and $0.6250$ for no-IM). Thus, the complete framework was best on all three datasets, although its BCI IV-2b variants were statistically indistinguishable.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
@@ -484,7 +484,7 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
  & Ours-U      & 132.0 & 58.45 & 18.44 \\
  & Ours w/o RA & 132.0 & 58.41 & 21.63 \\
  & Ours w/o DA & 131.9 & 47.52 & 29.95 \\
- & \textbf{Ours} & \textbf{131.9} & \textbf{63.58} & \textbf{28.98} \\
+ & \textbf{Ours} & \textbf{132.0} & \textbf{59.82} & \textbf{22.20} \\
 \midrule
 \multirow{5}{*}{BCI IV-2b}
  & Ours-S      & 94.6  & 45.17 & 21.89 \\
@@ -516,7 +516,7 @@ The method is transductive because IM-TTA accesses unlabeled evaluation-session 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented a cross-subject MI-EEG framework combining multi-scale spatial--temporal convolution, alternating selective state-space blocks, local--global TCN fusion, hierarchical UDA, and constrained IM-TTA. Its chronological LOSO protocol excludes target labels from preprocessing, training, adaptation, and checkpoint selection. Ours obtained $75.81\pm10.63\%$ session-2 accuracy on BCI IV-2a and $84.09\pm10.42\%$ sessions~4--5 accuracy on BCI IV-2b, with corresponding Cohen's $\kappa$ scores of $67.70\pm14.20$ and $68.20\pm20.80$ on the $\times100$ scale. On Zhou2016, Ours obtained $84.33\pm0.75\%$ target-session-3 accuracy and $76.50\pm1.12$ Cohen's $\kappa$. Matched baselines and repeated-seed experiments remain necessary before drawing broader conclusions.
+We presented a cross-subject MI-EEG framework combining multi-scale spatial--temporal convolution, alternating selective state-space blocks, local--global TCN fusion, hierarchical UDA, and constrained IM-TTA. Its chronological LOSO protocol excludes target labels from preprocessing, training, adaptation, and checkpoint selection. Ours obtained $76.12\pm11.96\%$ session-2 accuracy on BCI IV-2a and $84.09\pm10.42\%$ sessions~4--5 accuracy on BCI IV-2b, with corresponding Cohen's $\kappa$ scores of $68.20\pm15.90$ and $68.20\pm20.80$ on the $\times100$ scale. On Zhou2016, Ours obtained $84.33\pm0.75\%$ target-session-3 accuracy and $76.50\pm1.12$ Cohen's $\kappa$. Matched baselines and repeated-seed experiments remain necessary before drawing broader conclusions.
 
 \section*{CRediT authorship contribution statement}
 %% One line per author; keep only the CRediT roles each author actually had.
