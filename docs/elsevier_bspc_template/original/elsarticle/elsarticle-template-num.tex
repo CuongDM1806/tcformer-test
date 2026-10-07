@@ -483,20 +483,20 @@ Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
  & $\kappa$ & $66.80\pm20.70$ & $67.20\pm20.10$ & $66.20\pm22.90$ & $\mathbf{67.90\pm21.40}$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Acc. & $74.00\pm6.02$ & $\mathbf{84.00\pm3.16}$ & $76.33\pm3.79$ & $82.33\pm3.82$ \\
- & $\kappa$ & $61.00\pm9.03$ & $\mathbf{76.00\pm4.70}$ & $64.50\pm5.70$ & $73.50\pm5.70$ \\
+ & Acc. & $74.00\pm6.02$ & $\mathbf{84.00\pm3.16}$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
+ & $\kappa$ & $61.00\pm9.03$ & $\mathbf{76.00\pm4.70}$ & $73.75\pm2.77$ & $73.50\pm5.70$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$), no-IM ($83.97\%$; $p=0.4063$), and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, no-RA ($84.00\%$), no-IM ($82.33\%$), and no-DA ($76.33\%$) exceeded the complete model ($74.00\%$); with only four folds, none of these differences was significant ($p=0.1250$, $0.3750$, and $0.6250$, respectively). Thus, alignment was beneficial on BCI IV-2a but dataset-dependent on BCI IV-2b and Zhou2016.
+On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$), no-IM ($83.97\%$; $p=0.4063$), and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, no-RA ($84.00\%$), no-IM ($82.33\%$), and no-DA ($82.50\%$) exceeded the complete model ($74.00\%$); with only four folds, none of these differences was significant ($p=0.1250$, $0.3750$, and $0.2500$, respectively). Thus, alignment was beneficial on BCI IV-2a but dataset-dependent on BCI IV-2b and Zhou2016.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
 
 Table~\ref{tab:efficiency} reports trainable parameters, Stage~1 training time, and CPU response time. Ours-S is smaller because it omits the AutoDIAL layer, aligner, and domain discriminator; RA and IM-TTA do not change parameter count.
 
-Because the token sequence after temporal pooling is short (20 tokens on Zhou2016), a step-by-step selective scan is dominated by per-operation dispatch overhead rather than arithmetic. The Zhou2016 Ours-S, Ours-U, and w/o-RA runs therefore use a loop-hoisted scan: $\exp(\Delta_t A)$, $\Delta_t B_t\odot u_t$, and the $C_t$ readout are computed for all time steps outside the recurrence, leaving one multiply--add per step, and the causal depthwise convolution is evaluated as shifted multiply--adds. This reorganization changes neither the model nor its parameters (output logits agree with the per-step scan to within $10^{-8}$). Ours-S required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms for Ours-U and 11.66~min and 18.88~ms for w/o RA. The remaining Zhou2016 Ours rows have not yet been re-measured with this implementation.
+Because the token sequence after temporal pooling is short (20 tokens on Zhou2016), a step-by-step selective scan is dominated by per-operation dispatch overhead rather than arithmetic. The Zhou2016 Ours-S, Ours-U, w/o-RA, and w/o-DA runs therefore use a loop-hoisted scan: $\exp(\Delta_t A)$, $\Delta_t B_t\odot u_t$, and the $C_t$ readout are computed for all time steps outside the recurrence, leaving one multiply--add per step, and the causal depthwise convolution is evaluated as shifted multiply--adds. This reorganization changes neither the model nor its parameters (output logits agree with the per-step scan to within $10^{-8}$). Ours-S required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms for Ours-U, 11.66~min and 18.88~ms for w/o RA, and 6.46~min and 18.41~ms for w/o DA. Only the complete Zhou2016 model has not yet been re-measured with this implementation.
 
 \begin{table*}[!htbp]
 \centering
@@ -527,7 +527,7 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
  & Ours-S$^{\dagger}$ & 96.8  & 6.29  & 13.36 \\
  & Ours-U$^{\dagger}$      & 130.4 & 11.42 & 14.65 \\
  & Ours w/o RA$^{\dagger}$ & 130.4 & 11.66 & 18.88 \\
- & Ours w/o DA & 130.3 & 11.06 & 31.23 \\
+ & Ours w/o DA$^{\dagger}$ & 130.3 & 6.46 & 18.41 \\
  & \textbf{Ours} & \textbf{130.3} & \textbf{15.20} & \textbf{28.99} \\
 \bottomrule
 \end{tabular}
@@ -536,7 +536,7 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
 \section{Discussion}
 \label{sec:discussion}
 
-The results show that adaptation is dataset dependent. The complete framework clearly surpassed its no-IM variant on BCI IV-2a, whereas the no-IM variant was slightly better on BCI IV-2b. On Zhou2016, the variants without RA or IM-TTA outperformed the complete configuration, while source-only and no-DA training also remained competitive. This outcome may reflect the small four-subject sample, long inter-session gaps, and subject-specific spectral variation. Although filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients, repeated-seed experiments are still required to establish the stability of the observed RA and IM-TTA sensitivity.
+The results show that adaptation is dataset dependent. The complete framework clearly surpassed its no-IM variant on BCI IV-2a, whereas the no-IM variant was slightly better on BCI IV-2b. On Zhou2016, the variants without RA, IM-TTA, or Stage~1 DA all outperformed the complete configuration, and source-only training remained competitive. This outcome may reflect the small four-subject sample, long inter-session gaps, and subject-specific spectral variation. Although filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients, repeated-seed experiments are still required to establish the stability of the observed RA and IM-TTA sensitivity.
 
 Architecturally, multi-scale and depthwise convolutions preserve local spectral--spatial evidence, while alternating selective scans and the TCN model complementary long- and short-range dynamics. The alternating scans exploit complete offline trials and are non-causal; online use would require forward-only processing and device-specific latency validation.
 
