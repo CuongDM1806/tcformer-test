@@ -53,7 +53,7 @@
                    country={[Country]}}
 
 \begin{abstract}
-Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is limited by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts across subjects and sessions. We propose a domain-adaptive selective state-space framework for this setting. A multi-kernel temporal convolutional front-end with depthwise spatial filtering and channel-group attention extracts local spectral--spatial features. Five selective state-space blocks with alternating forward and backward scans then model long-range temporal context at a cost linear in sequence length, and a convolutional shortcut with a grouped dilated temporal convolutional network fuses local and global information. To reduce cross-subject shift, the framework combines per-subject Riemannian alignment, an automatic domain alignment (AutoDIAL) layer that learns how strongly target features are normalized with target rather than source statistics, gradient-reversal adversarial learning, and multi-kernel maximum mean discrepancy at the temporal and trial levels. At inference time, an information-maximization stage adapts only normalization parameters using unlabeled evaluation-session trials and re-estimates the AutoDIAL target statistics; their labels remain hidden until scoring. Across nine LOSO target subjects, Ours achieved $75.81\pm10.63\%$ session-2 accuracy on BCI IV-2a and $83.41\pm10.35\%$ sessions~4--5 accuracy on BCI IV-2b, with Cohen's $\kappa$ scores of $67.70\pm14.20$ and $66.80\pm20.70$, respectively, on the $\times100$ scale. Across the four Zhou2016 targets, it reached $74.00\pm6.02\%$ session-3 accuracy ($\kappa=61.00\pm9.03$). Code will be released at \url{https://github.com/USERNAME/REPOSITORY}.
+Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is limited by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts across subjects and sessions. We propose a domain-adaptive selective state-space framework for this setting. A multi-kernel temporal convolutional front-end with depthwise spatial filtering and channel-group attention extracts local spectral--spatial features. Five selective state-space blocks with alternating forward and backward scans then model long-range temporal context at a cost linear in sequence length, and a convolutional shortcut with a grouped dilated temporal convolutional network fuses local and global information. To reduce cross-subject shift, the framework combines per-subject Riemannian alignment, an automatic domain alignment (AutoDIAL) layer that learns how strongly target features are normalized with target rather than source statistics, gradient-reversal adversarial learning, and multi-kernel maximum mean discrepancy at the temporal and trial levels. At inference time, an information-maximization stage adapts only normalization parameters using unlabeled evaluation-session trials and re-estimates the AutoDIAL target statistics; their labels remain hidden until scoring. Across nine LOSO target subjects, Ours achieved $75.81\pm10.63\%$ session-2 accuracy on BCI IV-2a and $83.41\pm10.35\%$ sessions~4--5 accuracy on BCI IV-2b, with Cohen's $\kappa$ scores of $67.70\pm14.20$ and $66.80\pm20.70$, respectively, on the $\times100$ scale. Across the four Zhou2016 targets, it reached $84.33\pm0.75\%$ session-3 accuracy ($\kappa=76.50\pm1.12$). Code will be released at \url{https://github.com/USERNAME/REPOSITORY}.
 \end{abstract}
 
 \begin{keyword}
@@ -434,30 +434,30 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
 \cmidrule(lr){3-6}\cmidrule(lr){7-10}
  & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{\textbf{Ours-S}\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{\textbf{Ours-U}\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & 68.00 & 72.00 & -- & -- & 79.33 & $\mathbf{82.00}$ \\
- & $\kappa$ & -- & -- & 52.00 & 58.00 & -- & -- & 69.00 & $\mathbf{73.00}$ \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & 68.00 & 72.00 & -- & -- & 79.33 & $\mathbf{84.00}$ \\
+ & $\kappa$ & -- & -- & 52.00 & 58.00 & -- & -- & 69.00 & $\mathbf{76.00}$ \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & 78.67 & 78.67 & -- & -- & $\mathbf{84.67}$ & 70.00 \\
- & $\kappa$ & -- & -- & 68.00 & 68.00 & -- & -- & $\mathbf{77.00}$ & 55.00 \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & 78.67 & 78.67 & -- & -- & $\mathbf{84.67}$ & 83.33 \\
+ & $\kappa$ & -- & -- & 68.00 & 68.00 & -- & -- & $\mathbf{77.00}$ & 75.00 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & 66.67 & 71.33 & -- & -- & $\mathbf{87.33}$ & 66.67 \\
- & $\kappa$ & -- & -- & 50.00 & 57.00 & -- & -- & $\mathbf{81.00}$ & 50.00 \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & 66.67 & 71.33 & -- & -- & $\mathbf{87.33}$ & 84.67 \\
+ & $\kappa$ & -- & -- & 50.00 & 57.00 & -- & -- & $\mathbf{81.00}$ & 77.00 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & $\mathbf{80.67}$ & 78.67 & -- & -- & 78.00 & 77.33 \\
- & $\kappa$ & -- & -- & $\mathbf{71.00}$ & 68.00 & -- & -- & 67.00 & 66.00 \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & 80.67 & 78.67 & -- & -- & 78.00 & $\mathbf{85.33}$ \\
+ & $\kappa$ & -- & -- & 71.00 & 68.00 & -- & -- & 67.00 & $\mathbf{78.00}$ \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & 73.50 & 75.17 & -- & -- & $\mathbf{82.33}$ & 74.00 \\
- & $\kappa$ & -- & -- & 60.25 & 62.75 & -- & -- & $\mathbf{73.50}$ & 61.00 \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & 73.50 & 75.17 & -- & -- & 82.33 & $\mathbf{84.33}$ \\
+ & $\kappa$ & -- & -- & 60.25 & 62.75 & -- & -- & 73.50 & $\mathbf{76.50}$ \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & 6.22 & 3.51 & -- & -- & 3.82 & 6.02 \\
- & $\kappa$ & -- & -- & 9.34 & 5.26 & -- & -- & 5.70 & 9.03 \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & 6.22 & 3.51 & -- & -- & 3.82 & 0.75 \\
+ & $\kappa$ & -- & -- & 9.34 & 5.26 & -- & -- & 5.70 & 1.12 \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & 1.0000 & 0.8750 & -- & -- & 0.3750 & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & 0.1250 & 0.1250 & -- & -- & 0.6250 & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-Ours reached $74.00\pm6.02\%$ accuracy and $61.00\pm9.03$ Cohen's $\kappa$. The matched TCFormer baseline obtained $73.50\pm6.22\%$ and $60.25\pm9.34$, respectively ($p=1.0000$). Ours-U, which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, obtained the highest mean accuracy, $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$); its four-fold difference from Ours was not significant ($p=0.3750$). Ours-S achieved $75.17\pm3.51\%$ ($\kappa=62.75\pm5.26$; $p=0.8750$). As an auxiliary diagnostic only, TCFormer obtained $75.91\pm4.65\%$ accuracy and $63.90\pm7.00$ Cohen's $\kappa$ when all three target sessions were pooled.
+Ours reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the highest mean and the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and Ours-S ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). Ours-U, which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$). As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for Ours and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
 
 \subsection{Ablation study}
 \label{sec:ablation}
@@ -483,24 +483,24 @@ Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
  & $\kappa$ & $66.80\pm20.70$ & $67.20\pm20.10$ & $66.20\pm22.90$ & $\mathbf{67.90\pm21.40}$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Acc. & $74.00\pm6.02$ & $\mathbf{84.00\pm3.16}$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
- & $\kappa$ & $61.00\pm9.03$ & $\mathbf{76.00\pm4.70}$ & $73.75\pm2.77$ & $73.50\pm5.70$ \\
+ & Acc. & $\mathbf{84.33\pm0.75}$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
+ & $\kappa$ & $\mathbf{76.50\pm1.12}$ & $76.00\pm4.70$ & $73.75\pm2.77$ & $73.50\pm5.70$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$), no-IM ($83.97\%$; $p=0.4063$), and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, no-RA ($84.00\%$), no-IM ($82.33\%$), and no-DA ($82.50\%$) exceeded the complete model ($74.00\%$); with only four folds, none of these differences was significant ($p=0.1250$, $0.3750$, and $0.2500$, respectively). Thus, alignment was beneficial on BCI IV-2a but dataset-dependent on BCI IV-2b and Zhou2016.
+On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$), no-IM ($83.97\%$; $p=0.4063$), and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, the complete model ($84.33\%$) was slightly above no-RA ($84.00\%$), no-DA ($82.50\%$), and no-IM ($82.33\%$); with only four folds, none of these differences can be significant (the smallest attainable $p$ is 0.125; $p=0.2500$ for no-DA and $0.6250$ for no-IM). Thus, the complete framework was best on BCI IV-2a and Zhou2016, whereas the variants were statistically indistinguishable on BCI IV-2b.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
 
 Table~\ref{tab:efficiency} reports trainable parameters, Stage~1 training time, and CPU response time. Ours-S is smaller because it omits the AutoDIAL layer, aligner, and domain discriminator; RA and IM-TTA do not change parameter count.
 
-Because the token sequence after temporal pooling is short (20 tokens on Zhou2016), a step-by-step selective scan is dominated by per-operation dispatch overhead rather than arithmetic. The Zhou2016 Ours-S, Ours-U, w/o-RA, and w/o-DA runs therefore use a loop-hoisted scan: $\exp(\Delta_t A)$, $\Delta_t B_t\odot u_t$, and the $C_t$ readout are computed for all time steps outside the recurrence, leaving one multiply--add per step, and the causal depthwise convolution is evaluated as shifted multiply--adds. This reorganization changes neither the model nor its parameters (output logits agree with the per-step scan to within $10^{-8}$). Ours-S required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms for Ours-U, 11.66~min and 18.88~ms for w/o RA, and 6.46~min and 18.41~ms for w/o DA. Only the complete Zhou2016 model has not yet been re-measured with this implementation.
+Because the token sequence after temporal pooling is short (20 tokens on Zhou2016), a step-by-step selective scan is dominated by per-operation dispatch overhead rather than arithmetic. All Zhou2016 runs of the proposed method therefore use a loop-hoisted scan: $\exp(\Delta_t A)$, $\Delta_t B_t\odot u_t$, and the $C_t$ readout are computed for all time steps outside the recurrence, leaving one multiply--add per step, and the causal depthwise convolution is evaluated as shifted multiply--adds. This reorganization changes neither the model nor its parameters (output logits agree with the per-step scan to within $10^{-8}$). Ours-S required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms for Ours-U, 11.66~min and 18.88~ms for w/o RA, 6.46~min and 18.41~ms for w/o DA, and 11.70~min and 19.14~ms for the complete model.
 
 \begin{table*}[!htbp]
 \centering
-\caption{Computational cost: trainable parameters, mean Stage~1 training time per fold, and single-trial CPU response time. $^{\dagger}$Measured with the loop-hoisted selective scan (Section~\ref{subsec:results_efficiency}); the other Ours rows use the per-step scan, which computes the same function.}
+\caption{Computational cost: trainable parameters, mean Stage~1 training time per fold, and single-trial CPU response time. $^{\dagger}$Measured with the loop-hoisted selective scan (Section~\ref{subsec:results_efficiency}); the BCI IV-2a and IV-2b rows use the per-step scan, which computes the same function.}
 \label{tab:efficiency}
 \small
 \setlength{\tabcolsep}{9pt}
@@ -528,7 +528,7 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
  & Ours-U$^{\dagger}$      & 130.4 & 11.42 & 14.65 \\
  & Ours w/o RA$^{\dagger}$ & 130.4 & 11.66 & 18.88 \\
  & Ours w/o DA$^{\dagger}$ & 130.3 & 6.46 & 18.41 \\
- & \textbf{Ours} & \textbf{130.3} & \textbf{15.20} & \textbf{28.99} \\
+ & \textbf{Ours}$^{\dagger}$ & \textbf{130.4} & \textbf{11.70} & \textbf{19.14} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -536,7 +536,7 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
 \section{Discussion}
 \label{sec:discussion}
 
-The results show that adaptation is dataset dependent. The complete framework clearly surpassed its no-IM variant on BCI IV-2a, whereas the no-IM variant was slightly better on BCI IV-2b. On Zhou2016, the variants without RA, IM-TTA, or Stage~1 DA all outperformed the complete configuration, and source-only training remained competitive. This outcome may reflect the small four-subject sample, long inter-session gaps, and subject-specific spectral variation. Although filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients, repeated-seed experiments are still required to establish the stability of the observed RA and IM-TTA sensitivity.
+The results show that adaptation is dataset dependent. The complete framework was best on BCI IV-2a and Zhou2016, whereas on BCI IV-2b the no-IM variant was slightly better and all variants were statistically indistinguishable. On Zhou2016, the complete configuration also had the lowest variability across targets, but its margins over the variants without RA, IM-TTA, or Stage~1 DA were small and cannot be significant with four folds. Filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients; repeated-seed experiments are still required to establish the stability of these differences.
 
 Architecturally, multi-scale and depthwise convolutions preserve local spectral--spatial evidence, while alternating selective scans and the TCN model complementary long- and short-range dynamics. The alternating scans exploit complete offline trials and are non-causal; online use would require forward-only processing and device-specific latency validation.
 
@@ -545,7 +545,7 @@ The method is transductive because IM-TTA accesses unlabeled evaluation-session 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented a cross-subject MI-EEG framework combining multi-scale spatial--temporal convolution, alternating selective state-space blocks, local--global TCN fusion, hierarchical UDA, and constrained IM-TTA. Its chronological LOSO protocol excludes target labels from preprocessing, training, adaptation, and checkpoint selection. Ours obtained $75.81\pm10.63\%$ session-2 accuracy on BCI IV-2a and $83.41\pm10.35\%$ sessions~4--5 accuracy on BCI IV-2b, with corresponding Cohen's $\kappa$ scores of $67.70\pm14.20$ and $66.80\pm20.70$ on the $\times100$ scale. On Zhou2016, Ours obtained $74.00\pm6.02\%$ target-session-3 accuracy and $61.00\pm9.03$ Cohen's $\kappa$. Matched baselines and repeated-seed experiments remain necessary before drawing broader conclusions.
+We presented a cross-subject MI-EEG framework combining multi-scale spatial--temporal convolution, alternating selective state-space blocks, local--global TCN fusion, hierarchical UDA, and constrained IM-TTA. Its chronological LOSO protocol excludes target labels from preprocessing, training, adaptation, and checkpoint selection. Ours obtained $75.81\pm10.63\%$ session-2 accuracy on BCI IV-2a and $83.41\pm10.35\%$ sessions~4--5 accuracy on BCI IV-2b, with corresponding Cohen's $\kappa$ scores of $67.70\pm14.20$ and $66.80\pm20.70$ on the $\times100$ scale. On Zhou2016, Ours obtained $84.33\pm0.75\%$ target-session-3 accuracy and $76.50\pm1.12$ Cohen's $\kappa$. Matched baselines and repeated-seed experiments remain necessary before drawing broader conclusions.
 
 \section*{CRediT authorship contribution statement}
 %% One line per author; keep only the CRediT roles each author actually had.
