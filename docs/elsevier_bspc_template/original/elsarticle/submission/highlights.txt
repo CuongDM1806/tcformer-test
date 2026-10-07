@@ -1,0 +1,7 @@
+Highlights
+
+• Multi-scale CNN and bidirectional selective state-space blocks decode MI-EEG
+• AutoDIAL learns how strongly target features use target normalization statistics
+• Chronological LOSO protocol keeps target labels hidden until final scoring
+• Label-free test-time adaptation updates only BatchNorm parameters
+• 75.81% BCI IV-2a accuracy, above source-only training (p = 0.0039)

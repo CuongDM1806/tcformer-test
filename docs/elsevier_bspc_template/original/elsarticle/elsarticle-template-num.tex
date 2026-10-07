@@ -38,15 +38,19 @@
 
 \title{Domain-Adaptive Selective State-Space Learning for Cross-Subject Motor-Imagery EEG Decoding}
 
-\author[aff1]{Author Name\corref{cor1}}
-\ead{author@email.com}
+%% Title page (Guide for Authors): given and family name of every author in
+%% submission-system order; full postal address of each affiliation, including
+%% the country; the corresponding author's e-mail is published with the article.
+%% Replace every [bracketed] field. Add further authors with \author[affX]{...}.
+\author[aff1]{[Given name(s)] [Family name]\corref{cor1}}
+\ead{dinhmanhcuong2003@gmail.com}
 \cortext[cor1]{Corresponding author.}
 
-\affiliation[aff1]{organization={Department and Institution},
-                   addressline={Street address},
-                   city={City},
-                   postcode={Postcode},
-                   country={Country}}
+\affiliation[aff1]{organization={[Department], [Full institution name]},
+                   addressline={[Street address]},
+                   city={[City]},
+                   postcode={[Postcode]},
+                   country={[Country]}}
 
 \begin{abstract}
 Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is limited by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts across subjects and sessions. We propose a domain-adaptive selective state-space framework for this setting. A multi-kernel temporal convolutional front-end with depthwise spatial filtering and channel-group attention extracts local spectral--spatial features. Five selective state-space blocks with alternating forward and backward scans then model long-range temporal context at a cost linear in sequence length, and a convolutional shortcut with a grouped dilated temporal convolutional network fuses local and global information. To reduce cross-subject shift, the framework combines per-subject Riemannian alignment, an automatic domain alignment (AutoDIAL) layer that learns how strongly target features are normalized with target rather than source statistics, gradient-reversal adversarial learning, and multi-kernel maximum mean discrepancy at the temporal and trial levels. At inference time, an information-maximization stage adapts only normalization parameters using unlabeled evaluation-session trials and re-estimates the AutoDIAL target statistics; their labels remain hidden until scoring. Across nine LOSO target subjects, Ours achieved $75.81\pm10.63\%$ session-2 accuracy on BCI IV-2a and $83.41\pm10.35\%$ sessions~4--5 accuracy on BCI IV-2b, with Cohen's $\kappa$ scores of $67.70\pm14.20$ and $66.80\pm20.70$, respectively, on the $\times100$ scale. Across the four Zhou2016 targets, it reached $74.00\pm6.02\%$ session-3 accuracy ($\kappa=61.00\pm9.03$). Code will be released at \url{https://github.com/USERNAME/REPOSITORY}.
@@ -256,7 +260,7 @@ Riemannian whitening, when active, follows the session-isolated fitting rule in 
 \subsection{Training configuration}
 \label{subsec:training}
 
-All experiments are executed in Kaggle notebooks using one NVIDIA Tesla T4 GPU with 16~GB memory. BCI IV-2a and BCI IV-2b use a mini-batch size of 48 and a maximum of 125 epochs. Zhou2016 uses a mini-batch size of 32 and 100 epochs. The BCI Competition runs use Adam with an initial learning rate of $9\times10^{-4}$, $\beta_1=0.5$, and weight decay $10^{-3}$; the Zhou2016 setting uses an initial learning rate of $10^{-3}$ and weight decay $10^{-4}$. A linear warm-up over the first three LOSO epochs is followed by cosine decay. The random seed, data split, and initialization procedure are held fixed for direct architectural ablations. Final reporting should additionally repeat each complete LOSO experiment with multiple seeds to quantify optimization variance.
+All experiments are executed in Kaggle notebooks using one NVIDIA Tesla T4 GPU with 16~GB memory. BCI IV-2a and BCI IV-2b use a mini-batch size of 48 and a maximum of 125 epochs. Zhou2016 uses a mini-batch size of 32 and 100 epochs. The BCI Competition runs use Adam with an initial learning rate of $9\times10^{-4}$, $\beta_1=0.5$, and weight decay $10^{-3}$; the Zhou2016 setting uses an initial learning rate of $10^{-3}$ and weight decay $10^{-4}$. A linear warm-up over the first three LOSO epochs is followed by cosine decay. The random seed (0), data split, and initialization procedure are fixed and shared by all methods and ablation variants, so that every reported comparison differs only in the evaluated component.
 
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}
@@ -296,45 +300,45 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
 \cmidrule(lr){3-6}\cmidrule(lr){7-10}
  & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & -- & 68.06 & -- & -- & 77.43 & \textbf{78.82} \\
- & $\kappa$ & -- & -- & -- & 57.41 & -- & -- & 69.91 & \textbf{71.76} \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & -- & 68.06 & -- & -- & \textbf{79.17} & 78.82 \\
+ & $\kappa$ & -- & -- & -- & 57.41 & -- & -- & \textbf{72.22} & 71.76 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & -- & 51.04 & -- & -- & 50.00 & \textbf{57.64} \\
- & $\kappa$ & -- & -- & -- & 34.72 & -- & -- & 33.33 & \textbf{43.52} \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & -- & 51.04 & -- & -- & 47.57 & \textbf{57.64} \\
+ & $\kappa$ & -- & -- & -- & 34.72 & -- & -- & 30.09 & \textbf{43.52} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & -- & 86.46 & -- & -- & 90.97 & \textbf{93.75} \\
- & $\kappa$ & -- & -- & -- & 81.94 & -- & -- & 87.96 & \textbf{91.67} \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & -- & 86.46 & -- & -- & 92.71 & \textbf{93.75} \\
+ & $\kappa$ & -- & -- & -- & 81.94 & -- & -- & 90.28 & \textbf{91.67} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & -- & 61.11 & -- & -- & 69.10 & \textbf{74.31} \\
- & $\kappa$ & -- & -- & -- & 48.15 & -- & -- & 58.80 & \textbf{65.74} \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & -- & 61.11 & -- & -- & 73.61 & \textbf{74.31} \\
+ & $\kappa$ & -- & -- & -- & 48.15 & -- & -- & 64.81 & \textbf{65.74} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S5} & Acc. & -- & -- & -- & 64.24 & -- & -- & 36.11 & \textbf{65.62} \\
- & $\kappa$ & -- & -- & -- & 52.31 & -- & -- & 14.81 & \textbf{54.17} \\
+\multirow{2}{*}{S5} & Acc. & -- & -- & -- & 64.24 & -- & -- & 57.64 & \textbf{65.62} \\
+ & $\kappa$ & -- & -- & -- & 52.31 & -- & -- & 43.52 & \textbf{54.17} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S6} & Acc. & -- & -- & -- & 39.58 & -- & -- & 57.29 & \textbf{66.67} \\
- & $\kappa$ & -- & -- & -- & 19.44 & -- & -- & 43.06 & \textbf{55.56} \\
+\multirow{2}{*}{S6} & Acc. & -- & -- & -- & 39.58 & -- & -- & 59.72 & \textbf{66.67} \\
+ & $\kappa$ & -- & -- & -- & 19.44 & -- & -- & 46.30 & \textbf{55.56} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S7} & Acc. & -- & -- & -- & 72.92 & -- & -- & 71.53 & \textbf{85.42} \\
- & $\kappa$ & -- & -- & -- & 63.89 & -- & -- & 62.04 & \textbf{80.56} \\
+\multirow{2}{*}{S7} & Acc. & -- & -- & -- & 72.92 & -- & -- & 82.29 & \textbf{85.42} \\
+ & $\kappa$ & -- & -- & -- & 63.89 & -- & -- & 76.39 & \textbf{80.56} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S8} & Acc. & -- & -- & -- & 73.61 & -- & -- & 78.12 & \textbf{84.38} \\
- & $\kappa$ & -- & -- & -- & 64.81 & -- & -- & 70.83 & \textbf{79.17} \\
+\multirow{2}{*}{S8} & Acc. & -- & -- & -- & 73.61 & -- & -- & 82.64 & \textbf{84.38} \\
+ & $\kappa$ & -- & -- & -- & 64.81 & -- & -- & 76.85 & \textbf{79.17} \\
 \addlinespace[2pt]
-\multirow{2}{*}{S9} & Acc. & -- & -- & -- & 62.15 & -- & -- & 70.83 & \textbf{75.69} \\
- & $\kappa$ & -- & -- & -- & 49.54 & -- & -- & 61.11 & \textbf{67.59} \\
+\multirow{2}{*}{S9} & Acc. & -- & -- & -- & 62.15 & -- & -- & 73.96 & \textbf{75.69} \\
+ & $\kappa$ & -- & -- & -- & 49.54 & -- & -- & 65.28 & \textbf{67.59} \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & 64.35 & -- & -- & 66.82 & \textbf{75.81} \\
- & $\kappa$ & -- & -- & -- & 52.50 & -- & -- & 55.80 & \textbf{67.70} \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & 64.35 & -- & -- & 72.15 & \textbf{75.81} \\
+ & $\kappa$ & -- & -- & -- & 52.50 & -- & -- & 62.90 & \textbf{67.70} \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & -- & 12.77 & -- & -- & 15.58 & \textbf{10.63} \\
- & $\kappa$ & -- & -- & -- & 17.00 & -- & -- & 20.80 & \textbf{14.20} \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & -- & 12.77 & -- & -- & 13.58 & \textbf{10.63} \\
+ & $\kappa$ & -- & -- & -- & 17.00 & -- & -- & 18.10 & \textbf{14.20} \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & -- & 0.0039 & -- & -- & 0.0039 & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & -- & 0.0039 & -- & -- & 0.0078 & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-Ours achieved $75.81\pm10.63\%$ accuracy and $67.70\pm14.20$ Cohen's $\kappa$, outperforming Ours-S ($64.35\pm12.77\%$) and Ours-U ($66.82\pm15.58\%$). Both paired accuracy differences were significant ($p=0.0039$); IM-TTA improved all nine target folds.
+Ours achieved $75.81\pm10.63\%$ accuracy and $67.70\pm14.20$ Cohen's $\kappa$, outperforming Ours-S ($64.35\pm12.77\%$) and Ours-U ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ and $p=0.0078$, respectively); IM-TTA improved eight of the nine target folds. As an auxiliary diagnostic only, Ours-U obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
 
 
 \subsection{BCI Competition IV-2b}
@@ -354,45 +358,45 @@ Table~\ref{tab:results_2b} reports the completed binary left- versus right-hand 
 \cmidrule(lr){3-6}\cmidrule(lr){7-10}
  & & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{Ours-S\\{}} & \colhead{DAN\\\cite{long2015dan}} & \colhead{CDAN\\\cite{tang2020cdan}} & \colhead{Ours-U\\{}} & \colhead{\textbf{Ours}\\{}} \\
 \midrule
-\multirow{2}{*}{S1} & Acc. & -- & -- & -- & 77.50 & -- & -- & 75.00 & 77.50 \\
- & $\kappa$ & -- & -- & -- & 55.00 & -- & -- & 50.00 & 55.00 \\
+\multirow{2}{*}{S1} & Acc. & -- & -- & -- & 77.50 & -- & -- & 78.44 & 77.50 \\
+ & $\kappa$ & -- & -- & -- & 55.00 & -- & -- & 56.88 & 55.00 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S2} & Acc. & -- & -- & -- & 68.57 & -- & -- & 68.57 & 67.86 \\
- & $\kappa$ & -- & -- & -- & 37.14 & -- & -- & 37.14 & 35.71 \\
+\multirow{2}{*}{S2} & Acc. & -- & -- & -- & 68.57 & -- & -- & 70.71 & 67.86 \\
+ & $\kappa$ & -- & -- & -- & 37.14 & -- & -- & 41.43 & 35.71 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S3} & Acc. & -- & -- & -- & 63.13 & -- & -- & 60.62 & 65.94 \\
- & $\kappa$ & -- & -- & -- & 26.25 & -- & -- & 21.25 & 31.88 \\
+\multirow{2}{*}{S3} & Acc. & -- & -- & -- & 63.13 & -- & -- & 63.44 & 65.94 \\
+ & $\kappa$ & -- & -- & -- & 26.25 & -- & -- & 26.88 & 31.88 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S4} & Acc. & -- & -- & -- & 89.38 & -- & -- & 88.75 & 88.75 \\
- & $\kappa$ & -- & -- & -- & 78.75 & -- & -- & 77.50 & 77.50 \\
+\multirow{2}{*}{S4} & Acc. & -- & -- & -- & 89.38 & -- & -- & 90.31 & 88.75 \\
+ & $\kappa$ & -- & -- & -- & 78.75 & -- & -- & 80.62 & 77.50 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S5} & Acc. & -- & -- & -- & 96.56 & -- & -- & 97.50 & 96.88 \\
- & $\kappa$ & -- & -- & -- & 93.12 & -- & -- & 95.00 & 93.75 \\
+\multirow{2}{*}{S5} & Acc. & -- & -- & -- & 96.56 & -- & -- & 97.81 & 96.88 \\
+ & $\kappa$ & -- & -- & -- & 93.12 & -- & -- & 95.63 & 93.75 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S6} & Acc. & -- & -- & -- & 73.44 & -- & -- & 80.31 & 85.94 \\
- & $\kappa$ & -- & -- & -- & 46.88 & -- & -- & 60.62 & 71.88 \\
+\multirow{2}{*}{S6} & Acc. & -- & -- & -- & 73.44 & -- & -- & 83.75 & 85.94 \\
+ & $\kappa$ & -- & -- & -- & 46.88 & -- & -- & 67.50 & 71.88 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S7} & Acc. & -- & -- & -- & 85.00 & -- & -- & 86.87 & 90.62 \\
- & $\kappa$ & -- & -- & -- & 70.00 & -- & -- & 73.75 & 81.25 \\
+\multirow{2}{*}{S7} & Acc. & -- & -- & -- & 85.00 & -- & -- & 89.69 & 90.62 \\
+ & $\kappa$ & -- & -- & -- & 70.00 & -- & -- & 79.37 & 81.25 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S8} & Acc. & -- & -- & -- & 86.25 & -- & -- & 94.38 & 94.06 \\
- & $\kappa$ & -- & -- & -- & 72.50 & -- & -- & 88.75 & 88.13 \\
+\multirow{2}{*}{S8} & Acc. & -- & -- & -- & 86.25 & -- & -- & 95.63 & 94.06 \\
+ & $\kappa$ & -- & -- & -- & 72.50 & -- & -- & 91.25 & 88.13 \\
 \addlinespace[2pt]
-\multirow{2}{*}{S9} & Acc. & -- & -- & -- & 85.00 & -- & -- & 83.44 & 83.13 \\
- & $\kappa$ & -- & -- & -- & 70.00 & -- & -- & 66.87 & 66.25 \\
+\multirow{2}{*}{S9} & Acc. & -- & -- & -- & 85.00 & -- & -- & 85.94 & 83.13 \\
+ & $\kappa$ & -- & -- & -- & 70.00 & -- & -- & 71.88 & 66.25 \\
 \midrule
-\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & 80.54 & -- & -- & 81.72 & \textbf{83.41} \\
- & $\kappa$ & -- & -- & -- & 61.10 & -- & -- & 63.40 & \textbf{66.80} \\
+\multirow{2}{*}{Mean} & Acc. & -- & -- & -- & 80.54 & -- & -- & \textbf{83.97} & 83.41 \\
+ & $\kappa$ & -- & -- & -- & 61.10 & -- & -- & \textbf{67.90} & 66.80 \\
 \addlinespace[2pt]
-\multirow{2}{*}{SD} & Acc. & -- & -- & -- & 10.07 & -- & -- & 11.32 & \textbf{10.35} \\
- & $\kappa$ & -- & -- & -- & 20.10 & -- & -- & 22.60 & \textbf{20.70} \\
+\multirow{2}{*}{SD} & Acc. & -- & -- & -- & 10.07 & -- & -- & 10.71 & \textbf{10.35} \\
+ & $\kappa$ & -- & -- & -- & 20.10 & -- & -- & 21.40 & \textbf{20.70} \\
 \midrule
-\multicolumn{2}{l}{$p$} & -- & -- & -- & 0.2500 & -- & -- & 0.3125 & -- \\
+\multicolumn{2}{l}{$p$} & -- & -- & -- & 0.2500 & -- & -- & 0.4063 & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-Ours achieved $83.41\pm10.35\%$ accuracy and $66.80\pm20.70$ Cohen's $\kappa$, compared with $80.54\pm10.07\%$ for Ours-S and $81.72\pm11.32\%$ for Ours-U. The paired gains were not significant ($p=0.2500$ and $p=0.3125$, respectively).
+Ours achieved $83.41\pm10.35\%$ accuracy and $66.80\pm20.70$ Cohen's $\kappa$, compared with $80.54\pm10.07\%$ for Ours-S and $83.97\pm10.71\%$ for Ours-U. Ours-U was 0.56 percentage points higher than Ours on average, but the paired difference was not significant ($p=0.4063$); Ours likewise did not differ significantly from Ours-S ($p=0.2500$). IM-TTA improved three of the nine target folds.
 
 \subsection{Zhou2016}
 \label{subsec:results_zhou}
@@ -455,14 +459,14 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
 \midrule
 \multirow{5}{*}{BCI IV-2a}
  & Ours-S      & 98.4  & 47.01 & 25.08 \\
- & Ours-U      & 131.9 & 65.75 & 27.73 \\
+ & Ours-U      & 132.0 & 58.45 & 18.44 \\
  & Ours w/o RA & 131.9 & 64.43 & 32.42 \\
  & Ours w/o DA & 131.9 & 47.52 & 29.95 \\
  & \textbf{Ours} & \textbf{131.9} & \textbf{63.58} & \textbf{28.98} \\
 \midrule
 \multirow{5}{*}{BCI IV-2b}
  & Ours-S      & 94.6  & 45.17 & 21.89 \\
- & Ours-U      & 128.1 & 57.17 & 22.61 \\
+ & Ours-U      & 128.2 & 48.08 & 13.35 \\
  & Ours w/o RA & 128.1 & 58.09 & 23.05 \\
  & Ours w/o DA & 128.1 & 45.75 & 23.34 \\
  & \textbf{Ours} & \textbf{128.1} & \textbf{60.74} & \textbf{24.72} \\
@@ -485,7 +489,7 @@ Table~\ref{tab:ablation} follows the primary chronological protocol. ``w/o DA'' 
 
 \begin{table*}[!htbp]
 \centering
-\caption{Ablation results under the primary chronological protocol: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ ($\times100$) across target subjects. BCI IV-2a is scored on session~2, BCI IV-2b on sessions~4--5, and Zhou2016 on session~3. RA: Riemannian alignment; DA: Stage~1 domain adaptation; IM: IM-TTA. Only completed clean-protocol runs are populated.}
+\caption{Ablation results under the primary chronological protocol: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ ($\times100$) across target subjects. BCI IV-2a is scored on session~2, BCI IV-2b on sessions~4--5, and Zhou2016 on session~3. RA: Riemannian alignment; DA: Stage~1 domain adaptation; IM: IM-TTA.}
 \label{tab:ablation}
 \small
 \setlength{\tabcolsep}{3.0pt}
@@ -494,12 +498,12 @@ Table~\ref{tab:ablation} follows the primary chronological protocol. ``w/o DA'' 
 Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
 \midrule
 \multirow{2}{*}{BCI IV-2a}
- & Acc. & $\mathbf{75.81\pm10.63}$ & $69.06\pm8.97$ & $71.37\pm11.60$ & $66.82\pm15.58$ \\
- & $\kappa$ & $\mathbf{67.70\pm14.20}$ & $58.70\pm12.00$ & $61.80\pm15.50$ & $55.80\pm20.80$ \\
+ & Acc. & $\mathbf{75.81\pm10.63}$ & $69.06\pm8.97$ & $71.37\pm11.60$ & $72.15\pm13.58$ \\
+ & $\kappa$ & $\mathbf{67.70\pm14.20}$ & $58.70\pm12.00$ & $61.80\pm15.50$ & $62.90\pm18.10$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
- & Acc. & $83.41\pm10.35$ & $\mathbf{83.61\pm10.06}$ & $83.11\pm11.47$ & $81.72\pm11.32$ \\
- & $\kappa$ & $66.80\pm20.70$ & $\mathbf{67.20\pm20.10}$ & $66.20\pm22.90$ & $63.40\pm22.60$ \\
+ & Acc. & $83.41\pm10.35$ & $83.61\pm10.06$ & $83.11\pm11.47$ & $\mathbf{83.97\pm10.71}$ \\
+ & $\kappa$ & $66.80\pm20.70$ & $67.20\pm20.10$ & $66.20\pm22.90$ & $\mathbf{67.90\pm21.40}$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
  & Acc. & $74.00\pm6.02$ & $\mathbf{84.00\pm3.16}$ & $76.33\pm3.79$ & $82.33\pm3.82$ \\
@@ -508,12 +512,12 @@ Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
 \end{tabular}
 \end{table*}
 
-On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$) and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, no-RA ($84.00\%$), no-IM ($82.33\%$), and no-DA ($76.33\%$) exceeded the complete model ($74.00\%$); with only four folds, none of these differences was significant ($p=0.1250$, $0.3750$, and $0.6250$, respectively). Thus, alignment was beneficial on BCI IV-2a but dataset-dependent on BCI IV-2b and Zhou2016.
+On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$), no-IM ($83.97\%$; $p=0.4063$), and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, no-RA ($84.00\%$), no-IM ($82.33\%$), and no-DA ($76.33\%$) exceeded the complete model ($74.00\%$); with only four folds, none of these differences was significant ($p=0.1250$, $0.3750$, and $0.6250$, respectively). Thus, alignment was beneficial on BCI IV-2a but dataset-dependent on BCI IV-2b and Zhou2016.
 
 \section{Discussion}
 \label{sec:discussion}
 
-The results show that adaptation is dataset dependent. The complete framework produced a clear gain on BCI IV-2a, whereas its improvement on BCI IV-2b was modest. On Zhou2016, the variants without RA or IM-TTA outperformed the complete configuration, while source-only and no-DA training also remained competitive. This outcome may reflect the small four-subject sample, long inter-session gaps, and subject-specific spectral variation. Although filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients, repeated-seed experiments are still required to establish the stability of the observed RA and IM-TTA sensitivity.
+The results show that adaptation is dataset dependent. The complete framework clearly surpassed its no-IM variant on BCI IV-2a, whereas the no-IM variant was slightly better on BCI IV-2b. On Zhou2016, the variants without RA or IM-TTA outperformed the complete configuration, while source-only and no-DA training also remained competitive. This outcome may reflect the small four-subject sample, long inter-session gaps, and subject-specific spectral variation. Although filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients, repeated-seed experiments are still required to establish the stability of the observed RA and IM-TTA sensitivity.
 
 Architecturally, multi-scale and depthwise convolutions preserve local spectral--spatial evidence, while alternating selective scans and the TCN model complementary long- and short-range dynamics. The alternating scans exploit complete offline trials and are non-causal; online use would require forward-only processing and device-specific latency validation.
 
@@ -523,6 +527,19 @@ The method is transductive because IM-TTA accesses unlabeled evaluation-session 
 \label{sec:conclusion}
 
 We presented a cross-subject MI-EEG framework combining multi-scale spatial--temporal convolution, alternating selective state-space blocks, local--global TCN fusion, hierarchical UDA, and constrained IM-TTA. Its chronological LOSO protocol excludes target labels from preprocessing, training, adaptation, and checkpoint selection. Ours obtained $75.81\pm10.63\%$ session-2 accuracy on BCI IV-2a and $83.41\pm10.35\%$ sessions~4--5 accuracy on BCI IV-2b, with corresponding Cohen's $\kappa$ scores of $67.70\pm14.20$ and $66.80\pm20.70$ on the $\times100$ scale. On Zhou2016, Ours obtained $74.00\pm6.02\%$ target-session-3 accuracy and $61.00\pm9.03$ Cohen's $\kappa$. Matched baselines and repeated-seed experiments remain necessary before drawing broader conclusions.
+
+\section*{CRediT authorship contribution statement}
+%% One line per author; keep only the CRediT roles each author actually had.
+\textbf{[Author name]:} Conceptualization, Methodology, Software, Validation, Formal analysis, Investigation, Data curation, Visualization, Writing -- original draft, Writing -- review \& editing.
+
+\section*{Declaration of competing interest}
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+\section*{Funding}
+This research did not receive any specific grant from funding agencies in the public, commercial, or not-for-profit sectors.
+
+\section*{Data availability}
+All EEG data analyzed in this study are publicly available. BCI Competition IV datasets 2a and 2b \cite{tangermann2012review} and the Zhou2016 dataset \cite{zhou2016trialselection} were accessed through the MOABB library \cite{jayaram2018moabb}; no new data were collected. The source code, configuration files, and Kaggle notebooks needed to reproduce all experiments will be made publicly available at [repository URL] upon publication.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{references}
