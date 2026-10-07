@@ -168,7 +168,7 @@ As detailed in Fig.~\ref{fig:encoder_detail}, three temporal convolutions with k
 \subsection{Alternating selective state-space encoder}
 \label{subsec:ssm}
 
-After pointwise channel mixing, five selective state-space blocks scan in the order forward--backward--forward--backward--forward. A backward block reverses the temporal axis before and after its recurrence, providing bidirectional offline context without duplicating every block. Within each block, layer normalization, gated projections, and a causal depthwise convolution generate $u_t$. A diagonal selective recurrence then computes \cite{gu2022s4,gu2024mamba}
+After pointwise channel mixing, five selective state-space blocks scan in the order forward--backward--forward--backward--forward. A backward block reverses the temporal axis before and after its recurrence, providing bidirectional offline context without duplicating every block (Fig.~\ref{fig:ssm_block}). Within each block, layer normalization, gated projections, and a causal depthwise convolution generate $u_t$. A diagonal selective recurrence then computes \cite{gu2022s4,gu2024mamba}
 \begin{align}
     A &= -\exp(A_{\log}), \\
     h_t &= \exp(\Delta_t A)\odot h_{t-1}
