@@ -81,28 +81,19 @@ To our knowledge, selective state-space MI decoders have not been coupled with t
 \section{Method}
 \label{sec:method}
 
-In each LOSO fold, one subject is the target and the remaining subjects are sources. We denote the labeled source trials by $\mathcal{S}$, the earlier, unlabeled target sessions used for adaptation during training by $\mathcal{T}_a$, and the later target sessions used for evaluation by $\mathcal{T}_e$; each trial is an EEG matrix $X\in\mathbb{R}^{C\times T}$ with $C$ channels and $T$ samples. Figure~\ref{fig:architecture_overview} summarizes the framework. In Stage~1, a shared encoder processes $\mathcal{S}$ and $\mathcal{T}_a$, and an AutoDIAL layer normalizes the pooled trial features before the residual aligner, classifier, and alignment losses. After checkpoint selection on source validation data, Stage~2 adapts only normalization parameters with the unlabeled trials of $\mathcal{T}_e$ and re-estimates the AutoDIAL target statistics. The labels of $\mathcal{T}_e$ are used only for scoring in Stage~3.
+The proposed framework has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder extracts local spectral--spatial features with multi-scale convolutions, models long-range temporal dynamics with bidirectional selective state-space blocks, and fuses both through a temporal convolutional head (Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). A hierarchical adaptation scheme then reduces the shift between subjects at three levels: the input signal is aligned by Riemannian whitening, the learned features by an AutoDIAL normalization layer together with adversarial and discrepancy losses, and the predictions by test-time adaptation (Sections~\ref{subsec:ra}--\ref{subsec:imtta}). The model is trained on labeled trials of the other (source) subjects and unlabeled trials of the new (target) subject (Stage~1), adapted to the unlabeled trials on which it will be evaluated (Stage~2), and then used for prediction (Stage~3).
 
 \begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/architecture_overview.pdf}
-    \caption{Framework for one LOSO fold: joint source classification and target adaptation with AutoDIAL feature normalization (Stage~1), label-free IM-TTA followed by AutoDIAL target-statistic re-estimation on the evaluation sessions $\mathcal{T}_e$ (Stage~2), and scoring with previously withheld labels (Stage~3).}
+    \caption{Overview of the framework: training with labeled source and unlabeled target EEG (Stage~1), label-free test-time adaptation on the unlabeled evaluation sessions $\mathcal{T}_e$ (Stage~2), and prediction (Stage~3).}
     \label{fig:architecture_overview}
 \end{figure*}
-
-\subsection{Leakage-safe signal alignment}
-\label{subsec:ra}
-
-A separate Riemannian whitening operator is optionally fitted for each subject. OAS trial covariances are summarized by their affine-invariant mean $\bar{R}$, and trials are transformed as
-\begin{equation}
-    \widetilde{X}=\bar{R}^{-1/2}X.
-\end{equation}
-A source transform is fitted on that subject's training sessions and applied to its validation sessions; the target transform is fitted on $\mathcal{T}_a$ and frozen before application to $\mathcal{T}_e$ \cite{zanini2018riemannian,he2020euclidean}. Evaluation-session data therefore update neither the Riemannian transforms nor the input z-score statistics; the only statistics estimated on $\mathcal{T}_e$ are the AutoDIAL target moments in Stage~2 (Section~\ref{subsec:imtta}).
 
 \subsection{Multi-scale convolutional encoder}
 \label{subsec:conv_frontend}
 
-As detailed in Fig.~\ref{fig:encoder_detail}, three temporal convolutions with kernels of 20, 32, and 64 samples produce 32 maps each \cite{altaheri2025tcformer}. Their concatenated output is processed by depthwise convolution across all electrodes with depth multiplier two, average pooling, and dropout. A grouped pointwise projection reduces the 192 spatial maps to 48 channels (16 per temporal scale), followed by grouped temporal convolution and residual channel-group attention. The latter assigns one learned coefficient to each scale. A second pooling layer yields $H_c\in\mathbb{R}^{B\times48\times L}$.
+Each trial is an EEG matrix $X\in\mathbb{R}^{C\times T}$ with $C$ electrodes and $T$ time samples. Following TCFormer \cite{altaheri2025tcformer}, three temporal convolutions with kernels of 20, 32, and 64 samples capture rhythms at different time scales and produce 32 feature maps each (Fig.~\ref{fig:encoder_detail}). A depthwise convolution across all electrodes then learns two spatial filters per map, followed by average pooling and dropout. A grouped pointwise convolution reduces the 192 maps to 48 channels, 16 per temporal scale, and a grouped temporal convolution refines them. A residual channel-group attention weights the three scales by one learned coefficient each, and a second pooling stage yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$, where $L$ is the number of pooled time steps.
 
 \begin{figure*}[!htbp]
     \centering
@@ -111,17 +102,15 @@ As detailed in Fig.~\ref{fig:encoder_detail}, three temporal convolutions with k
     \label{fig:encoder_detail}
 \end{figure*}
 
-\subsection{Alternating selective state-space encoder}
+\subsection{Bidirectional selective state-space encoder}
 \label{subsec:ssm}
 
-After pointwise channel mixing, five selective state-space blocks scan in the order forward--backward--forward--backward--forward. A backward block reverses the temporal axis before and after its recurrence, providing bidirectional offline context without duplicating every block (Fig.~\ref{fig:ssm_block}). Within each block, layer normalization, gated projections, and a causal depthwise convolution generate $u_t$. A diagonal selective recurrence then computes \cite{gu2022s4,gu2024mamba}
+To capture dependencies across the whole trial, $H_c$ is mixed across channels and passed through five selective state-space blocks \cite{gu2022s4,gu2024mamba}. Each block normalizes its input and produces, through gated projections and a short causal convolution, a sequence $u_t$ that drives a diagonal recurrence:
 \begin{align}
-    A &= -\exp(A_{\log}), \\
-    h_t &= \exp(\Delta_t A)\odot h_{t-1}
-       + \Delta_t B_t\odot u_t, \\
-    z_t &= C_t^\top h_t + d_{\mathrm{skip}}\odot u_t .
+    h_t &= \exp(\Delta_t A)\odot h_{t-1} + \Delta_t B_t\odot u_t, \\
+    z_t &= C_t^\top h_t + d\odot u_t ,
 \end{align}
-Here $\Delta_t$, $B_t$, and $C_t$ depend on the input. The implementation uses state dimension eight, dropout 0.4, and depth-dependent stochastic depth. It is a lightweight PyTorch selective SSM rather than the official hardware-aware Mamba kernel, but retains linear scaling in sequence length.
+where $h_t$ is the hidden state, $A=-\exp(A_{\log})$ is a learned negative decay that keeps the recurrence stable, and the step size $\Delta_t$ and the projections $B_t$ and $C_t$ are computed from the input. This input dependence lets each block decide which time steps to retain, and its cost grows linearly with $L$. Because complete trials are available offline, the blocks alternate between forward and backward scanning, a backward block reversing the time axis before and after its recurrence (Fig.~\ref{fig:ssm_block}). This gives bidirectional context without duplicating every block. The state dimension is eight, with dropout 0.4 and depth-dependent stochastic depth; the recurrence is implemented in plain PyTorch rather than with the hardware-specific Mamba kernel.
 
 \begin{figure*}[!htbp]
     \centering
@@ -133,41 +122,53 @@ Here $\Delta_t$, $B_t$, and $C_t$ depend on the input. The implementation uses s
 \subsection{Local--global fusion and classification}
 \label{subsec:tcn}
 
-The state-space output is reduced from 48 to 16 channels and concatenated with the 48-channel shortcut $H_c$. Two residual grouped TCN blocks with kernel length four and dilations one and two refine the resulting 64-channel sequence. The mean of its last state and temporal average forms the trial representation. A norm-constrained grouped $1\times1$ classifier produces four group-wise logits, which are combined by learned softmax weights.
+The state-space output is reduced to 16 channels and concatenated with the 48-channel local sequence $H_c$, so that the head sees both local and global evidence. Two residual grouped temporal convolutional network (TCN) blocks with kernel length four and dilations one and two refine the resulting 64-channel sequence. The average of its last time step and its temporal mean forms the trial representation $q\in\mathbb{R}^{64}$, made of four 16-channel groups (three convolutional scales and the state-space branch). A norm-constrained grouped classifier produces one set of class scores per group, combined with learned softmax weights.
+
+\subsection{Riemannian signal alignment}
+\label{subsec:ra}
+
+Different subjects produce EEG covariance structures that are shifted relative to one another. In Riemannian alignment (RA), each subject's trials are therefore whitened by the inverse square root of that subject's mean covariance $\bar{R}$, computed as the affine-invariant Riemannian mean of the OAS-shrunk trial covariances \cite{zanini2018riemannian,he2020euclidean}:
+\begin{equation}
+    \widetilde{X}=\bar{R}^{-1/2}X.
+\end{equation}
+To avoid leakage, $\bar{R}$ is estimated only from data available before evaluation. For a source subject, it is computed from the training sessions and applied to the validation sessions. For the target subject, it is computed from the earlier, unlabeled sessions $\mathcal{T}_a$ and applied unchanged to the later sessions $\mathcal{T}_e$ used for evaluation.
 
 \subsection{Automatic domain alignment layer}
 \label{subsec:autodial}
 
-Let $q\in\mathbb{R}^{64}$ denote a pooled trial representation, formed by the 16-channel groups of the three convolutional scales and the state-space branch. Following AutoDIAL \cite{carlucci2017autodial}, an alignment layer standardizes source features with source statistics $(\mu_s,\sigma_s^2)$, whereas target features are standardized with the moments of the source--target mixture weighted by $\alpha$:
+Riemannian whitening aligns second-order input statistics but cannot correct shifts that arise inside the network. Following AutoDIAL \cite{carlucci2017autodial}, the trial representation $q$ is therefore normalized by an alignment layer that lets the network decide how strongly target features should be standardized with their own statistics. Source features use source mean and variance $(\mu_s,\sigma_s^2)$; target features use the moments of a mixture of the source and target $(\mu_t,\sigma_t^2)$ distributions,
 \begin{align}
     \mu_\alpha &= \alpha\mu_t+(1-\alpha)\mu_s, \\
-    \sigma_\alpha^2 &= \alpha\sigma_t^2+(1-\alpha)\sigma_s^2+\alpha(1-\alpha)(\mu_t-\mu_s)^2, \\
-    \hat{q}^s &= \gamma\odot\frac{q^s-\mu_s}{\sqrt{\sigma_s^2+\epsilon}}+\beta, \qquad
-    \hat{q}^t = \gamma\odot\frac{q^t-\mu_\alpha}{\sqrt{\sigma_\alpha^2+\epsilon}}+\beta .
+    \sigma_\alpha^2 &= \alpha\sigma_t^2+(1-\alpha)\sigma_s^2+\alpha(1-\alpha)(\mu_t-\mu_s)^2,
 \end{align}
-The affine parameters $\gamma$ and $\beta$ are shared by both domains. A separate $\alpha=\mathrm{sigmoid}(a)\in(0,1)$, initialized to 0.5, is learned for each of the four feature groups: $\alpha\rightarrow0$ normalizes the target with source statistics, whereas $\alpha\rightarrow1$ recovers fully domain-specific normalization. During training, mini-batch moments of each domain are used and running estimates are updated with momentum 0.1; at inference, the running source and target moments are mixed with the learned $\alpha$. Source validation trials are always normalized with source statistics.
+so that
+\begin{equation}
+    \hat{q}^s = \gamma\odot\frac{q^s-\mu_s}{\sqrt{\sigma_s^2+\epsilon}}+\beta, \qquad
+    \hat{q}^t = \gamma\odot\frac{q^t-\mu_\alpha}{\sqrt{\sigma_\alpha^2+\epsilon}}+\beta ,
+\end{equation}
+with shared affine parameters $\gamma$ and $\beta$. The mixing weight $\alpha\in(0,1)$, initialized to 0.5, is learned separately for each of the four feature groups: $\alpha\rightarrow0$ normalizes target features with source statistics, whereas $\alpha\rightarrow1$ normalizes them entirely with their own. During training the moments are computed per mini-batch and tracked as running averages (momentum 0.1); at inference the running moments are mixed with the learned $\alpha$, and source validation trials always use source statistics.
 
-\subsection{Hierarchical unsupervised domain adaptation}
+\subsection{Training objective}
 \label{subsec:uda}
 
-A residual $64\!\rightarrow\!128\!\rightarrow\!64$ feature aligner follows the AutoDIAL layer and precedes classification and domain alignment. Source cross-entropy $\mathcal{L}_{\mathrm{cls}}$ maintains discrimination. A gradient-reversal discriminator provides domain loss $\mathcal{L}_{\mathrm{adv}}$ \cite{ganin2016dann}, while five-kernel MK-MMD aligns normalized source and target representations \cite{long2015dan}. It is applied both to pooled trial features ($\mathcal{L}_{\mathrm{mmd}}$) and to time-averaged TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$). In addition, the information-maximization objective $\mathcal{L}_{\mathrm{IM}}$ of Eq.~\eqref{eq:im} is evaluated on the predictions for the unlabeled target mini-batch ($\mathcal{L}_{\mathrm{IM}}^{t}$), giving
+A residual $64\!\rightarrow\!128\!\rightarrow\!64$ aligner maps the normalized representation to the space used by the classifier and the alignment losses. The source cross-entropy $\mathcal{L}_{\mathrm{cls}}$ is the only labeled term. A domain discriminator trained through gradient reversal \cite{ganin2016dann} provides $\mathcal{L}_{\mathrm{adv}}$, whose weight rises smoothly from zero to one during training, and a five-kernel MK-MMD \cite{long2015dan} reduces the distance between source and target features, both for trial representations ($\mathcal{L}_{\mathrm{mmd}}$) and for time-averaged TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$). Finally, the target predictions are encouraged to be confident and class-balanced by the information-maximization loss \cite{liang2020shot}
+\begin{equation}
+    \mathcal{L}_{\mathrm{IM}}
+    =\frac{1}{N}\sum_{j=1}^{N} H(p_j)-H\!\left(\frac{1}{N}\sum_{j=1}^{N}p_j\right),
+\label{eq:im}
+\end{equation}
+where $p_j$ is the predicted class distribution of the $j$-th of $N$ unlabeled trials and $H(\cdot)$ is the entropy; the first term rewards confident predictions and the second prevents all trials from being assigned to one class. Applied to a target mini-batch, it gives $\mathcal{L}_{\mathrm{IM}}^{t}$, and the training objective is
 \begin{equation}
     \mathcal{L}=\mathcal{L}_{\mathrm{cls}}+0.1\mathcal{L}_{\mathrm{IM}}^{t}+\mathcal{L}_{\mathrm{adv}}
     +0.5\mathcal{L}_{\mathrm{mmd}}+0.1\mathcal{L}_{\mathrm{tmmd}}.
 \label{eq:total_loss}
 \end{equation}
-The alignment losses $\mathcal{L}_{\mathrm{adv}}$, $\mathcal{L}_{\mathrm{mmd}}$, and $\mathcal{L}_{\mathrm{tmmd}}$ see the AutoDIAL output with $\alpha$ held fixed, because they could otherwise be reduced trivially by driving $\alpha$ toward one. Since source features do not depend on $\alpha$, the mixing weights are learned only through $\mathcal{L}_{\mathrm{IM}}^{t}$, that is, toward the normalization that yields confident yet class-diverse target predictions. Only $\mathcal{L}_{\mathrm{cls}}$ uses labels, all of which come from source subjects; target trials in this stage come exclusively from $\mathcal{T}_a$. The discriminator coefficient increases smoothly from zero to one with training progress.
+The target trials in this stage come only from $\mathcal{T}_a$. The alignment losses see the AutoDIAL output with $\alpha$ held fixed, since they could otherwise be reduced trivially by setting $\alpha$ to one; $\alpha$ is therefore learned only through $\mathcal{L}_{\mathrm{IM}}^{t}$, toward the normalization that yields confident yet class-diverse target predictions.
 
-\subsection{Constrained information-maximization adaptation}
+\subsection{Test-time adaptation}
 \label{subsec:imtta}
 
-After checkpoint selection, all parameters except BatchNorm affine weights and biases are frozen. Five Adam passes over unlabeled $\mathcal{T}_e$ at learning rate $10^{-4}$ minimize
-\begin{equation}
-    \mathcal{L}_{\mathrm{IM}}
-    =\frac{1}{N_e}\sum_j H(p_j)-H\!\left(\frac{1}{N_e}\sum_jp_j\right),
-\label{eq:im}
-\end{equation}
-where $p_j$ is the predicted class distribution of the $j$-th of the $N_e$ trials and $H(\cdot)$ is the entropy; the first term encourages confident predictions and the second preserves class diversity \cite{liang2020shot,wang2021tent}. Because IM-TTA changes the backbone features, the AutoDIAL target moments $(\mu_t,\sigma_t^2)$ are then re-estimated in one pass over the same unlabeled $\mathcal{T}_e$ trials, while the learned $\alpha$ and the source moments remain fixed. No evaluation label or metric is used for adaptation, re-estimation, or checkpoint selection.
+After training, the checkpoint with the highest source-validation accuracy is adapted to the evaluation trials $\mathcal{T}_e$ without their labels by information-maximization test-time adaptation (IM-TTA). All parameters except the BatchNorm scales and shifts are frozen, and Eq.~\eqref{eq:im} is minimized over $\mathcal{T}_e$ for five Adam passes with learning rate $10^{-4}$; restricting the update to normalization parameters limits the risk of overfitting a small target set \cite{wang2021tent}. Because this changes the backbone features, the AutoDIAL target moments $(\mu_t,\sigma_t^2)$ are then re-estimated in one pass over the same trials, while $\alpha$ and the source moments remain fixed. The labels of $\mathcal{T}_e$ are used only to score the final predictions.
 
 \section{Experimental Setup}
 \label{sec:experiments}
