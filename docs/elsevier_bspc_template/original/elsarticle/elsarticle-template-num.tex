@@ -99,31 +99,34 @@ Three public MI-EEG datasets are used to examine whether the same decoder transf
 \label{tab:datasets}
 \small
 \setlength{\tabcolsep}{4.5pt}
-\begin{tabular}{lcccl}
+\begin{tabular}{lccccl}
 \toprule
-Dataset & Subjects & Channels & Sessions & Classes \\
+Dataset & Subjects & Sex (M/F) & Channels & Sessions & Classes \\
 \midrule
-BCI IV-2a & 9 & 22 & 2 & left hand, right hand, feet, tongue \\
-BCI IV-2b & 9 & 3  & 5 & left hand, right hand \\
-Zhou2016  & 4 & 14 & 3 & left hand, right hand, feet \\
+BCI IV-2a & 9 & n.r.          & 22 & 2 & left hand, right hand, feet, tongue \\
+BCI IV-2b & 9 & n.r.$^{a}$    & 3  & 5 & left hand, right hand \\
+Zhou2016  & 4 & 1/3           & 14 & 3 & left hand, right hand, feet \\
 \bottomrule
 \end{tabular}
+
+\vspace{2pt}
+{\footnotesize n.r.: not reported in the dataset description. $^{a}$The nine participants were drawn from a study of ten (6/4, 24.7 $\pm$ 3.3 years) \cite{leeb2007virtual}; the split of the nine released participants is not reported.\par}
 \end{table*}
 
 \subsection{BCI Competition IV-2a}
 \label{subsec:bcic2a}
 
-BCI Competition IV dataset 2a contains recordings from nine participants. Each participant completed two sessions on different days, and each session contains 288 trials distributed equally over imagined left-hand, right-hand, both-feet, and tongue movements. Signals were acquired from 22 EEG electrodes and three EOG electrodes at 250~Hz; only the EEG electrodes are supplied to the classifier. The original recordings were hardware band-pass filtered between 0.5 and 100~Hz and notch filtered at 50~Hz \cite{tangermann2012review}. The implementation uses the event-defined MI interval exposed by MOABB, rescales volts to microvolts, and does not apply an additional frequency filter. The first recording session is denoted session~1 and the second is denoted session~2 throughout this paper.
+BCI Competition IV dataset 2a contains recordings from nine participants. Each participant completed two sessions on different days, and each session contains 288 trials distributed equally over imagined left-hand, right-hand, both-feet, and tongue movements. Signals were acquired from 22 EEG electrodes and three EOG electrodes at 250~Hz; only the EEG electrodes are supplied to the classifier. The original recordings were hardware band-pass filtered between 0.5 and 100~Hz and notch filtered at 50~Hz \cite{tangermann2012review}. The implementation uses the event-defined MI interval exposed by MOABB, rescales volts to microvolts, and does not apply an additional frequency filter. The first recording session is denoted session~1 and the second is denoted session~2 throughout this paper. The dataset description does not report participant sex or age.
 
 \subsection{BCI Competition IV-2b}
 \label{subsec:bcic2b}
 
-BCI Competition IV dataset 2b contains two-class left- versus right-hand MI recordings from nine participants. Three bipolar EEG derivations centered on C3, Cz, and C4 were sampled at 250~Hz, together with three EOG channels that are excluded from decoding. Each participant completed five sessions: the first three form the calibration portion and the final two form the original evaluation portion \cite{tangermann2012review}. The present loader follows this natural chronological separation. The event-defined MI window is used after removing the final 0.5~s through the configured stop offset. This dataset tests whether the method remains useful when spatial coverage is reduced from 22 electrodes to only three.
+BCI Competition IV dataset 2b contains two-class left- versus right-hand MI recordings from nine right-handed participants with normal or corrected-to-normal vision, drawn from a study of ten participants (six male, four female; age $24.7\pm3.3$ years) \cite{leeb2007virtual}; the sex of the nine released participants is not reported individually. Three bipolar EEG derivations centered on C3, Cz, and C4 were sampled at 250~Hz, together with three EOG channels that are excluded from decoding. Each participant completed five sessions: the first three form the calibration portion and the final two form the original evaluation portion \cite{tangermann2012review}. The present loader follows this natural chronological separation. The event-defined MI window is used after removing the final 0.5~s through the configured stop offset. This dataset tests whether the method remains useful when spatial coverage is reduced from 22 electrodes to only three.
 
 \subsection{Zhou2016}
 \label{subsec:zhou2016}
 
-The Zhou2016 dataset contains four participants, each recorded in three sessions separated by days to months. A session consists of two runs of 75 trials, with 25 trials per class, giving 450 trials per participant. The three MI classes are left hand, right hand, and feet. EEG was recorded from 14 electrodes at 250~Hz. Each trial contains a 5-s visual arrow period during which the indicated imagery is performed, followed by a 4-s rest period \cite{zhou2016trialselection}. The public data are loaded through the MOABB representation \cite{jayaram2018moabb}; the dataset-specific frequency and time-window processing is described in Section~\ref{subsec:preprocessing}.
+The Zhou2016 dataset contains four healthy participants (one male and three female, aged 22--28 years), each recorded in three sessions separated by days to months; sex is reported only for the group, not per participant \cite{zhou2016trialselection}. A session consists of two runs of 75 trials, with 25 trials per class, giving 450 trials per participant. The three MI classes are left hand, right hand, and feet. EEG was recorded from 14 electrodes at 250~Hz. Each trial contains a 5-s visual arrow period during which the indicated imagery is performed, followed by a 4-s rest period \cite{zhou2016trialselection}. The public data are loaded through the MOABB representation \cite{jayaram2018moabb}; the dataset-specific frequency and time-window processing is described in Section~\ref{subsec:preprocessing}.
 
 \section{Proposed Method}
 \label{sec:method}
@@ -521,7 +524,7 @@ The results show that adaptation is dataset dependent. The complete framework cl
 
 Architecturally, multi-scale and depthwise convolutions preserve local spectral--spatial evidence, while alternating selective scans and the TCN model complementary long- and short-range dynamics. The alternating scans exploit complete offline trials and are non-causal; online use would require forward-only processing and device-specific latency validation.
 
-The method is transductive because IM-TTA accesses unlabeled evaluation-session signals before scoring. Comparisons must therefore provide baselines with identical target access. Other limitations include the three-channel BCI IV-2b setting, the small Zhou2016 cohort, and the absence of repeated-seed and fully matched baseline results.
+The method is transductive because IM-TTA accesses unlabeled evaluation-session signals before scoring. Comparisons must therefore provide baselines with identical target access. Other limitations include the three-channel BCI IV-2b setting, the small Zhou2016 cohort, and the absence of repeated-seed and fully matched baseline results. Participant sex is reported only in aggregate or not at all for the public datasets, and the cohorts are too small for sex- or gender-stratified analysis; potential sex-related differences in decoding performance were therefore not assessed and limit the generalizability of the findings.
 
 \section{Conclusion}
 \label{sec:conclusion}
