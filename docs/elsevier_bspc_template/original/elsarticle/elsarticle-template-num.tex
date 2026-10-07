@@ -78,10 +78,10 @@ To our knowledge, selective state-space MI decoders have not been coupled with t
     \item an evaluation on three public MI-EEG datasets with subject-wise accuracy, Cohen's $\kappa$, statistical tests, efficiency analysis, and component ablations.
 \end{itemize}
 
-\section{Proposed Method}
+\section{Method}
 \label{sec:method}
 
-Figure~\ref{fig:architecture_overview} summarizes one LOSO fold. A shared encoder processes labeled source trials and unlabeled target trials during Stage~1 UDA; an AutoDIAL layer then normalizes the pooled trial features before the residual aligner, classifier, and alignment losses. After source-validation checkpoint selection, Stage~2 adapts only normalization parameters with unlabeled evaluation-session EEG and re-estimates the AutoDIAL target statistics; labels are revealed only for Stage~3 scoring.
+In each LOSO fold, one subject is the target and the remaining subjects are sources. We denote the labeled source trials by $\mathcal{S}$, the earlier, unlabeled target sessions used for adaptation during training by $\mathcal{T}_a$, and the later target sessions used for evaluation by $\mathcal{T}_e$; each trial is an EEG matrix $X\in\mathbb{R}^{C\times T}$ with $C$ channels and $T$ samples. Figure~\ref{fig:architecture_overview} summarizes the framework. In Stage~1, a shared encoder processes $\mathcal{S}$ and $\mathcal{T}_a$, and an AutoDIAL layer normalizes the pooled trial features before the residual aligner, classifier, and alignment losses. After checkpoint selection on source validation data, Stage~2 adapts only normalization parameters with the unlabeled trials of $\mathcal{T}_e$ and re-estimates the AutoDIAL target statistics. The labels of $\mathcal{T}_e$ are used only for scoring in Stage~3.
 
 \begin{figure*}[!htbp]
     \centering
@@ -89,10 +89,6 @@ Figure~\ref{fig:architecture_overview} summarizes one LOSO fold. A shared encode
     \caption{Framework for one LOSO fold: joint source classification and target adaptation with AutoDIAL feature normalization (Stage~1), label-free IM-TTA followed by AutoDIAL target-statistic re-estimation on the evaluation sessions $\mathcal{T}_e$ (Stage~2), and scoring with previously withheld labels (Stage~3).}
     \label{fig:architecture_overview}
 \end{figure*}
-
-\subsection{Problem formulation}
-
-Let $\mathcal{S}=\{(X_i^s,y_i^s)\}_{i=1}^{N_s}$ be labeled trials from the source subjects, $\mathcal{T}_a=\{X_j^a\}_{j=1}^{N_a}$ the earlier unlabeled target sessions used for UDA, and $\mathcal{T}_e=\{X_j^e\}_{j=1}^{N_e}$ the later target sessions used for evaluation, where $X\in\mathbb{R}^{C\times T}$. Training uses $\mathcal{S}$ and $\mathcal{T}_a$; IM-TTA may access only the signal values of $\mathcal{T}_e$, never their labels.
 
 \subsection{Leakage-safe signal alignment}
 \label{subsec:ra}
@@ -171,7 +167,7 @@ After checkpoint selection, all parameters except BatchNorm affine weights and b
     =\frac{1}{N_e}\sum_j H(p_j)-H\!\left(\frac{1}{N_e}\sum_jp_j\right),
 \label{eq:im}
 \end{equation}
-where the first term encourages confident predictions and the second preserves class diversity \cite{liang2020shot,wang2021tent}. Because IM-TTA changes the backbone features, the AutoDIAL target moments $(\mu_t,\sigma_t^2)$ are then re-estimated in one pass over the same unlabeled $\mathcal{T}_e$ trials, while the learned $\alpha$ and the source moments remain fixed. No evaluation label or metric is used for adaptation, re-estimation, or checkpoint selection.
+where $p_j$ is the predicted class distribution of the $j$-th of the $N_e$ trials and $H(\cdot)$ is the entropy; the first term encourages confident predictions and the second preserves class diversity \cite{liang2020shot,wang2021tent}. Because IM-TTA changes the backbone features, the AutoDIAL target moments $(\mu_t,\sigma_t^2)$ are then re-estimated in one pass over the same unlabeled $\mathcal{T}_e$ trials, while the learned $\alpha$ and the source moments remain fixed. No evaluation label or metric is used for adaptation, re-estimation, or checkpoint selection.
 
 \section{Experimental Setup}
 \label{sec:experiments}
