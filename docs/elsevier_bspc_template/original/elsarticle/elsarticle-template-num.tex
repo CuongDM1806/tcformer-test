@@ -450,8 +450,8 @@ Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
  & $\kappa$ & $\mathbf{67.70\pm14.20}$ & $58.70\pm12.00$ & $61.80\pm15.50$ & $62.90\pm18.10$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
- & Acc. & $83.41\pm10.35$ & $83.61\pm10.06$ & $83.11\pm11.47$ & $\mathbf{83.97\pm10.71}$ \\
- & $\kappa$ & $66.80\pm20.70$ & $67.20\pm20.10$ & $66.20\pm22.90$ & $\mathbf{67.90\pm21.40}$ \\
+ & Acc. & $83.41\pm10.35$ & $83.58\pm10.46$ & $83.11\pm11.47$ & $\mathbf{83.97\pm10.71}$ \\
+ & $\kappa$ & $66.80\pm20.70$ & $67.20\pm20.90$ & $66.20\pm22.90$ & $\mathbf{67.90\pm21.40}$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
  & Acc. & $\mathbf{84.33\pm0.75}$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
@@ -460,7 +460,7 @@ Dataset & Metric & Complete & w/o RA & w/o DA & w/o IM \\
 \end{tabular}
 \end{table*}
 
-On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.61\%$), no-IM ($83.97\%$; $p=0.4063$), and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, the complete model ($84.33\%$) was slightly above no-RA ($84.00\%$), no-DA ($82.50\%$), and no-IM ($82.33\%$); with only four folds, none of these differences can be significant (the smallest attainable $p$ is 0.125; $p=0.2500$ for no-DA and $0.6250$ for no-IM). Thus, the complete framework was best on BCI IV-2a and Zhou2016, whereas the variants were statistically indistinguishable on BCI IV-2b.
+On BCI IV-2a, removing RA or DA reduced accuracy from $75.81\%$ to $69.06\%$ and $71.37\%$, respectively; the no-DA difference was significant ($p=0.0078$). On BCI IV-2b, no-RA ($83.58\%$), no-IM ($83.97\%$; $p=0.4063$), and no-DA ($83.11\%$; $p=0.4961$) were effectively comparable with the complete model ($83.41\%$). On Zhou2016, the complete model ($84.33\%$) was slightly above no-RA ($84.00\%$), no-DA ($82.50\%$), and no-IM ($82.33\%$); with only four folds, none of these differences can be significant (the smallest attainable $p$ is 0.125; $p=0.2500$ for no-DA and $0.6250$ for no-IM). Thus, the complete framework was best on BCI IV-2a and Zhou2016, whereas the variants were statistically indistinguishable on BCI IV-2b.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
@@ -489,7 +489,7 @@ Dataset & Method & Params (K) & Train (min) & CPU (ms) \\
 \multirow{5}{*}{BCI IV-2b}
  & Ours-S      & 94.6  & 45.17 & 21.89 \\
  & Ours-U      & 128.2 & 48.08 & 13.35 \\
- & Ours w/o RA & 128.1 & 58.09 & 23.05 \\
+ & Ours w/o RA & 128.2 & 47.95 & 13.33 \\
  & Ours w/o DA & 128.1 & 45.75 & 23.34 \\
  & \textbf{Ours} & \textbf{128.1} & \textbf{60.74} & \textbf{24.72} \\
 \midrule
