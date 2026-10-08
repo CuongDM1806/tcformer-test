@@ -69,8 +69,8 @@ model_kwargs:
   sequence_block_types: [mamba_forward, mamba_backward, mamba_forward, mamba_backward, mamba_forward]
   mamba_d_state: 8
   mamba_d_conv: 3
-  # Same optimized scripted scan used by the no-DA/AutoDIAL ablation branches.
-  mamba_scan_mode: scripted
+  # Hoist state-independent work out of the recurrent time loop.
+  mamba_scan_mode: hoisted
 
   tcn_depth: 2
   kernel_length_tcn: 4
