@@ -1,0 +1,37 @@
+# T-TIME (IEEE TBME 2024) and BFT (IEEE JBHI 2026) under the chronological
+# LOSO protocol of the paper; see tta_baselines.py. Settings are those of the
+# authors' tl/ttime.py, tl/ttime_ensemble.py and tl/bft.py.
+subject_ids: "all"
+seed: 0
+
+preprocessing:
+  bcic2a:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: 0.0
+
+# EEGNet source models (tl/ttime.py): Adam lr 1e-3, batch 32, 100 epochs.
+lr: 0.001
+batch_size: 32
+max_epoch: 100
+log_every_n_epochs: 10
+
+ttime:
+  # "T-TIME (5)": complete configuration, SML ensemble of 5 seeded EEGNets.
+  ensemble_size: 5
+  test_batch: 8
+  steps: 1
+  stride: 1
+  t: 2
+
+bft:
+  variant: "BFT-D"
+  K: 10
+  temperature: 0.25
+  ranker_lr: 0.001
+  ranker_epoch: 20
+  test_batch: 8
+  steps: 1
+  stride: 1

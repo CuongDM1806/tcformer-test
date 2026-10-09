@@ -1,0 +1,36 @@
+# EEGEncoder baseline (Liao et al., Sci. Rep. 2025), unmodified architecture
+# from models/eegencoder.py with the authors' training loss and optimizer
+# (Adam lr 1e-3, batch 64, label smoothing 0.2, explicit L2 terms, no
+# augmentation). Same pure source-only LOSO protocol as SSM-DAN (source-only):
+# best source-validation checkpoint, no target samples, no RA, no domain
+# adaptation, no test-time adaptation. Released for 22-channel BCI IV-2a.
+dataset_name: ""
+subject_ids: "all"
+max_epochs: 500
+max_epochs_2b: 500
+max_epochs_loso: 125
+seed: 0
+requires_loso: true
+domain_adaptation: false
+
+z_scale: true
+interaug: false
+preprocessing:
+  bcic2a:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: 0.0
+    batch_size: 64
+    riemannian_alignment: false
+
+model: "EEGEncoderBaseline"
+model_kwargs:
+  label_smoothing: 0.2
+  lr: 0.001
+  weight_decay: 0.0
+  optimizer: "adam"
+  scheduler: false
+  warmup_epochs: 20
+  warmup_epochs_loso: 3

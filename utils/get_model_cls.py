@@ -14,6 +14,8 @@ from models import (
     CTNet,
     MSCFormer,
     EEGDeformer,
+    EEGEncoderBaseline,
+    SATransNetBaseline,
 )
 
 
@@ -33,6 +35,8 @@ model_dict = dict(
     CTNet = CTNet,
     MSCFormer = MSCFormer,
     EEGDeformer=EEGDeformer,
+    EEGEncoderBaseline=EEGEncoderBaseline,
+    SATransNetBaseline=SATransNetBaseline,
 )
 
 

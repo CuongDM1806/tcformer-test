@@ -1,0 +1,49 @@
+# SATrans-Net baseline (Sci. Rep. 2025), unmodified architecture from
+# models/satransnet.py with the authors' settings (heads 8, depth 6, emb 40,
+# dropout 0.25, AdamW lr 1e-3, betas (0.5, 0.999), batch 72, S&R
+# augmentation). Same pure source-only LOSO protocol as SSM-DAN (source-only):
+# best source-validation checkpoint, no target samples, no RA, no domain
+# adaptation, no test-time adaptation.
+dataset_name: ""
+subject_ids: "all"
+max_epochs: 500
+max_epochs_2b: 500
+max_epochs_loso: 125
+seed: 0
+requires_loso: true
+domain_adaptation: false
+
+z_scale: true
+interaug: true
+preprocessing:
+  bcic2a:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: 0.0
+    batch_size: 72
+    riemannian_alignment: false
+
+model: "SATransNetBaseline"
+model_kwargs:
+  # BCI IV-2a trials in this pipeline are 4 s at 250 Hz.
+  n_samples: 1000
+  heads: 8
+  emb_size: 40
+  depth: 6
+  eeg1_f1: 20
+  eeg1_kernel_size: 64
+  eeg1_D: 2
+  eeg1_pooling_size1: 8
+  eeg1_pooling_size2: 8
+  eeg1_dropout_rate: 0.25
+
+  lr: 0.001
+  beta_1: 0.5
+  # torch.optim.AdamW default, as in the released experiment.py.
+  weight_decay: 0.01
+  optimizer: "adamW"
+  scheduler: false
+  warmup_epochs: 20
+  warmup_epochs_loso: 3

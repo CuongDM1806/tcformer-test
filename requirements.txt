@@ -27,3 +27,6 @@ braindecode==0.7
 
 # --- Utilities ---
 PyYAML==6.0.2
+
+# --- EEGEncoder baseline (models/eegencoder_lma.py) ---
+transformers==4.48.3
