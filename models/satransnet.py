@@ -26,6 +26,10 @@ cudnn.deterministic = True
 
 def numberClassChannel(database_type):
     """Return dataset dimensions without importing visualization utilities."""
+    # Added for this repository: an explicit (n_classes, n_channels) pair,
+    # used for datasets the released code does not list (Zhou2016).
+    if isinstance(database_type, tuple):
+        return database_type
     if database_type == "A":
         return 4, 22
     if database_type == "B":
@@ -334,9 +338,10 @@ class SATransNetBaseline(ClassificationModule):
                  eeg1_f1: int = 20, eeg1_kernel_size: int = 64, eeg1_D: int = 2,
                  eeg1_pooling_size1: int = 8, eeg1_pooling_size2: int = 8,
                  eeg1_dropout_rate: float = 0.25, **kwargs):
-        database_type = {(4, 22): "A", (2, 3): "B"}.get((n_classes, n_channels))
-        if database_type is None:
-            raise ValueError("SATrans-Net is released for BCI IV-2a and IV-2b only.")
+        # Released dataset codes for BCI IV-2a/2b; any other dataset passes
+        # its own (n_classes, n_channels) to the same network.
+        database_type = {(4, 22): "A", (2, 3): "B"}.get(
+            (n_classes, n_channels), (n_classes, n_channels))
         n_tokens = n_samples // (eeg1_pooling_size1 * eeg1_pooling_size2)
         model = EEGTransformer(
             heads=heads, emb_size=emb_size, depth=depth,

@@ -9,6 +9,7 @@ subject_ids: "all"
 max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
+max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
 domain_adaptation: false
@@ -34,6 +35,24 @@ preprocessing:
     riemannian_alignment: false
     num_workers: 2
     test_num_workers: 0
+  zhou2016:
+    sfreq: 250
+    # Same MI-focused Zhou2016 preprocessing as every method in the paper.
+    low_cut: 8.0
+    high_cut: 30.0
+    z_scale: true
+    # Exclude the initial cue transient and retain the 0.5--5.0 s MI interval.
+    start: 0.5
+    trial_duration: 4.5
+    batch_size: 72
+    num_workers: 2
+    test_num_workers: 0
+    validation_fraction: 0.20
+    riemannian_alignment: false
+    interaug: false
+    model_overrides:
+      # 4.5 s at 250 Hz.
+      n_samples: 1125
 
 model: "SATransNetBaseline"
 model_kwargs:
