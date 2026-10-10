@@ -24,10 +24,20 @@ preprocessing:
     stop: 0.0
     batch_size: 72
     riemannian_alignment: false
+  bcic2b:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: -0.5
+    batch_size: 72
+    riemannian_alignment: false
+    num_workers: 2
+    test_num_workers: 0
 
 model: "SATransNetBaseline"
 model_kwargs:
-  # BCI IV-2a trials in this pipeline are 4 s at 250 Hz.
+  # BCI IV-2a and IV-2b trials in this pipeline are 4 s at 250 Hz.
   n_samples: 1000
   heads: 8
   emb_size: 40
