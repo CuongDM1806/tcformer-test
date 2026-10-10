@@ -2,7 +2,8 @@
 
 The classes below are copied verbatim from the authors' main.py
 (https://github.com/BlackCattt9/EEGEncoder, commit ad7aaf4); only the training
-script and data loading were left out. ``EEGEncoderBaseline`` wraps the network
+script and data loading were left out, and ConvBlock receives the
+constructor's ``in_chans`` instead of a literal 22 (identical on BCI IV-2a). ``EEGEncoderBaseline`` wraps the network
 for this repository's LOSO pipeline and reproduces the authors' training loss:
 cross-entropy with label smoothing 0.2 on the network output plus the explicit
 L2 penalties of the ``*L2`` layers, scaled by two, optimized with Adam
@@ -246,7 +247,10 @@ class EEGEncoder(nn.Module):
         F2 = eegn_F1 * eegn_D
 
         # self.conv_block = ConvBlock(eegn_F1, eegn_F1, eegn_D, eegn_kernelSize, eegn_poolSize, eegn_dropout)
-        self.conv_block = ConvBlock(F1=eegn_F1, kernLength=eegn_kernelSize, poolSize=7, D=2, in_chans=22, dropout=eegn_dropout)
+        # Released code passed the literal in_chans=22 here; using the
+        # constructor argument is identical on BCI IV-2a and lets the same
+        # network run on BCI IV-2b (3 channels) and Zhou2016 (14 channels).
+        self.conv_block = ConvBlock(F1=eegn_F1, kernLength=eegn_kernelSize, poolSize=7, D=2, in_chans=in_chans, dropout=eegn_dropout)
         self.attention_block = AttentionBlock(embed_dim=F2, num_heads=4)  # Define your attention block
         self.tcn_blocks = nn.ModuleList([TCNBlock_(F2, tcn_depth, tcn_kernelSize, tcn_filters, tcn_dropout, tcn_activation) for _ in range(n_windows)])
         self.dense_layers = nn.ModuleList([LinearL2(tcn_filters, n_classes, 0.5) for _ in range(n_windows)])
@@ -316,9 +320,6 @@ class EEGEncoderBaseline(ClassificationModule):
 
     def __init__(self, n_channels: int, n_classes: int, label_smoothing: float = 0.2,
                  **kwargs):
-        if n_channels != 22:
-            # The released ConvBlock hard-codes in_chans=22 (BCI IV-2a).
-            raise ValueError("The released EEGEncoder supports 22-channel BCI IV-2a only.")
         model = EEGEncoder(n_classes=n_classes, in_chans=n_channels)
         super().__init__(model, n_classes, **kwargs)
         self.label_smoothing = label_smoothing

@@ -3,12 +3,13 @@
 # (Adam lr 1e-3, batch 64, label smoothing 0.2, explicit L2 terms, no
 # augmentation). Same pure source-only LOSO protocol as SSM-DAN (source-only):
 # best source-validation checkpoint, no target samples, no RA, no domain
-# adaptation, no test-time adaptation. Released for 22-channel BCI IV-2a.
+# adaptation, no test-time adaptation.
 dataset_name: ""
 subject_ids: "all"
 max_epochs: 500
 max_epochs_2b: 500
 max_epochs_loso: 125
+max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
 domain_adaptation: false
@@ -24,6 +25,31 @@ preprocessing:
     stop: 0.0
     batch_size: 64
     riemannian_alignment: false
+  bcic2b:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: -0.5
+    batch_size: 64
+    riemannian_alignment: false
+    num_workers: 2
+    test_num_workers: 0
+  zhou2016:
+    sfreq: 250
+    # Same MI-focused Zhou2016 preprocessing as every method in the paper.
+    low_cut: 8.0
+    high_cut: 30.0
+    z_scale: true
+    # Exclude the initial cue transient and retain the 0.5--5.0 s MI interval.
+    start: 0.5
+    trial_duration: 4.5
+    batch_size: 64
+    num_workers: 2
+    test_num_workers: 0
+    validation_fraction: 0.20
+    riemannian_alignment: false
+    interaug: false
 
 model: "EEGEncoderBaseline"
 model_kwargs:
