@@ -1,17 +1,23 @@
-"""Chronological LOSO evaluation of T-TIME and BFT on BCI IV-2a.
+"""Chronological LOSO evaluation of T-TIME and BFT (BCI IV-2a, IV-2b, Zhou2016).
 
 Both methods are the authors' implementations (utils/deeptransfer_tta.py) run
-under the same chronological protocol as SSM-DAN:
+under the same chronological protocol as SSM-DAN. Session split per dataset
+(source training / source validation = target evaluation sessions):
+BCI IV-2a 1 / 2, BCI IV-2b 1-3 / 4-5, Zhou2016 1-2 / 3.
 
-* source subjects: session 1 trains the EEGNet source models, session 2 is the
-  labeled validation split used only to select the checkpoint (highest source
-  validation accuracy), as for every other method in the paper;
+* source subjects: the training sessions train the EEGNet source models, the
+  validation sessions are the labeled split used only to select the checkpoint
+  (highest source validation accuracy), as for every other method in the paper;
 * each source subject is Euclidean-aligned with the reference of its own
-  training session (the authors align every source subject independently);
-* target subject: session 2 is presented once, trial by trial in recording
-  order, as an unlabeled stream. Incremental EA, the online adaptation and the
-  predictions use the EEG only; labels are read afterwards for scoring.
-  Target session 1 is not used, because both methods are test-time methods.
+  training sessions (the authors align every source subject independently);
+* target subject: the evaluation sessions are presented once, trial by trial
+  in recording order, as an unlabeled stream. Incremental EA, the online
+  adaptation and the predictions use the EEG only; labels are read afterwards
+  for scoring. Earlier target sessions are not used (test-time methods).
+* preprocessing (windows, Zhou2016 8-30 Hz filter) is the paper's per-dataset
+  setting; EA replaces z-scoring, as in the authors' pipeline.
+* the T-TIME ensemble is SML: multiclass (one-vs-rest) for BCI IV-2a and
+  Zhou2016, binary for BCI IV-2b, as in the authors' ttime_ensemble.py.
 
 Settings follow the authors' scripts and papers: EEGNet (F1 4, D 2, F2 8,
 kernel fs/2, dropout 0.25), Adam lr 1e-3, batch 32, 100 source epochs; T-TIME
@@ -38,6 +44,8 @@ import yaml
 from sklearn.metrics import accuracy_score, cohen_kappa_score, confusion_matrix
 
 from datamodules.bcic4_2a import BCICIV2a, _get_2a_train_test_sessions
+from datamodules.bcic4_2b import BCICIV2b, _get_ordered_sessions
+from datamodules.zhou2016 import Zhou2016LOSO, _get_three_sessions
 from datamodules.base import BaseDataModule
 from utils.deeptransfer_tta import (
     BFT_func, EA_reference, ReliabilityRanker, SML_online_ensemble, TTIME,
@@ -45,6 +53,7 @@ from utils.deeptransfer_tta import (
 )
 from utils.latency import measure_latency
 from utils.load_bcic4 import load_bcic4
+from utils.load_zhou2016 import load_zhou2016
 from utils.metrics import write_summary
 from utils.plotting import plot_confusion_matrix
 
@@ -61,36 +70,61 @@ def fix_random_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
-def load_sessions(preprocessing):
-    """Return {subject: (X_s1, y_s1, X_s2, y_s2)} with session 1 before session 2."""
-    dataset = load_bcic4(
-        subject_ids=BCICIV2a.all_subject_ids, dataset="2a",
-        preprocessing_dict=preprocessing,
-    )
-    by_subject = dataset.split("subject")
+# Chronological split of each dataset, identical to its LOSO datamodule:
+# source training sessions / source validation (= target evaluation) sessions.
+DATASETS = {
+    "bcic2a": dict(module=BCICIV2a, train=[0], test=[1], label="SESSION 2"),
+    "bcic2b": dict(module=BCICIV2b, train=[0, 1, 2], test=[3, 4], label="SESSIONS 4-5"),
+    "zhou2016": dict(module=Zhou2016LOSO, train=[0, 1], test=[2], label="SESSION 3"),
+}
+
+
+def _subject_sessions(dataset_name, windows, subject):
+    by_subject = windows.split("subject")
+    subject_ds = by_subject.get(str(subject), by_subject.get(subject))
+    if dataset_name == "bcic2a":
+        return list(_get_2a_train_test_sessions(subject_ds))
+    if dataset_name == "bcic2b":
+        return _get_ordered_sessions(subject_ds)
+    return _get_three_sessions(subject_ds)
+
+
+def load_sessions(dataset_name, preprocessing):
+    """Return {subject: [(X, y) per session]} in chronological session order."""
+    module = DATASETS[dataset_name]["module"]
+    if dataset_name == "zhou2016":
+        windows = load_zhou2016(module.all_subject_ids, preprocessing)
+    else:
+        windows = load_bcic4(subject_ids=module.all_subject_ids,
+                             dataset=dataset_name[-2:], preprocessing_dict=preprocessing)
     sessions = {}
-    for subject in BCICIV2a.all_subject_ids:
-        session1, session2 = _get_2a_train_test_sessions(by_subject[str(subject)])
-        X1, y1 = BaseDataModule._dataset_to_arrays(session1)
-        X2, y2 = BaseDataModule._dataset_to_arrays(session2)
-        sessions[subject] = (
-            X1.astype(np.float64), y1.astype(np.int64),
-            X2.astype(np.float64), y2.astype(np.int64),
-        )
+    for subject in module.all_subject_ids:
+        arrays = []
+        for session in _subject_sessions(dataset_name, windows, subject):
+            X, y = BaseDataModule._dataset_to_arrays(session)
+            arrays.append((X.astype(np.float64), y.astype(np.int64)))
+        sessions[subject] = arrays
     return sessions
 
 
-def aligned_source(sessions, target):
-    """EA every source subject with its own training-session reference."""
+def _concat(arrays, idx):
+    return (np.concatenate([arrays[i][0] for i in idx]),
+            np.concatenate([arrays[i][1] for i in idx]))
+
+
+def aligned_source(sessions, target, split):
+    """EA every source subject with the reference of its own training sessions."""
     Xs, ys, Xv, yv = [], [], [], []
-    for subject, (X1, y1, X2, y2) in sessions.items():
+    for subject, arrays in sessions.items():
         if subject == target:
             continue
-        ref = EA_reference(X1)
-        Xs.append(np.real(np.einsum("cd,ndt->nct", ref, X1)))
-        Xv.append(np.real(np.einsum("cd,ndt->nct", ref, X2)))
-        ys.append(y1)
-        yv.append(y2)
+        X_train, y_train = _concat(arrays, split["train"])
+        X_val, y_val = _concat(arrays, split["test"])
+        ref = EA_reference(X_train)
+        Xs.append(np.real(np.einsum("cd,ndt->nct", ref, X_train)))
+        Xv.append(np.real(np.einsum("cd,ndt->nct", ref, X_val)))
+        ys.append(y_train)
+        yv.append(y_val)
     return (np.concatenate(Xs), np.concatenate(ys),
             np.concatenate(Xv), np.concatenate(yv))
 
@@ -186,12 +220,14 @@ class BFTForward(nn.Module):
         return (torch.stack(views) * weights.unsqueeze(-1)).sum(0)
 
 
-def run(config, method, gpu_id):
+def run(config, method, gpu_id, dataset_name="bcic2a"):
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
-    preprocessing = config["preprocessing"]["bcic2a"]
+    split = DATASETS[dataset_name]
+    module = split["module"]
+    preprocessing = config["preprocessing"][dataset_name]
     hp = config[method]
     args = argparse.Namespace(
-        chn=BCICIV2a.channels, class_num=BCICIV2a.classes,
+        chn=module.channels, class_num=module.classes,
         sample_rate=preprocessing["sfreq"], lr=config["lr"],
         batch_size=config["batch_size"], max_epoch=config["max_epoch"],
         align=True, log_every=config.get("log_every_n_epochs", 0), **hp,
@@ -200,28 +236,27 @@ def run(config, method, gpu_id):
     model_name = {"ttime": "T-TIME", "bft": "BFT"}[method]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     result_dir = (Path(__file__).resolve().parent /
-                  f"results/{model_name}_bcic2a_loso_seed-{config['seed']}_GPU{gpu_id}_{timestamp}")
+                  f"results/{model_name}_{dataset_name}_loso_seed-{config['seed']}_GPU{gpu_id}_{timestamp}")
     (result_dir / "confmats").mkdir(parents=True, exist_ok=True)
     with open(result_dir / "config.yaml", "w") as f:
-        yaml.dump({"method": method, **config}, f, default_flow_style=False)
+        yaml.dump({"method": method, "dataset": dataset_name, **config}, f, default_flow_style=False)
 
-    sessions = load_sessions(preprocessing)
-    args.time_sample_num = next(iter(sessions.values()))[0].shape[-1]
+    sessions = load_sessions(dataset_name, preprocessing)
+    args.time_sample_num = next(iter(sessions.values()))[0][0].shape[-1]
 
     subject_ids = config["subject_ids"]
     if subject_ids == "all":
-        subject_ids = BCICIV2a.all_subject_ids
+        subject_ids = module.all_subject_ids
     test_accs, test_losses, test_kappas = [], [], []
     train_times, test_times, response_times, confmats = [], [], [], []
 
     for target in subject_ids:
         print(f"\n>>> {model_name} | target subject {target}", flush=True)
-        Xs, ys, Xv, yv = aligned_source(sessions, target)
+        Xs, ys, Xv, yv = aligned_source(sessions, target, split)
         train_loader = to_loader(Xs, ys, args.batch_size, True, True, device)
         val_loader = to_loader(Xv, yv, args.batch_size * 3, False, False, device)
-        # Target evaluation session, in recording order, labels kept aside.
-        X_stream = sessions[target][2].astype(np.float64)
-        y_true = sessions[target][3]
+        # Target evaluation sessions, in recording order, labels kept aside.
+        X_stream, y_true = _concat(sessions[target], split["test"])
 
         st_train = time.time()
         if method == "ttime":
@@ -270,22 +305,22 @@ def run(config, method, gpu_id):
         confmats.append(cm)
         plot_confusion_matrix(
             cm, save_path=result_dir / f"confmats/confmat_subject_{target}.png",
-            class_names=BCICIV2a.class_names,
+            class_names=module.class_names,
             title=f"Confusion Matrix – Subject {target}",
         )
         response_times.append(measure_latency(
             latency_model, (1, 1, args.chn, args.time_sample_num), device="cpu"))
         latency_model.to(device)
-        print(f"\nTARGET SUBJECT {target} SESSION 2 RESULT | acc={acc * 100:.2f}% | "
+        print(f"\nTARGET SUBJECT {target} {split['label']} RESULT | acc={acc * 100:.2f}% | "
               f"loss={loss:.4f} | kappa={kappa:.4f} | test_time={test_times[-1]:.2f}s\n",
               flush=True)
 
-    write_summary(result_dir, model_name, "bcic2a_loso", list(subject_ids), param_count,
+    write_summary(result_dir, model_name, f"{dataset_name}_loso", list(subject_ids), param_count,
                   test_accs, test_losses, test_kappas, train_times, test_times,
-                  response_times, primary_test_label="SESSION 2")
+                  response_times, primary_test_label=split["label"])
     plot_confusion_matrix(
         np.mean(confmats, axis=0), save_path=result_dir / "confmats/avg_confusion_matrix.png",
-        class_names=BCICIV2a.class_names, title="Average Confusion Matrix",
+        class_names=module.class_names, title="Average Confusion Matrix",
     )
     print((result_dir / "results.txt").read_text(encoding="utf-8"), flush=True)
 
@@ -293,11 +328,12 @@ def run(config, method, gpu_id):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--method", choices=["ttime", "bft"], required=True)
+    parser.add_argument("--dataset", choices=sorted(DATASETS), default="bcic2a")
     parser.add_argument("--gpu_id", type=int, default=0)
     cli = parser.parse_args()
     with open(CONFIG_DIR / "tta_baselines.yaml") as f:
         config = yaml.safe_load(f)
-    run(config, cli.method, cli.gpu_id)
+    run(config, cli.method, cli.gpu_id, cli.dataset)
 
 
 if __name__ == "__main__":

@@ -315,8 +315,63 @@ def SML_multiclass(preds, n_classes):
     return pred
 
 
+def convert_label(labels, axis, threshold, minus1=False):
+    """tl/ttime_ensemble.py :: convert_label."""
+    if minus1:
+        # Converting labels to -1 or 1, based on a certain threshold
+        if np.random.randint(2, size=1)[0] == 1:
+            label_01 = np.where(labels > threshold, 1, -1)
+        else:
+            label_01 = np.where(labels >= threshold, 1, -1)
+    else:
+        # Converting labels to 0 or 1, based on a certain threshold
+        if np.random.randint(2, size=1)[0] == 1:
+            label_01 = np.where(labels > threshold, 1, 0)
+        else:
+            label_01 = np.where(labels >= threshold, 1, 0)
+    return label_01
+
+
+def SML(preds):
+    """tl/ttime_ensemble.py :: SML (binary). preds: (num_models, num_test_samples)."""
+    preds = convert_label(preds, 1, 0.5, minus1=True)
+    mu = np.mean(preds, axis=1)
+    deviations = preds - mu[:, np.newaxis]
+    # Calculate the covariance matrix
+    Q = np.dot(deviations, deviations.T) / (preds.shape[1] - 1)
+    # Principal eigenvector
+    v = np.linalg.eig(Q)[1][:, 0]
+    if v[0] < 0:
+        v = -v
+    predictions = np.einsum('a,ab->b', v, preds)
+    pred = np.where(predictions >= 0, 1, 0)
+    return pred
+
+
+def SML_online_ensemble_binary(pred):
+    """Online SML of tl/ttime_ensemble.py :: binary_classification.
+
+    pred: (num_models, num_test_samples, 2) online softmax predictions; the
+    authors' binary ensemble works on the class-1 probability.
+    """
+    pred = pred[:, :, 1]
+    ens_num = pred.shape[0]
+    ens_prediction = []
+    for sample in range(pred.shape[1]):
+        if sample < ens_num:
+            ens_pred = np.average(pred[:, sample], axis=0)
+            curr_pred = convert_label(ens_pred, 0, 0.5).item()
+        else:
+            curr_table = pred[:, :sample + 1]
+            curr_pred = SML(curr_table)[-1]
+        ens_prediction.append(curr_pred)
+    return np.real(np.array(ens_prediction)).astype(int)
+
+
 def SML_online_ensemble(pred, class_num):
     """pred: (num_models, num_test_samples, num_classes) online predictions."""
+    if class_num == 2:
+        return SML_online_ensemble_binary(pred)
     ens_num = pred.shape[0]
     ens_prediction = []
     for sample in range(pred.shape[1]):
