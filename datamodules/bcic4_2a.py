@@ -39,6 +39,25 @@ def _get_2a_train_test_sessions(windows_dataset):
     return ordered_sessions[0], ordered_sessions[1]
 
 
+def _get_2a_target_sessions(subject_dataset, adaptation_session="train"):
+    """Return (unlabeled adaptation session, labeled test session) for a target.
+
+    ``"train"`` keeps the chronological protocol (adapt on session T, test on
+    session E). ``"test"`` is the transductive protocol used by several UDA
+    baselines: the unlabeled evaluation session E is both the adaptation
+    domain and the test set.
+    """
+    train_session, test_session = _get_2a_train_test_sessions(subject_dataset)
+    if adaptation_session == "train":
+        return train_session, test_session
+    if adaptation_session == "test":
+        return test_session, test_session
+    raise ValueError(
+        "target_adaptation_session must be 'train' or 'test', "
+        f"got {adaptation_session!r}"
+    )
+
+
 class BCICIV2a(BaseDataModule):
     all_subject_ids = list(range(1, 10))
     class_names = ["feet", "hand(L)", "hand(R)", "tongue"]
@@ -166,8 +185,19 @@ class BCICIV2aLOSO(BCICIV2a):
             _get_2a_train_test_sessions(splitted_ds[str(subj_id)])[1]
             for subj_id in train_subjects
         ]
-        test_dataset = _get_2a_train_test_sessions(splitted_ds[str(self.subject_id)])[1]
-        target_dataset = _get_2a_train_test_sessions(splitted_ds[str(self.subject_id)])[0]
+        adaptation_session = self.preprocessing_dict.get(
+            "target_adaptation_session", "train"
+        )
+        transductive = adaptation_session == "test"
+        target_dataset, test_dataset = _get_2a_target_sessions(
+            splitted_ds[str(self.subject_id)], adaptation_session
+        )
+        print(
+            f"LOSO target {self.subject_id}: unlabeled adaptation session = "
+            f"{'E (evaluation, transductive)' if transductive else 'T (training)'}"
+            ", test session = E",
+            flush=True,
+        )
 
         # load the data
         train_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in train_datasets]
@@ -208,8 +238,9 @@ class BCICIV2aLOSO(BCICIV2a):
             X_target = BaseDataModule._apply_riemannian_whitener(
                 target_whitener, X_target
             )
-            # Fit only on target Session 1; Session 2 is transformed with the
-            # frozen matrix and never changes the RA reference.
+            # Chronological protocol: fit only on target Session 1, and Session 2
+            # is transformed with the frozen matrix. Transductive protocol: the
+            # reference is fit on the unlabeled Session 2 itself.
             X_test = BaseDataModule._apply_riemannian_whitener(
                 target_whitener, X_test
             )
@@ -229,7 +260,9 @@ class BCICIV2aLOSO(BCICIV2a):
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
-        self.all_target_dataset = BaseDataModule._make_tensor_dataset(
+        # The all-sessions diagnostic would count Session 2 twice when it is
+        # also the adaptation session, so it is skipped in that protocol.
+        self.all_target_dataset = None if transductive else BaseDataModule._make_tensor_dataset(
             np.concatenate((X_target, X_test), axis=0),
             np.concatenate((y_target, y_test), axis=0),
         )

@@ -23,6 +23,10 @@ preprocessing:
     # Per-subject OAS covariance + affine-invariant Riemannian whitening.
     # Each whitener is fit on that subject's training session only.
     riemannian_alignment: true
+    # Unlabeled target session used for Stage 1 UDA and the target RA
+    # reference: "train" (session T, chronological) or "test" (session E,
+    # transductive; the test session itself is the adaptation domain).
+    target_adaptation_session: train
   bcic2b:
     sfreq: 250
     low_cut: null
