@@ -407,8 +407,8 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
 \multirow{2}{*}{\shortstack[l]{EEGEncoder~\cite{liao2025eegencoder}}} & Acc. & 62.00 & 84.00 & 74.67 & 76.67 & $74.33\pm7.92$ & 0.2500 \\
  & $\kappa$ & 43.00 & 76.00 & 62.00 & 65.00 & $61.50\pm11.90$ &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SATrans-Net~\cite{miao2025satransnet}}} & Acc. & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- &  \\
+\multirow{2}{*}{\shortstack[l]{SATrans-Net~\cite{miao2025satransnet}}} & Acc. & 81.33 & 80.00 & 67.33 & 70.00 & $74.67\pm6.09$ & 0.1250 \\
+ & $\kappa$ & 72.00 & 70.00 & 51.00 & 55.00 & $62.00\pm9.14$ &  \\
 \addlinespace[2pt]
 \multirow{2}{*}{\shortstack[l]{SSM-DAN\\(source-only)}} & Acc. & 72.00 & 78.67 & 71.33 & 78.67 & $75.17\pm3.51$ & 0.1250 \\
  & $\kappa$ & 58.00 & 68.00 & 57.00 & 68.00 & $62.75\pm5.26$ &  \\
@@ -430,7 +430,7 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the highest mean and the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and its source-only variant ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). It also exceeded ATCNet ($76.50\pm3.93\%$; $\kappa=64.80\pm5.90$) on all four targets ($p=0.1250$) and EEGEncoder ($74.33\pm7.92\%$; $\kappa=61.50\pm11.90$) on three of the four targets ($p=0.2500$). The variant without test-time adaptation, which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$). As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for SSM-DAN and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
+SSM-DAN reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the highest mean and the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and its source-only variant ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). It also exceeded ATCNet ($76.50\pm3.93\%$; $\kappa=64.80\pm5.90$) on all four targets ($p=0.1250$), SATrans-Net ($74.67\pm6.09\%$; $\kappa=62.00\pm9.14$) on all four targets ($p=0.1250$), and EEGEncoder ($74.33\pm7.92\%$; $\kappa=61.50\pm11.90$) on three of the four targets ($p=0.2500$). The variant without test-time adaptation, which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$). As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for SSM-DAN and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
 
 \subsection{Ablation study}
 \label{sec:ablation}
@@ -469,35 +469,36 @@ On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-
 
 Table~\ref{tab:efficiency} reports trainable parameters, Stage~1 training time, and CPU response time. The source-only variant is smaller because it omits the AutoDIAL layer, aligner, and domain discriminator; RA and IM-TTA do not change parameter count.
 
-Because the token sequence after temporal pooling is short (20 tokens on Zhou2016), a step-by-step selective scan is dominated by per-operation dispatch overhead rather than arithmetic. All Zhou2016 runs, the BCI IV-2a and IV-2b runs without domain adaptation, and the BCI IV-2b source-only run therefore use a loop-hoisted scan: $\exp(\Delta_t A)$, $\Delta_t B_t\odot u_t$, and the $C_t$ readout are computed for all time steps outside the recurrence, leaving one multiply--add per step, and the causal depthwise convolution is evaluated as shifted multiply--adds. This reorganization changes neither the model nor its parameters (output logits agree with the per-step scan to within $10^{-8}$). On Zhou2016, the source-only variant required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms without test-time adaptation, 11.66~min and 18.88~ms without Riemannian alignment, 6.46~min and 18.41~ms without domain adaptation, and 11.70~min and 19.14~ms for SSM-DAN.
+On Zhou2016, the source-only variant required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms without test-time adaptation, 11.66~min and 18.88~ms without Riemannian alignment, 6.46~min and 18.41~ms without domain adaptation, and 11.70~min and 19.14~ms for SSM-DAN.
 
 \begin{table*}[!htbp]
 \centering
-\caption{Computational cost: trainable parameters, mean Stage~1 training time per fold, and single-trial CPU response time.}
+\caption{Computational cost: trainable parameters, mean Stage~1 training time per fold, and single-trial CPU response time. w/o: SSM-DAN without the indicated component; RA: Riemannian alignment; DA: domain adaptation; IM-TTA: information-maximization test-time adaptation.}
 \label{tab:efficiency}
-\footnotesize
-\setlength{\tabcolsep}{3.5pt}
+\small
+\setlength{\tabcolsep}{2pt}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{>{\raggedright\arraybackslash}p{2.9cm}@{\hspace{10pt}}ccc@{\hspace{10pt}}ccc@{\hspace{10pt}}ccc}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.75cm}@{\hspace{2pt}}ccc@{\hspace{2pt}}ccc@{\hspace{2pt}}ccc}
 \toprule
  & \multicolumn{3}{c}{BCI IV-2a} & \multicolumn{3}{c}{BCI IV-2b} & \multicolumn{3}{c}{Zhou2016} \\
 \cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
-Method & Params (K) & Train (min) & CPU (ms) & Params (K) & Train (min) & CPU (ms) & Params (K) & Train (min) & CPU (ms) \\
+Method & Params & Train & CPU & Params & Train & CPU & Params & Train & CPU \\
+ & (K) & (min) & (ms) & (K) & (min) & (ms) & (K) & (min) & (ms) \\
 \midrule
 \multicolumn{10}{l}{\textit{Source-only training}} \\
 Conformer & 789.6 & 11.14 & 11.45 & 759.1 & 4.93 & 9.34 & -- & -- & -- \\
 ATCNet & 113.7 & 48.58 & 13.33 & 112.8 & 60.19 & 11.35 & 113.3 & 8.09 & 11.91 \\
 TCFormer & 127.2 & 38.37 & 14.96 & 123.4 & 31.04 & 11.17 & 125.6 & 5.89 & 15.97 \\
 EEGEncoder & 197.2 & 13.49 & 26.51 & 196.2 & 14.98 & 26.88 & 196.8 & 3.64 & 25.68 \\
-SATrans-Net & 155.6 & 10.19 & 12.78 & 153.7 & 4.99 & 11.10 & -- & -- & -- \\
+SATrans-Net & 155.6 & 10.19 & 12.78 & 153.7 & 4.99 & 11.10 & 155.0 & 1.32 & 11.38 \\
 SSM-DAN (source-only) & 98.4 & 47.01 & 25.08 & 94.6 & 36.10 & 13.68 & 96.8 & 6.29 & 13.36 \\
 \midrule
 \multicolumn{10}{l}{\textit{Label-free target adaptation}} \\
 T-TIME & 9.5 & 5.85 & 7.71 & -- & -- & -- & -- & -- & -- \\
 BFT & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
-SSM-DAN without test-time adaptation & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
-SSM-DAN without Riemannian alignment & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4 & 11.66 & 18.88 \\
-SSM-DAN without domain adaptation & 131.9 & 40.73 & 22.12 & 128.1 & 33.21 & 14.25 & 130.3 & 6.46 & 18.41 \\
+\quad w/o IM-TTA & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
+\quad w/o RA & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4 & 11.66 & 18.88 \\
+\quad w/o DA & 131.9 & 40.73 & 22.12 & 128.1 & 33.21 & 14.25 & 130.3 & 6.46 & 18.41 \\
 \textbf{SSM-DAN} & \textbf{132.0} & \textbf{59.82} & \textbf{22.20} & \textbf{128.2} & \textbf{54.21} & \textbf{17.40} & \textbf{130.4} & \textbf{11.70} & \textbf{19.14} \\
 \bottomrule
 \end{tabular}
