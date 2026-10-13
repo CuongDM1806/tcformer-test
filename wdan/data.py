@@ -74,24 +74,37 @@ def euclidean_alignment(X: np.ndarray) -> np.ndarray:
 
 
 def _events(raw, event_id):
-    import mne
-    if "stim" in raw.ch_names:
-        ev = mne.find_events(raw, stim_channel="stim", shortest_event=0, verbose=False)
-    else:
-        ev, _ = mne.events_from_annotations(raw, event_id=event_id, verbose=False)
+    """Đọc vị trí bắt đầu trial từ kênh trigger của MOABB.
+
+    MOABB ghi nhãn lớp (1..4) vào kênh kiểu "stim" tại mẫu bắt đầu trial (t = 0 s của
+    paradigm); tên kênh đổi theo phiên bản ("stim" ở bản cũ, "STI" ở bản mới), nên tìm
+    theo kiểu kênh. interval = [2, 6] của dataset được tính từ mốc này."""
+    stim = [ch for ch, kind in zip(raw.ch_names, raw.get_channel_types()) if kind == "stim"]
+    if len(stim) != 1:
+        raise RuntimeError(f"Cần đúng một kênh trigger kiểu stim, tìm thấy: {stim}")
+    trig = raw.get_data(picks=stim)[0]
+    onsets = np.flatnonzero(trig > 0)
+    codes = np.rint(trig[onsets]).astype(int)
     inv = {v: k for k, v in event_id.items()}
-    keep = np.isin(ev[:, 2], list(inv))
-    return ev[keep, 0], [inv[c] for c in ev[keep, 2]]
+    unknown = sorted(set(codes) - set(inv))
+    if unknown:
+        raise RuntimeError(f"Mã trigger lạ: {unknown}")
+    return onsets, [inv[c] for c in codes]
 
 
 def preprocess_run(raw, event_id, interval, zero_phase=False):
-    """Lọc + EMS trên tín hiệu liên tục của một run, rồi cắt trial theo interval của dataset."""
+    """Lọc + EMS trên tín hiệu liên tục của một run, rồi cắt trial theo interval của dataset.
+    Trả về None với run baseline không có trial."""
+    onsets, labels = _events(raw, event_id)
+    if len(onsets) == 0:
+        return None
     raw = raw.copy().pick("eeg")                              # 22 kênh EEG, bỏ EOG
     x = raw.get_data() * 1e6                                  # V -> microvolt
     x = bandpass(x, zero_phase=zero_phase)
     x = exponential_moving_standardize(x)
-    onsets, labels = _events(raw, event_id)
     start, stop = int(round(interval[0] * SFREQ)), int(round(interval[1] * SFREQ))
+    if onsets.max() + stop > x.shape[1]:
+        raise RuntimeError(f"Trial cuối vượt quá độ dài run: {onsets.max() + stop} > {x.shape[1]}")
     X = np.stack([x[:, o + start:o + stop] for o in onsets]).astype(np.float32)
     y = np.array([CLASSES.index(l) for l in labels], dtype=np.int64)
     return X, y
@@ -113,10 +126,15 @@ def load_bci2a(cache="bci2a_she2023_cache.npz", zero_phase=False):
         for sess_name, runs in sessions.items():
             for raw in runs.values():
                 assert int(raw.info["sfreq"]) == SFREQ
-                parts[_session_key(sess_name)].append(
-                    preprocess_run(raw, dataset.event_id, dataset.interval, zero_phase))
+                out = preprocess_run(raw, dataset.event_id, dataset.interval, zero_phase)
+                if out is not None:
+                    parts[_session_key(sess_name)].append(out)
         data[subj] = {k: (np.concatenate([p[0] for p in v]), np.concatenate([p[1] for p in v]))
                       for k, v in parts.items()}
+        for k in ("T", "E"):
+            n = len(data[subj][k][1])
+            if n != 288:
+                raise RuntimeError(f"S{subj:02d} session {k}: {n} trial, cần 288")
         print(f"S{subj:02d}: T={data[subj]['T'][0].shape}, E={data[subj]['E'][0].shape}")
     np.savez(cache, data=np.array(data, dtype=object))
     return data
