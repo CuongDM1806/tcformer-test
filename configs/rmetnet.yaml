@@ -1,0 +1,34 @@
+# RMETNet (PLOS ONE 2026) under the chronological LOSO protocol of the paper;
+# see rmetnet_baseline.py. Settings are those of the authors' main script
+# (maingcn-mmdloss-2a-matrics.py) and its fittvmmd training loop.
+subject_ids: "all"
+seed: 0
+log_every_n_epochs: 25
+
+preprocessing:
+  bcic2a:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: 0.0
+  bcic2b:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: -0.5
+  zhou2016:
+    # Same MI-focused Zhou2016 preprocessing as every method in the paper.
+    sfreq: 250
+    low_cut: 8.0
+    high_cut: 30.0
+    start: 0.5
+    trial_duration: 4.5
+
+rmetnet:
+  epochs: 1000
+  batch_size: 64
+  lr: 0.0002
+  betas: [0.5, 0.999]
+  weight_decay: 0.075
