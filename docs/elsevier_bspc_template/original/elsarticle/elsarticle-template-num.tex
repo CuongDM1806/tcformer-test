@@ -454,15 +454,15 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
 \multirow{2}{*}{\shortstack[l]{MSD-DDA~\cite{gong2026msdda}}} & Acc. & -- & -- & -- & -- & -- & -- \\
  & $\kappa$ & -- & -- & -- & -- & -- &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN without\\test-time adaptation}} & Acc. & 79.33 & $\mathbf{84.67}$ & $\mathbf{87.33}$ & 78.00 & $82.33\pm3.82$ & 0.6250 \\
- & $\kappa$ & 69.00 & $\mathbf{77.00}$ & $\mathbf{81.00}$ & 67.00 & $73.50\pm5.70$ &  \\
+\multirow{2}{*}{\shortstack[l]{SSM-DAN without\\test-time adaptation}} & Acc. & 79.33 & 84.67 & $\mathbf{87.33}$ & 78.00 & $82.33\pm3.82$ & 0.6250 \\
+ & $\kappa$ & 69.00 & 77.00 & $\mathbf{81.00}$ & 67.00 & $73.50\pm5.70$ &  \\
 \midrule
 \multicolumn{8}{l}{\textit{Test-time adaptation (unlabeled target session~3 at inference)}} \\
 \multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & -- & -- & -- & -- & -- & -- \\
  & $\kappa$ & -- & -- & -- & -- & -- &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- &  \\
+\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & $\mathbf{84.00}$ & $\mathbf{86.67}$ & 76.00 & 84.67 & $82.83\pm4.07$ & -- \\
+ & $\kappa$ & $\mathbf{76.00}$ & $\mathbf{80.00}$ & 64.00 & 77.00 & $74.30\pm6.10$ &  \\
 \addlinespace[2pt]
 \multirow{2}{*}{\shortstack[l]{SSM-DAN without\\domain adaptation}} & Acc. & -- & -- & -- & -- & $82.50\pm1.85$ & -- \\
  & $\kappa$ & -- & -- & -- & -- & $73.75\pm2.77$ &  \\
@@ -474,7 +474,7 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the highest mean and the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and its source-only variant ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). It also exceeded ATCNet ($76.50\pm3.93\%$; $\kappa=64.80\pm5.90$) on all four targets ($p=0.1250$), SATrans-Net ($74.67\pm6.09\%$; $\kappa=62.00\pm9.14$) on all four targets ($p=0.1250$), and EEGEncoder ($74.33\pm7.92\%$; $\kappa=61.50\pm11.90$) on three of the four targets ($p=0.2500$). The variant without test-time adaptation, which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$) and is the matched reference of the UDA baselines; SSM-DAN without domain adaptation ($82.50\pm1.85\%$; $\kappa=73.75\pm2.77$) is the matched reference of the test-time adaptation baselines. As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for SSM-DAN and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
+SSM-DAN reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the highest mean and the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and its source-only variant ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). It also exceeded ATCNet ($76.50\pm3.93\%$; $\kappa=64.80\pm5.90$) on all four targets ($p=0.1250$), SATrans-Net ($74.67\pm6.09\%$; $\kappa=62.00\pm9.14$) on all four targets ($p=0.1250$), and EEGEncoder ($74.33\pm7.92\%$; $\kappa=61.50\pm11.90$) on three of the four targets ($p=0.2500$). The variant without test-time adaptation, which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$) and is the matched reference of the UDA baselines; SSM-DAN without domain adaptation ($82.50\pm1.85\%$; $\kappa=73.75\pm2.77$) is the matched reference of the test-time adaptation baselines. BFT reached $82.83\pm4.07\%$ ($\kappa=74.30\pm6.10$), $0.33$ percentage points above this reference on average, and obtained the highest accuracy on target~2 ($86.67\%$). As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for SSM-DAN and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
 
 \subsection{Ablation study}
 \label{sec:ablation}
@@ -545,7 +545,7 @@ MSD-DDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
 \multicolumn{10}{l}{\textit{Test-time adaptation}} \\
 T-TIME & 9.5 & 5.85 & 7.71 & -- & -- & -- & -- & -- & -- \\
-BFT & 40.6 & 1.47 & 3.08 & 39.9 & 0.96 & 2.61 & -- & -- & -- \\
+BFT & 40.6 & 1.47 & 3.08 & 39.9 & 0.96 & 2.61 & 51.0 & 0.36 & 2.84 \\
 \quad w/o DA & 131.9 & 40.73 & 22.12 & 128.1 & 33.21 & 14.25 & 130.3 & 6.46 & 18.41 \\
 \midrule
 \quad w/o RA & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4 & 11.66 & 18.88 \\
