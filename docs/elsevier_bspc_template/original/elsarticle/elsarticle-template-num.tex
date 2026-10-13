@@ -304,8 +304,8 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
 \multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & 67.01 & 53.47 & 78.47 & 64.58 & 68.75 & 49.65 & 79.51 & 69.44 & 65.28 & $66.24\pm9.34$ & 0.0117 \\
  & $\kappa$ & 56.02 & 37.96 & 71.30 & 52.78 & 58.33 & 32.87 & 72.69 & 59.26 & 53.70 & $55.00\pm12.50$ &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
+\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 64.24 & 44.44 & 76.74 & 65.62 & 61.81 & 51.39 & 73.61 & 70.49 & 59.38 & $63.08\pm9.77$ & 0.0039 \\
+ & $\kappa$ & 52.31 & 25.93 & 68.98 & 54.17 & 49.07 & 35.19 & 64.81 & 60.65 & 45.83 & $50.80\pm13.00$ &  \\
 \addlinespace[2pt]
 \multirow{2}{*}{\shortstack[l]{SSM-DAN without\\test-time adaptation}} & Acc. & 79.17 & 47.57 & 92.71 & 73.61 & 57.64 & 59.72 & 82.29 & 82.64 & 73.96 & $72.15\pm13.58$ & 0.0039 \\
  & $\kappa$ & 72.22 & 30.09 & 90.28 & 64.81 & 43.52 & 46.30 & 76.39 & 76.85 & 65.28 & $62.90\pm18.10$ &  \\
@@ -317,7 +317,7 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN achieved $76.12\pm11.96\%$ accuracy and $68.20\pm15.90$ Cohen's $\kappa$, outperforming its source-only variant ($64.35\pm12.77\%$) and its variant without test-time adaptation ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ for each comparison); IM-TTA improved all nine target folds. SSM-DAN also exceeded the matched EEG Conformer ($55.25\pm13.39\%$; $\kappa=40.30\pm17.90$), ATCNet ($57.02\pm12.74\%$; $\kappa=42.70\pm17.00$), TCFormer ($60.80\pm11.49\%$; $\kappa=47.70\pm15.30$), EEGEncoder ($58.06\pm12.55\%$; $\kappa=44.10\pm16.70$), and SATrans-Net ($62.00\pm10.34\%$; $\kappa=49.30\pm13.80$) baselines on all nine targets ($p=0.0039$ for each). Among the label-free target-adaptation baselines, T-TIME reached $66.24\pm9.34\%$ ($\kappa=55.00\pm12.50$); SSM-DAN exceeded it on eight of the nine targets ($p=0.0117$). As an auxiliary diagnostic only, the variant without test-time adaptation obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
+SSM-DAN achieved $76.12\pm11.96\%$ accuracy and $68.20\pm15.90$ Cohen's $\kappa$, outperforming its source-only variant ($64.35\pm12.77\%$) and its variant without test-time adaptation ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ for each comparison); IM-TTA improved all nine target folds. SSM-DAN also exceeded the matched EEG Conformer ($55.25\pm13.39\%$; $\kappa=40.30\pm17.90$), ATCNet ($57.02\pm12.74\%$; $\kappa=42.70\pm17.00$), TCFormer ($60.80\pm11.49\%$; $\kappa=47.70\pm15.30$), EEGEncoder ($58.06\pm12.55\%$; $\kappa=44.10\pm16.70$), and SATrans-Net ($62.00\pm10.34\%$; $\kappa=49.30\pm13.80$) baselines on all nine targets ($p=0.0039$ for each). Among the label-free target-adaptation baselines, T-TIME reached $66.24\pm9.34\%$ ($\kappa=55.00\pm12.50$) and BFT $63.08\pm9.77\%$ ($\kappa=50.80\pm13.00$); SSM-DAN exceeded T-TIME on eight of the nine targets ($p=0.0117$) and BFT on all nine ($p=0.0039$). As an auxiliary diagnostic only, the variant without test-time adaptation obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
 
 
 \subsection{BCI Competition IV-2b}
@@ -495,7 +495,7 @@ SSM-DAN (source-only) & 98.4 & 47.01 & 25.08 & 94.6 & 36.10 & 13.68 & 96.8 & 6.2
 \midrule
 \multicolumn{10}{l}{\textit{Label-free target adaptation}} \\
 T-TIME & 9.5 & 5.85 & 7.71 & -- & -- & -- & -- & -- & -- \\
-BFT & -- & -- & -- & 39.9 & 0.96 & 2.61 & -- & -- & -- \\
+BFT & 40.6 & 1.47 & 3.08 & 39.9 & 0.96 & 2.61 & -- & -- & -- \\
 \quad w/o IM-TTA & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
 \quad w/o RA & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4 & 11.66 & 18.88 \\
 \quad w/o DA & 131.9 & 40.73 & 22.12 & 128.1 & 33.21 & 14.25 & 130.3 & 6.46 & 18.41 \\
