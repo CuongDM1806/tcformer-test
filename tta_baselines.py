@@ -14,6 +14,9 @@ BCI IV-2a 1 / 2, BCI IV-2b 1-3 / 4-5, Zhou2016 1-2 / 3.
   in recording order, as an unlabeled stream. Incremental EA, the online
   adaptation and the predictions use the EEG only; labels are read afterwards
   for scoring. Earlier target sessions are not used (test-time methods).
+  As an auxiliary diagnostic only, a second, independent online stream over
+  all target sessions in recording order (restarted from the source model) is
+  scored as well, like the all-sessions diagnostic of the other methods.
 * preprocessing (windows, Zhou2016 8-30 Hz filter) is the paper's per-dataset
   setting; EA replaces z-scoring, as in the authors' pipeline.
 * the T-TIME ensemble is SML: multiclass (one-vs-rest) for BCI IV-2a and
@@ -73,9 +76,12 @@ def fix_random_seed(seed):
 # Chronological split of each dataset, identical to its LOSO datamodule:
 # source training sessions / source validation (= target evaluation) sessions.
 DATASETS = {
-    "bcic2a": dict(module=BCICIV2a, train=[0], test=[1], label="SESSION 2"),
-    "bcic2b": dict(module=BCICIV2b, train=[0, 1, 2], test=[3, 4], label="SESSIONS 4-5"),
-    "zhou2016": dict(module=Zhou2016LOSO, train=[0, 1], test=[2], label="SESSION 3"),
+    "bcic2a": dict(module=BCICIV2a, train=[0], test=[1], label="SESSION 2",
+                   all_label="SESSIONS 1+2"),
+    "bcic2b": dict(module=BCICIV2b, train=[0, 1, 2], test=[3, 4], label="SESSIONS 4-5",
+                   all_label="SESSIONS 1-5"),
+    "zhou2016": dict(module=Zhou2016LOSO, train=[0, 1], test=[2], label="SESSION 3",
+                     all_label="ALL 3 SESSIONS"),
 }
 
 
@@ -249,6 +255,8 @@ def run(config, method, gpu_id, dataset_name="bcic2a"):
         subject_ids = module.all_subject_ids
     test_accs, test_losses, test_kappas = [], [], []
     train_times, test_times, response_times, confmats = [], [], [], []
+    all_accs, all_losses, all_kappas, all_test_times = [], [], [], []
+    all_label = split["all_label"]
 
     for target in subject_ids:
         print(f"\n>>> {model_name} | target subject {target}", flush=True)
@@ -267,14 +275,16 @@ def run(config, method, gpu_id, dataset_name="bcic2a"):
                 source_models.append(model)
             train_times.append((time.time() - st_train) / 60)
 
+            def adapt_stream(X):
+                preds = []
+                for seed, source_model in zip(seeds, source_models):
+                    fix_random_seed(seed)
+                    preds.append(TTIME(X, clone_model(source_model), args, device))
+                preds = np.stack(preds)           # (M, n_trials, n_classes)
+                return SML_online_ensemble(preds, args.class_num), preds.mean(0)
+
             st_test = time.time()
-            preds = []
-            for seed, source_model in zip(seeds, source_models):
-                fix_random_seed(seed)
-                preds.append(TTIME(X_stream, clone_model(source_model), args, device))
-            preds = np.stack(preds)               # (M, n_trials, n_classes)
-            y_hat = SML_online_ensemble(preds, args.class_num)
-            probs = preds.mean(0)
+            y_hat, probs = adapt_stream(X_stream)
             test_times.append(time.time() - st_test)
             param_count = sum(p.numel() for m in source_models for p in m.parameters())
             latency_model = EnsembleForward(source_models)
@@ -286,9 +296,12 @@ def run(config, method, gpu_id, dataset_name="bcic2a"):
             train_ranker(model[0], model[1], ranker, train_loader, args, device)
             train_times.append((time.time() - st_train) / 60)
 
+            def adapt_stream(X):
+                probs = BFT_func(X, clone_model(model), ranker, args, device)
+                return probs.argmax(1), probs
+
             st_test = time.time()
-            probs = BFT_func(X_stream, clone_model(model), ranker, args, device)
-            y_hat = probs.argmax(1)
+            y_hat, probs = adapt_stream(X_stream)
             test_times.append(time.time() - st_test)
             param_count = (sum(p.numel() for p in model.parameters())
                            + sum(p.numel() for p in ranker.parameters()))
@@ -296,6 +309,16 @@ def run(config, method, gpu_id, dataset_name="bcic2a"):
 
         acc = accuracy_score(y_true, y_hat)
         kappa = cohen_kappa_score(y_true, y_hat)
+
+        # Auxiliary diagnostic: a fresh online stream over every target session.
+        X_all, y_all = _concat(sessions[target], range(len(sessions[target])))
+        st_all = time.time()
+        y_hat_all, probs_all = adapt_stream(X_all)
+        all_test_times.append(time.time() - st_all)
+        all_accs.append(accuracy_score(y_all, y_hat_all))
+        all_kappas.append(cohen_kappa_score(y_all, y_hat_all))
+        all_losses.append(float(-np.mean(np.log(
+            probs_all[np.arange(len(y_all)), y_all] + 1e-12))))
         # Negative log-likelihood of the (averaged) online probabilities.
         loss = float(-np.mean(np.log(probs[np.arange(len(y_true)), y_true] + 1e-12)))
         test_accs.append(acc)
@@ -312,12 +335,16 @@ def run(config, method, gpu_id, dataset_name="bcic2a"):
             latency_model, (1, 1, args.chn, args.time_sample_num), device="cpu"))
         latency_model.to(device)
         print(f"\nTARGET SUBJECT {target} {split['label']} RESULT | acc={acc * 100:.2f}% | "
-              f"loss={loss:.4f} | kappa={kappa:.4f} | test_time={test_times[-1]:.2f}s\n",
+              f"loss={loss:.4f} | kappa={kappa:.4f} | test_time={test_times[-1]:.2f}s | "
+              f"{all_label} acc={all_accs[-1] * 100:.2f}%\n",
               flush=True)
 
     write_summary(result_dir, model_name, f"{dataset_name}_loso", list(subject_ids), param_count,
                   test_accs, test_losses, test_kappas, train_times, test_times,
-                  response_times, primary_test_label=split["label"])
+                  response_times,
+                  all_sessions_accs=all_accs, all_sessions_losses=all_losses,
+                  all_sessions_kappas=all_kappas, all_sessions_test_times=all_test_times,
+                  all_sessions_test_label=all_label, primary_test_label=split["label"])
     plot_confusion_matrix(
         np.mean(confmats, axis=0), save_path=result_dir / "confmats/avg_confusion_matrix.png",
         class_names=module.class_names, title="Average Confusion Matrix",
