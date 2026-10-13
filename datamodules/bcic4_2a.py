@@ -260,6 +260,23 @@ class BCICIV2aLOSO(BCICIV2a):
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
+        checkpoint_selection = self.preprocessing_dict.get(
+            "checkpoint_selection", "source_val"
+        )
+        if checkpoint_selection == "target_test":
+            # Upper-bound diagnostic only: the labeled target test session
+            # replaces source validation, so checkpoint selection uses test labels.
+            print(
+                f"WARNING: LOSO target {self.subject_id} selects the checkpoint "
+                "by target test-session accuracy (optimistic upper bound).",
+                flush=True,
+            )
+            self.val_dataset = self.test_dataset
+        elif checkpoint_selection != "source_val":
+            raise ValueError(
+                "checkpoint_selection must be 'source_val' or 'target_test', "
+                f"got {checkpoint_selection!r}"
+            )
         # The all-sessions diagnostic would count Session 2 twice when it is
         # also the adaptation session, so it is skipped in that protocol.
         self.all_target_dataset = None if transductive else BaseDataModule._make_tensor_dataset(

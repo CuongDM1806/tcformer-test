@@ -129,8 +129,9 @@ def train_and_test(config):
         trainer.fit(model, datamodule=datamodule)
         train_times.append((time.time() - st_train) / 60) # minutes
 
-        # Select the epoch using labeled source validation only. The held-out
-        # target labels are never consulted for checkpoint selection.
+        # Select the epoch by the validation set: labeled source validation by
+        # default, or the labeled target test session when the datamodule is
+        # configured with checkpoint_selection: target_test (upper bound).
         if not best_checkpoint.best_model_path:
             raise RuntimeError(
                 f"No best validation checkpoint was produced for subject {subject_id}."
@@ -142,8 +143,13 @@ def train_and_test(config):
         )
         model.load_state_dict(checkpoint["state_dict"])
         best_val_acc = float(best_checkpoint.best_model_score)
+        selection_name = (
+            "target-test"
+            if config["preprocessing"].get("checkpoint_selection") == "target_test"
+            else "source-validation"
+        )
         print(
-            f"Loaded best source-validation checkpoint | "
+            f"Loaded best {selection_name} checkpoint | "
             f"subject={subject_id} | val_acc={best_val_acc * 100:.2f}% | "
             f"path={best_checkpoint.best_model_path}",
             flush=True,

@@ -27,6 +27,9 @@ preprocessing:
     # reference: "train" (session T, chronological) or "test" (session E,
     # transductive; the test session itself is the adaptation domain).
     target_adaptation_session: train
+    # Checkpoint selection: "source_val" (source subjects' session E) or
+    # "target_test" (target test labels; optimistic upper bound only).
+    checkpoint_selection: source_val
   bcic2b:
     sfreq: 250
     low_cut: null
