@@ -361,8 +361,8 @@ Table~\ref{tab:results_2b} reports the completed binary left- versus right-hand 
 \multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
  & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
+\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 75.00 & 65.00 & 59.69 & 93.44 & 94.69 & 79.06 & 88.12 & 94.37 & 81.25 & $81.18\pm12.12$ & 0.0313 \\
+ & $\kappa$ & 50.00 & 30.00 & 19.37 & 86.88 & 89.38 & 58.13 & 76.25 & 88.75 & 62.50 & $62.40\pm24.20$ &  \\
 \addlinespace[2pt]
 \multirow{2}{*}{\shortstack[l]{SSM-DAN without\\test-time adaptation}} & Acc. & 78.44 & 70.71 & 63.44 & 90.31 & 97.81 & 83.75 & 89.69 & 95.63 & 85.94 & $83.97\pm10.71$ & 1.0000 \\
  & $\kappa$ & 56.88 & 41.43 & 26.88 & 80.62 & 95.63 & 67.50 & 79.37 & 91.25 & 71.88 & $67.90\pm21.40$ &  \\
@@ -374,7 +374,7 @@ Table~\ref{tab:results_2b} reports the completed binary left- versus right-hand 
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN achieved $84.09\pm10.42\%$ accuracy and $68.20\pm20.80$ Cohen's $\kappa$, compared with $80.54\pm10.05\%$ for its source-only variant and $83.97\pm10.71\%$ for its variant without test-time adaptation. SSM-DAN was 0.12 percentage points higher than the variant without test-time adaptation on average, but the paired difference was not significant ($p=1.0000$). It significantly outperformed the source-only variant ($p=0.0156$), and IM-TTA improved three of the nine target folds. SSM-DAN significantly exceeded ATCNet ($79.38\pm11.40\%$; $\kappa=58.80\pm22.80$; $p=0.0078$), which it outperformed on eight targets and tied on the ninth, and EEG Conformer ($78.03\pm12.02\%$; $\kappa=56.10\pm24.00$; $p=0.0156$), which it outperformed on eight of the nine targets. It also exceeded the matched TCFormer ($81.18\pm9.37\%$; $\kappa=62.40\pm18.70$), EEGEncoder ($81.02\pm11.76\%$; $\kappa=62.00\pm23.50$), and SATrans-Net ($81.76\pm8.78\%$; $\kappa=63.50\pm17.60$) baselines on average, on six, six, and five of the nine targets, respectively, although none of these differences was significant ($p=0.0820$, $0.0547$, and $0.2109$).
+SSM-DAN achieved $84.09\pm10.42\%$ accuracy and $68.20\pm20.80$ Cohen's $\kappa$, compared with $80.54\pm10.05\%$ for its source-only variant and $83.97\pm10.71\%$ for its variant without test-time adaptation. SSM-DAN was 0.12 percentage points higher than the variant without test-time adaptation on average, but the paired difference was not significant ($p=1.0000$). It significantly outperformed the source-only variant ($p=0.0156$), and IM-TTA improved three of the nine target folds. SSM-DAN significantly exceeded ATCNet ($79.38\pm11.40\%$; $\kappa=58.80\pm22.80$; $p=0.0078$), which it outperformed on eight targets and tied on the ninth, and EEG Conformer ($78.03\pm12.02\%$; $\kappa=56.10\pm24.00$; $p=0.0156$), which it outperformed on eight of the nine targets. It also exceeded the matched TCFormer ($81.18\pm9.37\%$; $\kappa=62.40\pm18.70$), EEGEncoder ($81.02\pm11.76\%$; $\kappa=62.00\pm23.50$), and SATrans-Net ($81.76\pm8.78\%$; $\kappa=63.50\pm17.60$) baselines on average, on six, six, and five of the nine targets, respectively, although none of these differences was significant ($p=0.0820$, $0.0547$, and $0.2109$). Among the label-free target-adaptation baselines, SSM-DAN also significantly exceeded BFT ($81.18\pm12.12\%$; $\kappa=62.40\pm24.20$; $p=0.0313$), which it outperformed on eight of the nine targets.
 
 \subsection{Zhou2016}
 \label{subsec:results_zhou}
@@ -495,7 +495,7 @@ SSM-DAN (source-only) & 98.4 & 47.01 & 25.08 & 94.6 & 36.10 & 13.68 & 96.8 & 6.2
 \midrule
 \multicolumn{10}{l}{\textit{Label-free target adaptation}} \\
 T-TIME & 9.5 & 5.85 & 7.71 & -- & -- & -- & -- & -- & -- \\
-BFT & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+BFT & -- & -- & -- & 39.9 & 0.96 & 2.61 & -- & -- & -- \\
 \quad w/o IM-TTA & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
 \quad w/o RA & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4 & 11.66 & 18.88 \\
 \quad w/o DA & 131.9 & 40.73 & 22.12 & 128.1 & 33.21 & 14.25 & 130.3 & 6.46 & 18.41 \\
