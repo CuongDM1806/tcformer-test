@@ -319,14 +319,14 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
  & $\kappa$ & 72.22 & 30.09 & 90.28 & 64.81 & 43.52 & 46.30 & 76.39 & 76.85 & 65.28 & $62.90\pm18.10$ &  \\
 \midrule
 \multicolumn{13}{l}{\textit{Test-time adaptation (unlabeled target session~2 at inference)}} \\
-\multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & 67.01 & 53.47 & 78.47 & 64.58 & 68.75 & 49.65 & 79.51 & 69.44 & 65.28 & $66.24\pm9.34$ & -- \\
+\multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & 67.01 & 53.47 & 78.47 & 64.58 & 68.75 & 49.65 & 79.51 & 69.44 & 65.28 & $66.24\pm9.34$ & 0.0742 \\
  & $\kappa$ & 56.02 & 37.96 & 71.30 & 52.78 & 58.33 & 32.87 & 72.69 & 59.26 & 53.70 & $55.00\pm12.50$ &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 64.24 & 44.44 & 76.74 & 65.62 & 61.81 & 51.39 & 73.61 & 70.49 & 59.38 & $63.08\pm9.77$ & -- \\
+\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 64.24 & 44.44 & 76.74 & 65.62 & 61.81 & 51.39 & 73.61 & 70.49 & 59.38 & $63.08\pm9.77$ & 0.0039 \\
  & $\kappa$ & 52.31 & 25.93 & 68.98 & 54.17 & 49.07 & 35.19 & 64.81 & 60.65 & 45.83 & $50.80\pm13.00$ &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN without\\domain adaptation}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & $71.37\pm11.78$ & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & $61.80\pm15.70$ &  \\
+\multirow{2}{*}{\shortstack[l]{SSM-DAN without\\domain adaptation}} & Acc. & 77.43 & 47.92 & 88.19 & 66.32 & 64.24 & 61.81 & 79.86 & 82.99 & 73.61 & $71.37\pm11.78$ & 0.0039 \\
+ & $\kappa$ & 69.91 & 30.56 & 84.26 & 55.09 & 52.31 & 49.07 & 73.15 & 77.31 & 64.81 & $61.80\pm15.70$ &  \\
 \midrule
 \multirow{2}{*}{\shortstack[l]{\textbf{SSM-DAN}}} & Acc. & \textbf{79.51} & \textbf{52.43} & \textbf{93.40} & \textbf{73.96} & \textbf{69.44} & \textbf{65.97} & \textbf{88.89} & \textbf{86.11} & \textbf{75.35} & $\mathbf{76.12\pm11.96}$ & -- \\
  & $\kappa$ & \textbf{72.69} & \textbf{36.57} & \textbf{91.20} & \textbf{65.28} & \textbf{59.26} & \textbf{54.63} & \textbf{85.19} & \textbf{81.48} & \textbf{67.13} & $\mathbf{68.20\pm15.90}$ &  \\
@@ -335,7 +335,7 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN achieved $76.12\pm11.96\%$ accuracy and $68.20\pm15.90$ Cohen's $\kappa$, outperforming its source-only variant ($64.35\pm12.77\%$) and its variant without test-time adaptation ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ for each comparison); IM-TTA improved all nine target folds. SSM-DAN also exceeded the matched EEG Conformer ($55.25\pm13.39\%$; $\kappa=40.30\pm17.90$), ATCNet ($57.02\pm12.74\%$; $\kappa=42.70\pm17.00$), TCFormer ($60.80\pm11.49\%$; $\kappa=47.70\pm15.30$), EEGEncoder ($58.06\pm12.55\%$; $\kappa=44.10\pm16.70$), and SATrans-Net ($62.00\pm10.34\%$; $\kappa=49.30\pm13.80$) baselines on all nine targets ($p=0.0039$ for each). The UDA baselines CLUDA, RMETNet, and MSD-DDA use the unlabeled target session~1 during training and no test-time adaptation, so they are compared with SSM-DAN without test-time adaptation ($72.15\pm13.58\%$). The test-time adaptation baselines use no target data during training and are compared with SSM-DAN without domain adaptation, which reached $71.37\pm11.78\%$ ($\kappa=61.80\pm15.70$): T-TIME reached $66.24\pm9.34\%$ ($\kappa=55.00\pm12.50$) and BFT $63.08\pm9.77\%$ ($\kappa=50.80\pm13.00$), $5.13$ and $8.29$ percentage points lower on average. As an auxiliary diagnostic only, the variant without test-time adaptation obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
+SSM-DAN achieved $76.12\pm11.96\%$ accuracy and $68.20\pm15.90$ Cohen's $\kappa$, outperforming its source-only variant ($64.35\pm12.77\%$) and its variant without test-time adaptation ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ for each comparison); IM-TTA improved all nine target folds. SSM-DAN also exceeded the matched EEG Conformer ($55.25\pm13.39\%$; $\kappa=40.30\pm17.90$), ATCNet ($57.02\pm12.74\%$; $\kappa=42.70\pm17.00$), TCFormer ($60.80\pm11.49\%$; $\kappa=47.70\pm15.30$), EEGEncoder ($58.06\pm12.55\%$; $\kappa=44.10\pm16.70$), and SATrans-Net ($62.00\pm10.34\%$; $\kappa=49.30\pm13.80$) baselines on all nine targets ($p=0.0039$ for each). The UDA baselines CLUDA, RMETNet, and MSD-DDA use the unlabeled target session~1 during training and no test-time adaptation, so they are compared with SSM-DAN without test-time adaptation ($72.15\pm13.58\%$). The test-time adaptation baselines use no target data during training and are compared with SSM-DAN without domain adaptation, which reached $71.37\pm11.78\%$ ($\kappa=61.80\pm15.70$): T-TIME reached $66.24\pm9.34\%$ ($\kappa=55.00\pm12.50$) and BFT $63.08\pm9.77\%$ ($\kappa=50.80\pm13.00$), $5.13$ and $8.29$ percentage points lower on average. The reference exceeded T-TIME on seven of the nine targets ($p=0.0742$) and BFT on all nine ($p=0.0039$). As an auxiliary diagnostic only, the variant without test-time adaptation obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
 
 
 \subsection{BCI Competition IV-2b}
