@@ -28,6 +28,10 @@ preprocessing:
 
 rmetnet:
   epochs: 1000
+  # Per-dataset override: 500 epochs on BCI IV-2a, as reported in the paper
+  # (the released script defaults to 1000).
+  epochs_by_dataset:
+    bcic2a: 500
   batch_size: 64
   lr: 0.0002
   betas: [0.5, 0.999]

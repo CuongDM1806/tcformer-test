@@ -175,10 +175,13 @@ def run(config, gpu_id, dataset_name="bcic2a"):
     split = DATASETS[dataset_name]
     module = split["module"]
     preprocessing = config["preprocessing"][dataset_name]
+    hp = dict(config["rmetnet"])
+    hp["epochs"] = hp.pop("epochs_by_dataset", {}).get(dataset_name, hp["epochs"])
     args = argparse.Namespace(
         chn=module.channels, class_num=module.classes, sample_rate=preprocessing["sfreq"],
-        seed=config["seed"], log_every=config.get("log_every_n_epochs", 0), **config["rmetnet"],
+        seed=config["seed"], log_every=config.get("log_every_n_epochs", 0), **hp,
     )
+    print(f"RMETNet | {dataset_name} | {args.epochs} epochs", flush=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     result_dir = (Path(__file__).resolve().parent /
