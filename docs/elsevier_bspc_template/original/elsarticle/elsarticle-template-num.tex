@@ -379,8 +379,8 @@ Table~\ref{tab:results_2b} reports the completed binary left- versus right-hand 
 \multirow{2}{*}{\shortstack[l]{CLUDA~\cite{ozyurt2023cluda}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
  & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{RMETNet~\cite{zhao2026rmetnet}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
+\multirow{2}{*}{\shortstack[l]{RMETNet~\cite{zhao2026rmetnet}}} & Acc. & 73.12 & 57.86 & 55.00 & 91.56 & 94.06 & 82.81 & 85.62 & 88.75 & 83.13 & $79.10\pm13.39$ & 0.0117 \\
+ & $\kappa$ & 46.25 & 15.71 & 10.00 & 83.13 & 88.12 & 65.62 & 71.25 & 77.50 & 66.25 & $58.20\pm26.80$ &  \\
 \addlinespace[2pt]
 \multirow{2}{*}{\shortstack[l]{MSD-DDA~\cite{gong2026msdda}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
  & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
@@ -405,7 +405,7 @@ Table~\ref{tab:results_2b} reports the completed binary left- versus right-hand 
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN achieved $84.09\pm10.42\%$ accuracy and $68.20\pm20.80$ Cohen's $\kappa$, compared with $80.54\pm10.05\%$ for its source-only variant and $83.97\pm10.71\%$ for its variant without test-time adaptation. SSM-DAN was 0.12 percentage points higher than the variant without test-time adaptation on average, but the paired difference was not significant ($p=1.0000$). It significantly outperformed the source-only variant ($p=0.0156$), and IM-TTA improved three of the nine target folds. SSM-DAN significantly exceeded ATCNet ($79.38\pm11.40\%$; $\kappa=58.80\pm22.80$; $p=0.0078$), which it outperformed on eight targets and tied on the ninth, and EEG Conformer ($78.03\pm12.02\%$; $\kappa=56.10\pm24.00$; $p=0.0156$), which it outperformed on eight of the nine targets. It also exceeded the matched TCFormer ($81.18\pm9.37\%$; $\kappa=62.40\pm18.70$), EEGEncoder ($81.02\pm11.76\%$; $\kappa=62.00\pm23.50$), and SATrans-Net ($81.76\pm8.78\%$; $\kappa=63.50\pm17.60$) baselines on average, on six, six, and five of the nine targets, respectively, although none of these differences was significant ($p=0.0820$, $0.0547$, and $0.2109$). The UDA baselines are compared with SSM-DAN without test-time adaptation ($83.97\pm10.71\%$). Among the test-time adaptation baselines, BFT reached $81.18\pm12.12\%$ ($\kappa=62.40\pm24.20$), $2.17$ percentage points below its matched reference, SSM-DAN without domain adaptation ($83.35\pm10.50\%$; $\kappa=66.70\pm21.00$).
+SSM-DAN achieved $84.09\pm10.42\%$ accuracy and $68.20\pm20.80$ Cohen's $\kappa$, compared with $80.54\pm10.05\%$ for its source-only variant and $83.97\pm10.71\%$ for its variant without test-time adaptation. SSM-DAN was 0.12 percentage points higher than the variant without test-time adaptation on average, but the paired difference was not significant ($p=1.0000$). It significantly outperformed the source-only variant ($p=0.0156$), and IM-TTA improved three of the nine target folds. SSM-DAN significantly exceeded ATCNet ($79.38\pm11.40\%$; $\kappa=58.80\pm22.80$; $p=0.0078$), which it outperformed on eight targets and tied on the ninth, and EEG Conformer ($78.03\pm12.02\%$; $\kappa=56.10\pm24.00$; $p=0.0156$), which it outperformed on eight of the nine targets. It also exceeded the matched TCFormer ($81.18\pm9.37\%$; $\kappa=62.40\pm18.70$), EEGEncoder ($81.02\pm11.76\%$; $\kappa=62.00\pm23.50$), and SATrans-Net ($81.76\pm8.78\%$; $\kappa=63.50\pm17.60$) baselines on average, on six, six, and five of the nine targets, respectively, although none of these differences was significant ($p=0.0820$, $0.0547$, and $0.2109$). The UDA baselines are compared with SSM-DAN without test-time adaptation ($83.97\pm10.71\%$), which significantly exceeded RMETNet ($79.10\pm13.39\%$; $\kappa=58.20\pm26.80$; $p=0.0117$) and outperformed it on eight of the nine targets. Among the test-time adaptation baselines, BFT reached $81.18\pm12.12\%$ ($\kappa=62.40\pm24.20$), $2.17$ percentage points below its matched reference, SSM-DAN without domain adaptation ($83.35\pm10.50\%$; $\kappa=66.70\pm21.00$).
 
 \subsection{Zhou2016}
 \label{subsec:results_zhou}
@@ -539,7 +539,7 @@ SSM-DAN (source-only) & 98.4 & 47.01 & 25.08 & 94.6 & 36.10 & 13.68 & 96.8 & 6.2
 \midrule
 \multicolumn{10}{l}{\textit{Unsupervised domain adaptation}} \\
 CLUDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
-RMETNet & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+RMETNet & -- & -- & -- & 159.1 & 21.96 & 4.90 & -- & -- & -- \\
 MSD-DDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
 \quad w/o IM-TTA & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
 \midrule
