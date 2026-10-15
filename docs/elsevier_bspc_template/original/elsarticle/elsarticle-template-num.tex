@@ -128,11 +128,11 @@ The state-space output is reduced to 16 channels and concatenated with the 48-ch
 \subsection{Riemannian signal alignment}
 \label{subsec:ra}
 
-Different subjects produce EEG covariance structures that are shifted relative to one another. In Riemannian alignment (RA), each subject's trials are therefore whitened by the inverse square root of that subject's mean covariance $\bar{R}$, computed as the affine-invariant Riemannian mean of the OAS-shrunk trial covariances \cite{zanini2018riemannian,he2020euclidean}:
+Because EEG covariance structures are shifted between subjects, Riemannian alignment (RA) whitens each subject's trials by the inverse square root of that subject's mean covariance $\bar{R}$, the affine-invariant Riemannian mean of the OAS-shrunk trial covariances \cite{zanini2018riemannian,he2020euclidean}:
 \begin{equation}
     \widetilde{X}=\bar{R}^{-1/2}X.
 \end{equation}
-To avoid leakage, $\bar{R}$ is estimated only from data available before evaluation. For a source subject, it is computed from the training sessions and applied to the validation sessions. For the target subject, it is computed from the earlier, unlabeled sessions $\mathcal{T}_a$ and applied unchanged to the later sessions $\mathcal{T}_e$ used for evaluation.
+To avoid leakage, $\bar{R}$ is estimated only from data available before evaluation and then applied unchanged: from the training sessions for the validation sessions of each source subject, and from the unlabeled earlier sessions $\mathcal{T}_a$ for the evaluation sessions $\mathcal{T}_e$ of the target subject.
 
 \subsection{Automatic domain alignment layer}
 \label{subsec:autodial}
