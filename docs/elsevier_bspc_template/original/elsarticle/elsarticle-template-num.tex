@@ -152,24 +152,24 @@ with shared affine parameters $\gamma$ and $\beta$. The mixing weight $\alpha\in
 \subsection{Training objective}
 \label{subsec:uda}
 
-A residual $64\!\rightarrow\!128\!\rightarrow\!64$ aligner maps the normalized representation to the space used by the classifier and the alignment losses. The source cross-entropy $\mathcal{L}_{\mathrm{cls}}$ is the only labeled term. A domain discriminator trained through gradient reversal \cite{ganin2016dann} provides $\mathcal{L}_{\mathrm{adv}}$, whose weight rises smoothly from zero to one during training, and a five-kernel MK-MMD \cite{long2015dan} reduces the distance between source and target features, both for trial representations ($\mathcal{L}_{\mathrm{mmd}}$) and for time-averaged TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$). Finally, the target predictions are encouraged to be confident and class-balanced by the information-maximization loss \cite{liang2020shot}
+A residual $64\!\rightarrow\!128\!\rightarrow\!64$ aligner maps the normalized representation into the space used by the classifier and the alignment losses. Besides the source cross-entropy $\mathcal{L}_{\mathrm{cls}}$, the only labeled term, a gradient-reversal domain discriminator \cite{ganin2016dann} gives $\mathcal{L}_{\mathrm{adv}}$, with a weight ramped from zero to one, and a five-kernel MK-MMD \cite{long2015dan} aligns source and target trial representations ($\mathcal{L}_{\mathrm{mmd}}$) and time-averaged TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$). Target predictions are made confident and class-balanced by the information-maximization loss \cite{liang2020shot}
 \begin{equation}
     \mathcal{L}_{\mathrm{IM}}
     =\frac{1}{N}\sum_{j=1}^{N} H(p_j)-H\!\left(\frac{1}{N}\sum_{j=1}^{N}p_j\right),
 \label{eq:im}
 \end{equation}
-where $p_j$ is the predicted class distribution of the $j$-th of $N$ unlabeled trials and $H(\cdot)$ is the entropy; the first term rewards confident predictions and the second prevents all trials from being assigned to one class. Applied to a target mini-batch, it gives $\mathcal{L}_{\mathrm{IM}}^{t}$, and the training objective is
+where $p_j$ is the predicted class distribution of the $j$-th of $N$ unlabeled trials and $H(\cdot)$ the entropy. With $\mathcal{L}_{\mathrm{IM}}^{t}$ computed on a target mini-batch, the objective is
 \begin{equation}
     \mathcal{L}=\mathcal{L}_{\mathrm{cls}}+0.1\mathcal{L}_{\mathrm{IM}}^{t}+\mathcal{L}_{\mathrm{adv}}
     +0.5\mathcal{L}_{\mathrm{mmd}}+0.1\mathcal{L}_{\mathrm{tmmd}}.
 \label{eq:total_loss}
 \end{equation}
-The target trials in this stage come only from $\mathcal{T}_a$. The alignment losses see the AutoDIAL output with $\alpha$ held fixed, since they could otherwise be reduced trivially by setting $\alpha$ to one; $\alpha$ is therefore learned only through $\mathcal{L}_{\mathrm{IM}}^{t}$, toward the normalization that yields confident yet class-diverse target predictions.
+Target trials in this stage come only from $\mathcal{T}_a$. The alignment losses see the AutoDIAL output with $\alpha$ fixed, since they could otherwise be minimized trivially by $\alpha\rightarrow1$; $\alpha$ is thus learned only through $\mathcal{L}_{\mathrm{IM}}^{t}$.
 
 \subsection{Test-time adaptation}
 \label{subsec:imtta}
 
-After training, the checkpoint with the highest source-validation accuracy is adapted to the evaluation trials $\mathcal{T}_e$ without their labels by information-maximization test-time adaptation (IM-TTA). All parameters except the BatchNorm scales and shifts are frozen, and Eq.~\eqref{eq:im} is minimized over $\mathcal{T}_e$ for five Adam passes with learning rate $10^{-4}$; restricting the update to normalization parameters limits the risk of overfitting a small target set \cite{wang2021tent}. Because this changes the backbone features, the AutoDIAL target moments $(\mu_t,\sigma_t^2)$ are then re-estimated in one pass over the same trials, while $\alpha$ and the source moments remain fixed. The labels of $\mathcal{T}_e$ are used only to score the final predictions.
+The checkpoint with the highest source-validation accuracy is adapted to the unlabeled evaluation trials $\mathcal{T}_e$ by information-maximization test-time adaptation (IM-TTA): only the BatchNorm scales and shifts are updated, which limits overfitting to a small target set \cite{wang2021tent}, by minimizing Eq.~\eqref{eq:im} over $\mathcal{T}_e$ for five Adam passes (learning rate $10^{-4}$). The AutoDIAL target moments are then re-estimated in one pass over the same trials, with $\alpha$ and the source moments fixed. The labels of $\mathcal{T}_e$ are used only for scoring.
 
 \section{Experimental Setup}
 \label{sec:experiments}
