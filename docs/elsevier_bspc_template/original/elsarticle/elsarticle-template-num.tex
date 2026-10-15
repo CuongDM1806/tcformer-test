@@ -426,8 +426,8 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
  & & S1 & S2 & S3 & S4 & & \\
 \midrule
 \multicolumn{8}{l}{\textit{Source-only training}} \\
-\multirow{2}{*}{\shortstack[l]{Conformer~\cite{song2023eegconformer}}} & Acc. & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- &  \\
+\multirow{2}{*}{\shortstack[l]{Conformer~\cite{song2023eegconformer}}} & Acc. & 76.00 & 79.33 & 70.67 & 82.67 & $77.17\pm4.43$ & 0.1250 \\
+ & $\kappa$ & 64.00 & 69.00 & 56.00 & 74.00 & $65.75\pm6.65$ &  \\
 \addlinespace[2pt]
 \multirow{2}{*}{\shortstack[l]{ATCNet~\cite{altaheri2023atcnet}}} & Acc. & 72.00 & 82.67 & 76.67 & 74.67 & $76.50\pm3.93$ & 0.1250 \\
  & $\kappa$ & 58.00 & 74.00 & 65.00 & 62.00 & $64.80\pm5.90$ &  \\
@@ -458,23 +458,23 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
  & $\kappa$ & 69.00 & 77.00 & $\mathbf{81.00}$ & 67.00 & $73.50\pm5.70$ &  \\
 \midrule
 \multicolumn{8}{l}{\textit{Test-time adaptation}} \\
-\multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- &  \\
+\multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & $\mathbf{88.67}$ & 84.00 & 81.33 & $\mathbf{86.00}$ & $\mathbf{85.00\pm2.69}$ & 0.5000 \\
+ & $\kappa$ & $\mathbf{83.00}$ & 76.00 & 72.00 & $\mathbf{79.00}$ & $\mathbf{77.50\pm4.03}$ &  \\
 \addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & $\mathbf{84.00}$ & $\mathbf{86.67}$ & 76.00 & 84.67 & $82.83\pm4.07$ & 0.8750 \\
- & $\kappa$ & $\mathbf{76.00}$ & $\mathbf{80.00}$ & 64.00 & 77.00 & $74.30\pm6.10$ &  \\
+\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 84.00 & $\mathbf{86.67}$ & 76.00 & 84.67 & $82.83\pm4.07$ & 0.8750 \\
+ & $\kappa$ & 76.00 & $\mathbf{80.00}$ & 64.00 & 77.00 & $74.30\pm6.10$ &  \\
 \addlinespace[2pt]
 \multirow{2}{*}{\shortstack[l]{SSM-DAN\\(IM-TTA)}} & Acc. & 79.33 & 84.00 & 83.33 & 83.33 & $82.50\pm1.85$ & 0.2500 \\
  & $\kappa$ & 69.00 & 76.00 & 75.00 & 75.00 & $73.75\pm2.77$ &  \\
 \midrule
-\multirow{2}{*}{\shortstack[l]{\textbf{SSM-DAN}}} & Acc. & $\mathbf{84.00}$ & 83.33 & 84.67 & $\mathbf{85.33}$ & $\mathbf{84.33\pm0.75}$ & -- \\
- & $\kappa$ & $\mathbf{76.00}$ & 75.00 & 77.00 & $\mathbf{78.00}$ & $\mathbf{76.50\pm1.12}$ &  \\
+\multirow{2}{*}{\shortstack[l]{\textbf{SSM-DAN}}} & Acc. & 84.00 & 83.33 & 84.67 & 85.33 & $84.33\pm0.75$ & -- \\
+ & $\kappa$ & 76.00 & 75.00 & 77.00 & 78.00 & $76.50\pm1.12$ &  \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the highest mean and the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and its source-only variant ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). It also exceeded ATCNet ($76.50\pm3.93\%$; $\kappa=64.80\pm5.90$) on all four targets ($p=0.1250$), SATrans-Net ($74.67\pm6.09\%$; $\kappa=62.00\pm9.14$) on all four targets ($p=0.1250$), and EEGEncoder ($74.33\pm7.92\%$; $\kappa=61.50\pm11.90$) on three of the four targets ($p=0.2500$). SSM-DAN (Stage~1 UDA), which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$) and is the matched reference of the UDA baselines; SSM-DAN (IM-TTA; $82.50\pm1.85\%$; $\kappa=73.75\pm2.77$) is the matched reference of the test-time adaptation baselines. BFT reached $82.83\pm4.07\%$ ($\kappa=74.30\pm6.10$), $0.33$ percentage points above this reference on average (higher on three of the four targets; $p=0.8750$), and obtained the highest accuracy on target~2 ($86.67\%$). As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for SSM-DAN and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
+SSM-DAN reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and its source-only variant ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). It also exceeded EEG Conformer ($77.17\pm4.43\%$; $\kappa=65.75\pm6.65$) on all four targets ($p=0.1250$), ATCNet ($76.50\pm3.93\%$; $\kappa=64.80\pm5.90$) on all four targets ($p=0.1250$), SATrans-Net ($74.67\pm6.09\%$; $\kappa=62.00\pm9.14$) on all four targets ($p=0.1250$), and EEGEncoder ($74.33\pm7.92\%$; $\kappa=61.50\pm11.90$) on three of the four targets ($p=0.2500$). SSM-DAN (Stage~1 UDA), which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$) and is the matched reference of the UDA baselines; SSM-DAN (IM-TTA; $82.50\pm1.85\%$; $\kappa=73.75\pm2.77$) is the matched reference of the test-time adaptation baselines. T-TIME reached $85.00\pm2.69\%$ ($\kappa=77.50\pm4.03$), the highest mean accuracy on this dataset and $2.50$ percentage points above this reference (higher on two targets, lower on one, and tied on one; $p=0.5000$), with the highest accuracy on targets~1 and~4 ($88.67\%$ and $86.00\%$). BFT reached $82.83\pm4.07\%$ ($\kappa=74.30\pm6.10$), $0.33$ percentage points above this reference on average (higher on three of the four targets; $p=0.8750$), and obtained the highest accuracy on target~2 ($86.67\%$). As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for SSM-DAN and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
 
 \subsection{Ablation study}
 \label{sec:ablation}
@@ -530,7 +530,7 @@ Method & Params & Train & CPU & Params & Train & CPU & Params & Train & CPU \\
  & (K) & (min) & (ms) & (K) & (min) & (ms) & (K) & (min) & (ms) \\
 \midrule
 \multicolumn{10}{l}{\textit{Source-only training}} \\
-Conformer & 789.6 & 11.14 & 11.45 & 759.1 & 4.93 & 9.34 & -- & -- & -- \\
+Conformer & 789.6 & 11.14 & 11.45 & 759.1 & 4.93 & 9.34 & 858.7 & 1.53 & 10.34 \\
 ATCNet & 113.7 & 48.58 & 13.33 & 112.8 & 60.19 & 11.35 & 113.3 & 8.09 & 11.91 \\
 TCFormer & 127.2 & 38.37 & 14.96 & 123.4 & 31.04 & 11.17 & 125.6 & 5.89 & 15.97 \\
 EEGEncoder & 197.2 & 13.49 & 26.51 & 196.2 & 14.98 & 26.88 & 196.8 & 3.64 & 25.68 \\
@@ -544,7 +544,7 @@ MSD-DDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
 SSM-DAN (Stage~1 UDA) & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
 \midrule
 \multicolumn{10}{l}{\textit{Test-time adaptation}} \\
-T-TIME & 9.5 & 5.85 & 7.71 & -- & -- & -- & -- & -- & -- \\
+T-TIME & 9.5 & 5.85 & 7.71 & -- & -- & -- & 8.4 & 1.34 & 6.72 \\
 BFT & 40.6 & 1.47 & 3.08 & 39.9 & 0.96 & 2.61 & 51.0 & 0.36 & 2.84 \\
 SSM-DAN (IM-TTA) & 131.9 & 40.73 & 22.12 & 128.1 & 33.21 & 14.25 & 130.3 & 6.46 & 18.41 \\
 \midrule
@@ -558,7 +558,7 @@ SSM-DAN\newline (w/o RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4
 \section{Discussion}
 \label{sec:discussion}
 
-The results show that adaptation is dataset dependent. SSM-DAN was best on all three datasets, although on BCI IV-2b its margin over the variant without test-time adaptation was only 0.12 percentage points and all variants were statistically indistinguishable. On Zhou2016, SSM-DAN also had the lowest variability across targets, but its margins over the variants without Riemannian alignment, test-time adaptation, or Stage~1 domain adaptation were small and cannot be significant with four folds. Filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients; repeated-seed experiments are still required to establish the stability of these differences.
+The results show that adaptation is dataset dependent. Among its variants, SSM-DAN was best on all three datasets, although on BCI IV-2b its margin over the variant without test-time adaptation was only 0.12 percentage points and all variants were statistically indistinguishable. On Zhou2016, SSM-DAN also had the lowest variability across targets, but its margins over the variants without Riemannian alignment, test-time adaptation, or Stage~1 domain adaptation were small and cannot be significant with four folds. Filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients; repeated-seed experiments are still required to establish the stability of these differences.
 
 Architecturally, multi-scale and depthwise convolutions preserve local spectral--spatial evidence, while alternating selective scans and the TCN model complementary long- and short-range dynamics. The alternating scans exploit complete offline trials and are non-causal; online use would require forward-only processing and device-specific latency validation.
 
