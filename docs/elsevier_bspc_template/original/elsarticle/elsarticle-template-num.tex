@@ -177,7 +177,7 @@ After training, the checkpoint with the highest source-validation accuracy is ad
 \subsection{Datasets}
 \label{sec:datasets}
 
-Three public MI-EEG datasets with different numbers of electrodes, classes, subjects, and sessions are used (Table~\ref{tab:datasets}). All are accessed through MOABB/Braindecode, which provides a common representation of subjects, sessions, runs, and event windows \cite{jayaram2018moabb}.
+Three public MI-EEG datasets, accessed through MOABB/Braindecode \cite{jayaram2018moabb}, are used (Table~\ref{tab:datasets}).
 
 \begin{table*}[!htbp]
 \centering
@@ -202,22 +202,22 @@ Zhou2016  & 4 & 1/3           & 14 & 3 & left hand, right hand, feet \\
 \subsubsection{BCI Competition IV-2a}
 \label{subsec:bcic2a}
 
-The dataset contains nine participants recorded in two sessions on different days; each session has 288 trials distributed equally over imagined left-hand, right-hand, both-feet, and tongue movements. EEG was recorded from 22 electrodes (three additional EOG channels are not used) at 250~Hz with hardware band-pass filtering at 0.5--100~Hz and a 50-Hz notch \cite{tangermann2012review}. The two sessions are denoted session~1 and session~2. Participant sex and age are not reported.
+Nine participants were recorded in two sessions on different days, each with 288 trials of left-hand, right-hand, both-feet, and tongue imagery, from 22 EEG electrodes at 250~Hz (0.5--100~Hz band-pass, 50-Hz notch; the three EOG channels are not used) \cite{tangermann2012review}. Participant sex and age are not reported.
 
 \subsubsection{BCI Competition IV-2b}
 \label{subsec:bcic2b}
 
-The dataset contains two-class left- versus right-hand MI from nine right-handed participants with normal or corrected-to-normal vision, drawn from a study of ten participants (six male, four female; age $24.7\pm3.3$ years) \cite{leeb2007virtual}; the sex of the nine released participants is not reported individually. Three bipolar derivations around C3, Cz, and C4 (three EOG channels are not used) were sampled at 250~Hz. Sessions 1--3 form the original calibration portion and sessions 4--5 the evaluation portion \cite{tangermann2012review}, a chronological separation that is kept here. The dataset tests whether the method remains useful with only three electrodes.
+Nine right-handed participants, drawn from a study of ten (six male, four female; $24.7\pm3.3$ years) \cite{leeb2007virtual}, performed left- versus right-hand imagery recorded from three bipolar derivations around C3, Cz, and C4 at 250~Hz (the three EOG channels are not used). Sessions 1--3 form the calibration portion and sessions 4--5 the evaluation portion \cite{tangermann2012review}; this chronological split is kept, and the dataset tests whether the method remains useful with only three electrodes.
 
 \subsubsection{Zhou2016}
 \label{subsec:zhou2016}
 
-The dataset contains four healthy participants (one male and three female, aged 22--28 years; sex reported only at group level), each recorded in three sessions separated by days to months \cite{zhou2016trialselection}. Each session has two runs of 75 trials (25 per class: left hand, right hand, and feet), recorded from 14 electrodes at 250~Hz. Each trial contains a 5-s cue period, during which the imagery is performed, followed by a 4-s rest.
+Four healthy participants (one male, three female; 22--28 years; sex reported only at group level) were each recorded in three sessions separated by days to months \cite{zhou2016trialselection}. Each session has two runs of 75 trials (25 per class: left hand, right hand, feet) from 14 electrodes at 250~Hz; each trial has a 5-s imagery cue followed by a 4-s rest.
 
 \subsection{Chronological LOSO protocol with test-time adaptation}
 \label{subsec:clean_protocol}
 
-One subject is held out in each LOSO fold. All remaining subjects are sources; the held-out participant is the target. Table~\ref{tab:protocol} specifies the chronological session split. Earlier target sessions are used without labels during Stage~1 UDA. The later evaluation sessions remain unavailable during model training, preprocessing-statistic fitting, and checkpoint selection; at inference time, their EEG signals are passed without labels to IM-TTA and AutoDIAL target-statistic re-estimation, after which the adapted model is scored using the withheld labels. This is the primary protocol for headline comparisons.
+Each LOSO fold holds out one target subject and uses all others as labeled sources, with the chronological session split in Table~\ref{tab:protocol}. Earlier target sessions are used without labels for Stage~1 UDA. The later evaluation sessions are excluded from training, preprocessing-statistic fitting, and checkpoint selection; at inference, their unlabeled EEG is used only by IM-TTA and AutoDIAL target-statistic re-estimation, after which the withheld labels are used for scoring. This is the primary protocol for all comparisons.
 
 \begin{table*}[!htbp]
 \centering
@@ -238,30 +238,30 @@ Zhou2016  & sessions 1--2  & session 3      & sessions 1--2  & session 3 \\
 \end{tabular}
 \end{table*}
 
-This split yields nine folds for BCI IV-2a and BCI IV-2b and four for Zhou2016, with identical split rules and hyperparameters in every fold. The checkpoint with the highest source-validation accuracy is selected before IM-TTA, and neither evaluation-session labels nor evaluation metrics participate in adaptation or checkpoint selection. Stage~1 adaptation (AutoDIAL, target information maximization, and the adversarial and MK-MMD losses) uses only the earlier target sessions, whereas Stage~2 IM-TTA and AutoDIAL re-estimation use the later evaluation sessions immediately before scoring. For Zhou2016, an all-session target score is additionally reported as an auxiliary diagnostic only.
+This yields nine folds for BCI IV-2a and IV-2b and four for Zhou2016, with identical rules and hyperparameters in every fold. The checkpoint with the highest source-validation accuracy is selected before IM-TTA, so evaluation labels and metrics never influence adaptation or model selection. For Zhou2016, an all-session target score is reported as an auxiliary diagnostic only.
 
 
 \subsection{Preprocessing and augmentation}
 \label{subsec:preprocessing}
 
-Only EEG channels are retained. Signals are resampled to 250~Hz and converted from volts to microvolts. The BCI Competition datasets receive no additional digital band-pass filtering: BCI IV-2a uses the complete MOABB event window, while BCI IV-2b removes 0.5~s from its end. For Zhou2016, all 14 EEG channels are band-pass filtered at 8--30~Hz and the interval from 0.5 to 5.0~s after cue onset is retained (4.5~s, or 1125 samples). This setting suppresses the initial cue transient and focuses both feature extraction and covariance estimation on the motor-imagery $\mu/\beta$ range.
+Only EEG channels are retained, resampled to 250~Hz, and converted to microvolts. BCI IV-2a uses the full MOABB event window and BCI IV-2b removes its last 0.5~s, both without further filtering. Zhou2016 is band-pass filtered at 8--30~Hz and cropped to 0.5--5.0~s after cue onset (1125 samples) to suppress the cue transient and focus on the $\mu/\beta$ range.
 
-Riemannian whitening, when active, follows the session-isolated fitting rule in Section~\ref{subsec:ra}. Z-score statistics are fitted using the source-training partition and then frozen. Following TCFormer \cite{altaheri2025tcformer}, the segmentation and reconstruction (S\&R) augmentation introduced by Lotte \cite{lotte2015signal} is applied to labeled source mini-batches of BCI IV-2a and IV-2b: each trial is divided into eight consecutive, non-overlapping segments, and synthetic trials are formed by concatenating, for each segment position, the segment of a randomly chosen trial of the same class, which doubles the mini-batch. It neither reads target labels nor mixes source and target trials. Zhou2016 is run without this augmentation to preserve its intended dataset-specific setting.
+Riemannian whitening follows the session-isolated rule in Section~\ref{subsec:ra}, and z-score statistics are fitted on the source-training partition and then frozen. Following TCFormer \cite{altaheri2025tcformer}, segmentation and reconstruction (S\&R) augmentation \cite{lotte2015signal} is applied to labeled source mini-batches of BCI IV-2a and IV-2b: each trial is split into eight consecutive segments, and synthetic trials concatenate same-position segments from randomly chosen same-class trials, doubling the mini-batch without using target data. Zhou2016 uses no augmentation.
 
 \subsection{Implementation details}
 \label{subsec:training}
 
-All experiments are executed in Kaggle notebooks using one NVIDIA Tesla T4 GPU with 16~GB memory. BCI IV-2a and BCI IV-2b use a mini-batch size of 48 and a maximum of 125 epochs. Zhou2016 uses a mini-batch size of 32 and 100 epochs. The BCI Competition runs use Adam with an initial learning rate of $9\times10^{-4}$, $\beta_1=0.5$, and weight decay $10^{-3}$; the Zhou2016 setting uses an initial learning rate of $10^{-3}$ and weight decay $10^{-4}$. A linear warm-up over the first three LOSO epochs is followed by cosine decay. The random seed (0), data split, and initialization procedure are fixed and shared by all methods and ablation variants, so that every reported comparison differs only in the evaluated component.
+All experiments run in Kaggle notebooks on one NVIDIA Tesla T4 GPU (16~GB). BCI IV-2a and IV-2b use a batch size of 48, at most 125 epochs, and Adam (learning rate $9\times10^{-4}$, $\beta_1=0.5$, weight decay $10^{-3}$); Zhou2016 uses a batch size of 32, 100 epochs, a learning rate of $10^{-3}$, and weight decay $10^{-4}$. A three-epoch linear warm-up is followed by cosine decay. The seed (0), data split, and initialization are shared by all methods and variants, so each comparison differs only in the evaluated component.
 
 \subsection{Comparison methods}
 \label{subsec:baselines}
 
-Comparison methods are grouped by the target data they may access, and each group is compared with the SSM-DAN variant that has the same access. Source-only decoders, namely EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, and SATrans-Net \cite{miao2025satransnet}, are trained on labeled source data only. Unsupervised domain adaptation (UDA) methods, namely CLUDA \cite{ozyurt2023cluda}, RMETNet \cite{zhao2026rmetnet}, and MSD-DDA \cite{gong2026msdda}, additionally use the unlabeled earlier target sessions during training, which is the target access of Stage~1 of SSM-DAN, and are evaluated without test-time adaptation; their matched reference is SSM-DAN (Stage~1 UDA), i.e., SSM-DAN without test-time adaptation. Test-time adaptation methods, namely T-TIME \cite{li2024ttime} and BFT \cite{li2026bft}, train on source data only and adapt to the unlabeled evaluation trials at inference; their matched reference is SSM-DAN (IM-TTA), i.e., SSM-DAN without domain adaptation, which removes every Stage~1 adaptation component while retaining Riemannian alignment and IM-TTA. Both references retain Riemannian alignment and differ from the complete model only in the adaptation stage they omit. All methods follow the session split in Table~\ref{tab:protocol}, use the same preprocessing, and select the checkpoint with the highest source-validation accuracy.
+Baselines are grouped by the target data they access, and each group is compared with the SSM-DAN variant that has the same access. Source-only decoders (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, and SATrans-Net \cite{miao2025satransnet}) use labeled source data only. Unsupervised domain adaptation (UDA) methods (CLUDA \cite{ozyurt2023cluda}, RMETNet \cite{zhao2026rmetnet}, and MSD-DDA \cite{gong2026msdda}) also use the unlabeled earlier target sessions, as Stage~1 of SSM-DAN does, without test-time adaptation; their reference is SSM-DAN (Stage~1 UDA), i.e., SSM-DAN without IM-TTA. Test-time adaptation methods (T-TIME \cite{li2024ttime} and BFT \cite{li2026bft}) train on source data only and adapt to the unlabeled evaluation trials; their reference is SSM-DAN (IM-TTA), i.e., SSM-DAN without any Stage~1 adaptation component. Both references keep Riemannian alignment. All methods share the session split, preprocessing, and checkpoint rule.
 
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}
 
-Accuracy and Cohen's $\kappa$ ($\times100$) are reported per target subject and as mean $\pm$ standard deviation across LOSO folds. Paired accuracy differences use a two-sided Wilcoxon signed-rank test with exact sign-permutation $p$-values. Efficiency is summarized by trainable parameters, mean Stage~1 training time per fold on a Tesla T4, and batch-one CPU response time averaged over 500 passes after 100 warm-up passes; IM-TTA, preprocessing, and data transfer are excluded from these timings.
+Accuracy and Cohen's $\kappa$ ($\times100$) are reported per target subject and as mean $\pm$ standard deviation across folds. Paired accuracy differences use a two-sided Wilcoxon signed-rank test with exact $p$-values. Efficiency is measured by trainable parameters, mean Stage~1 training time per fold on the T4, and batch-one CPU response time (mean of 500 passes after 100 warm-up passes), excluding IM-TTA, preprocessing, and data transfer.
 
 \section{Results}
 \label{sec:results}
@@ -271,7 +271,7 @@ Tables~\ref{tab:results_2a}--\ref{tab:results_zhou} report subject-wise chronolo
 \subsection{BCI Competition IV-2a}
 \label{subsec:results_2a}
 
-Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO results for the nine BCI IV-2a target subjects. SSM-DAN applies label-free IM-TTA to each target subject's session~2 EEG immediately before evaluation.
+Table~\ref{tab:results_2a} reports the four-class results for the nine BCI IV-2a targets.
 
 \begin{table*}[!htbp]
 \centering
@@ -335,13 +335,13 @@ Table~\ref{tab:results_2a} reports the four-class chronological-session LOSO res
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN achieved $76.12\pm11.96\%$ accuracy and $68.20\pm15.90$ Cohen's $\kappa$, outperforming its source-only variant ($64.35\pm12.77\%$) and its variant without test-time adaptation ($72.15\pm13.58\%$). Both paired accuracy differences were significant ($p=0.0039$ for each comparison); IM-TTA improved all nine target folds. SSM-DAN also exceeded the matched EEG Conformer ($55.25\pm13.39\%$; $\kappa=40.30\pm17.90$), ATCNet ($57.02\pm12.74\%$; $\kappa=42.70\pm17.00$), TCFormer ($60.80\pm11.49\%$; $\kappa=47.70\pm15.30$), EEGEncoder ($58.06\pm12.55\%$; $\kappa=44.10\pm16.70$), and SATrans-Net ($62.00\pm10.34\%$; $\kappa=49.30\pm13.80$) baselines on all nine targets ($p=0.0039$ for each). The UDA baselines CLUDA, RMETNet, and MSD-DDA use the unlabeled target session~1 during training and no test-time adaptation, so they are compared with SSM-DAN (Stage~1 UDA; $72.15\pm13.58\%$). The test-time adaptation baselines use no target data during training and are compared with SSM-DAN (IM-TTA), which reached $71.37\pm11.78\%$ ($\kappa=61.80\pm15.70$): T-TIME reached $66.24\pm9.34\%$ ($\kappa=55.00\pm12.50$) and BFT $63.08\pm9.77\%$ ($\kappa=50.80\pm13.00$), $5.13$ and $8.29$ percentage points lower on average. The reference exceeded T-TIME on seven of the nine targets ($p=0.0742$) and BFT on all nine ($p=0.0039$). As an auxiliary diagnostic only, the variant without test-time adaptation obtained $73.32\pm11.94\%$ accuracy and $64.40\pm15.90$ Cohen's $\kappa$ when target sessions~1 and~2 were pooled.
+SSM-DAN obtained the highest accuracy and $\kappa$, and significantly outperformed every source-only baseline and its own source-only variant on all nine targets. IM-TTA improved every target over SSM-DAN (Stage~1 UDA). In the test-time adaptation group, SSM-DAN (IM-TTA) significantly exceeded BFT on all nine targets and exceeded T-TIME on seven, although the latter difference was not significant.
 
 
 \subsection{BCI Competition IV-2b}
 \label{subsec:results_2b}
 
-Table~\ref{tab:results_2b} reports the completed binary left- versus right-hand results for the nine BCI IV-2b target subjects, whose recordings contain only three bipolar EEG derivations. Results use sessions~4--5 for the primary chronological evaluation; the standard deviation measures between-subject dispersion in this single LOSO run.
+Table~\ref{tab:results_2b} reports the two-class results for the nine BCI IV-2b targets, which provide only three bipolar EEG derivations.
 
 \begin{table*}[!htbp]
 \centering
@@ -405,12 +405,12 @@ Table~\ref{tab:results_2b} reports the completed binary left- versus right-hand 
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN achieved $84.09\pm10.42\%$ accuracy and $68.20\pm20.80$ Cohen's $\kappa$, compared with $80.54\pm10.05\%$ for its source-only variant and $83.97\pm10.71\%$ for its variant without test-time adaptation. SSM-DAN was 0.12 percentage points higher than the variant without test-time adaptation on average, but the paired difference was not significant ($p=1.0000$). It significantly outperformed the source-only variant ($p=0.0156$), and IM-TTA improved three of the nine target folds. SSM-DAN significantly exceeded ATCNet ($79.38\pm11.40\%$; $\kappa=58.80\pm22.80$; $p=0.0078$), which it outperformed on eight targets and tied on the ninth, and EEG Conformer ($78.03\pm12.02\%$; $\kappa=56.10\pm24.00$; $p=0.0156$), which it outperformed on eight of the nine targets. It also exceeded the matched TCFormer ($81.18\pm9.37\%$; $\kappa=62.40\pm18.70$), EEGEncoder ($81.02\pm11.76\%$; $\kappa=62.00\pm23.50$), and SATrans-Net ($81.76\pm8.78\%$; $\kappa=63.50\pm17.60$) baselines on average, on six, six, and five of the nine targets, respectively, although none of these differences was significant ($p=0.0820$, $0.0547$, and $0.2109$). The UDA baselines are compared with SSM-DAN (Stage~1 UDA; $83.97\pm10.71\%$), which significantly exceeded RMETNet ($79.10\pm13.39\%$; $\kappa=58.20\pm26.80$; $p=0.0117$) and outperformed it on eight of the nine targets. Among the test-time adaptation baselines, BFT reached $81.18\pm12.12\%$ ($\kappa=62.40\pm24.20$), $2.17$ percentage points below its matched reference, SSM-DAN (IM-TTA; $83.35\pm10.50\%$; $\kappa=66.70\pm21.00$); the reference was higher on eight targets and tied on the ninth ($p=0.0078$).
+SSM-DAN again obtained the highest mean accuracy. It significantly outperformed its source-only variant, ATCNet, and EEG Conformer, whereas its advantages over TCFormer, EEGEncoder, SATrans-Net, and SSM-DAN (Stage~1 UDA) were small and not significant, with IM-TTA helping on only three targets. Within the matched groups, SSM-DAN (Stage~1 UDA) significantly exceeded RMETNet and SSM-DAN (IM-TTA) significantly exceeded BFT.
 
 \subsection{Zhou2016}
 \label{subsec:results_zhou}
 
-Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source session~3 for validation, target sessions~1--2 for UDA, and target session~3 for primary scoring. With four folds, the smallest attainable two-sided Wilcoxon $p$-value is 0.125.
+Table~\ref{tab:results_zhou} reports the three-class results on target session~3 of Zhou2016. With four folds, the smallest attainable two-sided Wilcoxon $p$-value is 0.125, so no difference can be significant.
 
 \begin{table*}[!htbp]
 \centering
@@ -474,7 +474,7 @@ Table~\ref{tab:results_zhou} uses source sessions~1--2 for training, source sess
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN reached $84.33\pm0.75\%$ accuracy and $76.50\pm1.12$ Cohen's $\kappa$, the lowest variability across targets. It exceeded the matched TCFormer baseline ($73.50\pm6.22\%$; $\kappa=60.25\pm9.34$) and its source-only variant ($75.17\pm3.51\%$; $\kappa=62.75\pm5.26$) on all four targets ($p=0.1250$, the smallest attainable value with four folds). It also exceeded EEG Conformer ($77.17\pm4.43\%$; $\kappa=65.75\pm6.65$) on all four targets ($p=0.1250$), ATCNet ($76.50\pm3.93\%$; $\kappa=64.80\pm5.90$) on all four targets ($p=0.1250$), SATrans-Net ($74.67\pm6.09\%$; $\kappa=62.00\pm9.14$) on all four targets ($p=0.1250$), and EEGEncoder ($74.33\pm7.92\%$; $\kappa=61.50\pm11.90$) on three of the four targets ($p=0.2500$). SSM-DAN (Stage~1 UDA), which omits IM-TTA while retaining Stage~1 adaptation and AutoDIAL target-statistic re-estimation, reached $82.33\pm3.82\%$ ($\kappa=73.50\pm5.70$; $p=0.6250$) and is the matched reference of the UDA baselines; SSM-DAN (IM-TTA; $82.50\pm1.85\%$; $\kappa=73.75\pm2.77$) is the matched reference of the test-time adaptation baselines. T-TIME reached $85.00\pm2.69\%$ ($\kappa=77.50\pm4.03$), the highest mean accuracy on this dataset and $2.50$ percentage points above this reference (higher on two targets, lower on one, and tied on one; $p=0.5000$), with the highest accuracy on targets~1 and~4 ($88.67\%$ and $86.00\%$). BFT reached $82.83\pm4.07\%$ ($\kappa=74.30\pm6.10$), $0.33$ percentage points above this reference on average (higher on three of the four targets; $p=0.8750$), and obtained the highest accuracy on target~2 ($86.67\%$). As an auxiliary diagnostic only, pooling all three target sessions gave $83.23\pm2.89\%$ ($\kappa=74.85\pm4.34$) for SSM-DAN and $75.91\pm4.65\%$ ($\kappa=63.90\pm7.00$) for TCFormer.
+SSM-DAN had the most consistent performance across targets and exceeded every source-only baseline and its source-only variant on all four targets, except EEGEncoder, which it exceeded on three. In the test-time adaptation group, T-TIME obtained the highest mean accuracy on this dataset, above both its reference SSM-DAN (IM-TTA) and the complete SSM-DAN, while BFT was on par with the reference. SSM-DAN also remained above TCFormer in the auxiliary score pooled over all three target sessions.
 
 \subsection{Ablation study}
 \label{sec:ablation}
@@ -506,14 +506,14 @@ Dataset & Metric & SSM-DAN & \colhead{Without\\Riemannian\\alignment} & \colhead
 \end{tabular}
 \end{table*}
 
-On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation reduced accuracy from $76.12\%$ to $70.29\%$ ($p=0.0391$), $71.37\%$ ($p=0.0039$), and $72.15\%$ ($p=0.0039$), respectively. On BCI IV-2b, SSM-DAN ($84.09\%$) was slightly above the variants without test-time adaptation ($83.97\%$; $p=1.0000$), without Riemannian alignment ($83.58\%$; $p=0.2578$), and without domain adaptation ($83.35\%$; $p=0.2031$). On Zhou2016, SSM-DAN ($84.33\%$) was slightly above the variants without Riemannian alignment ($84.00\%$), without domain adaptation ($82.50\%$), and without test-time adaptation ($82.33\%$); with only four folds, none of these differences can be significant (the smallest attainable $p$ is 0.125; $p=0.2500$ without domain adaptation and $0.6250$ without test-time adaptation). Thus, SSM-DAN was best on all three datasets, although its BCI IV-2b variants were statistically indistinguishable.
+On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
 
 Table~\ref{tab:efficiency} reports trainable parameters, Stage~1 training time, and CPU response time. The source-only variant is smaller because it omits the AutoDIAL layer, aligner, and domain discriminator; RA and IM-TTA do not change parameter count.
 
-On Zhou2016, the source-only variant required 6.29~min per fold and 13.36~ms per CPU trial, compared with 11.42~min and 14.65~ms without test-time adaptation, 11.66~min and 18.88~ms without Riemannian alignment, 6.46~min and 18.41~ms without domain adaptation, and 11.70~min and 19.14~ms for SSM-DAN.
+Stage~1 adaptation accounts for most of the extra training time of SSM-DAN over its source-only variant (nearly doubling it on Zhou2016), whereas IM-TTA adds little. SSM-DAN has a parameter count comparable to ATCNet and TCFormer and far below EEG Conformer, while T-TIME and BFT are the smallest and fastest methods.
 
 \begin{table*}[!htbp]
 \centering
