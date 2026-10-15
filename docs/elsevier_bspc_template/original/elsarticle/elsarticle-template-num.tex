@@ -137,7 +137,7 @@ To avoid leakage, $\bar{R}$ is estimated only from data available before evaluat
 \subsection{Automatic domain alignment layer}
 \label{subsec:autodial}
 
-Riemannian whitening aligns second-order input statistics but cannot correct shifts that arise inside the network. Following AutoDIAL \cite{carlucci2017autodial}, the trial representation $q$ is therefore normalized by an alignment layer that lets the network decide how strongly target features should be standardized with their own statistics. Source features use source mean and variance $(\mu_s,\sigma_s^2)$; target features use the moments of a mixture of the source and target $(\mu_t,\sigma_t^2)$ distributions,
+Riemannian whitening aligns input statistics but not shifts arising inside the network. Following AutoDIAL \cite{carlucci2017autodial}, the trial representation $q$ is therefore normalized by a layer that learns how strongly target features are standardized with their own statistics: source features use the source moments $(\mu_s,\sigma_s^2)$, and target features use the moments of a mixture of the source and target $(\mu_t,\sigma_t^2)$ distributions,
 \begin{align}
     \mu_\alpha &= \alpha\mu_t+(1-\alpha)\mu_s, \\
     \sigma_\alpha^2 &= \alpha\sigma_t^2+(1-\alpha)\sigma_s^2+\alpha(1-\alpha)(\mu_t-\mu_s)^2,
@@ -147,7 +147,7 @@ so that
     \hat{q}^s = \gamma\odot\frac{q^s-\mu_s}{\sqrt{\sigma_s^2+\epsilon}}+\beta, \qquad
     \hat{q}^t = \gamma\odot\frac{q^t-\mu_\alpha}{\sqrt{\sigma_\alpha^2+\epsilon}}+\beta ,
 \end{equation}
-with shared affine parameters $\gamma$ and $\beta$. The mixing weight $\alpha\in(0,1)$, initialized to 0.5, is learned separately for each of the four feature groups: $\alpha\rightarrow0$ normalizes target features with source statistics, whereas $\alpha\rightarrow1$ normalizes them entirely with their own. During training the moments are computed per mini-batch and tracked as running averages (momentum 0.1); at inference the running moments are mixed with the learned $\alpha$, and source validation trials always use source statistics.
+with shared affine parameters $\gamma$ and $\beta$. The mixing weight $\alpha\in(0,1)$, initialized to 0.5 and learned separately for each of the four feature groups, interpolates between source statistics ($\alpha\rightarrow0$) and target statistics ($\alpha\rightarrow1$). Moments are computed per mini-batch during training and tracked as running averages (momentum 0.1), which are mixed with the learned $\alpha$ at inference; source validation trials always use source statistics.
 
 \subsection{Training objective}
 \label{subsec:uda}
