@@ -257,7 +257,7 @@ All experiments run in Kaggle notebooks on one NVIDIA Tesla T4 GPU (16~GB). BCI 
 \subsection{Comparison methods}
 \label{subsec:baselines}
 
-Baselines are grouped by target-data access, each group being compared with the SSM-DAN variant of equal access. Source-only decoders (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, SATrans-Net \cite{miao2025satransnet}) are compared with SSM-DAN; UDA methods (CLUDA \cite{ozyurt2023cluda}, RMETNet \cite{zhao2026rmetnet}, MSD-DDA \cite{gong2026msdda}), which also see the unlabeled earlier target sessions, with SSM-DAN (Stage~1 UDA), i.e., without IM-TTA; and test-time adaptation methods (T-TIME \cite{li2024ttime}, BFT \cite{li2026bft}) with SSM-DAN (IM-TTA), i.e., without Stage~1 adaptation. All methods share the split, preprocessing, and checkpoint rule.
+Baselines are grouped by target-data access, each group being compared with the SSM-DAN variant of equal access. Source-only decoders (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, SATrans-Net \cite{miao2025satransnet}) are compared with SSM-DAN; UDA methods (CLUDA \cite{ozyurt2023cluda}, RMETNet \cite{zhao2026rmetnet}, MSD-DDA \cite{gong2026msdda}), which also see the unlabeled earlier target sessions, with SSM-DAN (Stage~1 UDA), i.e., without IM-TTA; and test-time adaptation methods (T-TIME \cite{li2024ttime}, BFT \cite{li2026bft}) with SSM-DAN (IM-TTA), i.e., without Stage~1 adaptation. All methods share the split, preprocessing, and checkpoint rule; for RMETNet on Zhou2016, a ridge of $10^{-3}$ times the mean eigenvalue is added to each trial covariance to keep it positive definite.
 
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}
@@ -388,13 +388,13 @@ SSM-DAN (source-only) & 72.00 & 78.67 & 71.33 & 78.67 & $75.17\pm3.51$ & $0.627\
 \midrule
 \multicolumn{8}{l}{\textit{Unsupervised domain adaptation}} \\
 CLUDA~\cite{ozyurt2023cluda} & -- & -- & -- & -- & -- & -- & -- \\
-RMETNet~\cite{zhao2026rmetnet} & -- & -- & -- & -- & -- & -- & -- \\
+RMETNet~\cite{zhao2026rmetnet} & 70.00 & $\mathbf{89.33}$ & 80.67 & 84.67 & $81.17\pm7.14$ & $0.718\pm0.107$ & 0.8750 \\
 MSD-DDA~\cite{gong2026msdda} & -- & -- & -- & -- & -- & -- & -- \\
 SSM-DAN (Stage~1 UDA) & 79.33 & 84.67 & $\mathbf{87.33}$ & 78.00 & $82.33\pm3.82$ & $0.735\pm0.057$ & 0.6250 \\
 \midrule
 \multicolumn{8}{l}{\textit{Test-time adaptation}} \\
 T-TIME~\cite{li2024ttime} & $\mathbf{88.67}$ & 84.00 & 81.33 & $\mathbf{86.00}$ & $\mathbf{85.00\pm2.69}$ & $\mathbf{0.775\pm0.040}$ & 0.5000 \\
-BFT~\cite{li2026bft} & 84.00 & $\mathbf{86.67}$ & 76.00 & 84.67 & $82.83\pm4.07$ & $0.743\pm0.061$ & 0.8750 \\
+BFT~\cite{li2026bft} & 84.00 & 86.67 & 76.00 & 84.67 & $82.83\pm4.07$ & $0.743\pm0.061$ & 0.8750 \\
 SSM-DAN (IM-TTA) & 79.33 & 84.00 & 83.33 & 83.33 & $82.50\pm1.85$ & $0.738\pm0.028$ & 0.2500 \\
 \midrule
 \textbf{SSM-DAN} & 84.00 & 83.33 & 84.67 & 85.33 & $84.33\pm0.75$ & $0.765\pm0.011$ & -- \\
@@ -403,7 +403,7 @@ SSM-DAN (IM-TTA) & 79.33 & 84.00 & 83.33 & 83.33 & $82.50\pm1.85$ & $0.738\pm0.0
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN had the most consistent performance across targets and exceeded every source-only baseline and its source-only variant on all four targets, except EEGEncoder, which it exceeded on three. In the test-time adaptation group, T-TIME obtained the highest mean accuracy on this dataset, above both its reference SSM-DAN (IM-TTA) and the complete SSM-DAN, while BFT was on par with the reference. SSM-DAN also remained above TCFormer in the auxiliary score pooled over all three target sessions.
+SSM-DAN had the most consistent performance across targets and exceeded every source-only baseline and its source-only variant on all four targets, except EEGEncoder, which it exceeded on three. In the UDA group, RMETNet was slightly below its reference SSM-DAN (Stage~1 UDA) on average and far more variable across targets, although it obtained the highest accuracy on target~2. In the test-time adaptation group, T-TIME obtained the highest mean accuracy on this dataset, above both its reference SSM-DAN (IM-TTA) and the complete SSM-DAN, while BFT was on par with the reference. SSM-DAN also remained above TCFormer in the auxiliary score pooled over all three target sessions.
 
 \subsection{Ablation study}
 \label{sec:ablation}
@@ -468,7 +468,7 @@ SSM-DAN (source-only) & 98.4 & 47.01 & 25.08 & 94.6 & 36.10 & 13.68 & 96.8 & 6.2
 \midrule
 \multicolumn{10}{l}{\textit{Unsupervised domain adaptation}} \\
 CLUDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
-RMETNet & -- & -- & -- & 159.1 & 21.96 & 4.90 & -- & -- & -- \\
+RMETNet & -- & -- & -- & 159.1 & 21.96 & 4.90 & 306.6 & 23.74 & 7.19 \\
 MSD-DDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
 SSM-DAN (Stage~1 UDA) & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
 \midrule
