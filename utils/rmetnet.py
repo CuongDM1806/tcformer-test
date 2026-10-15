@@ -400,9 +400,18 @@ class MMDLoss(nn.Module):
 # --------------------------------------------------------------------------
 # tools/Rieman.py :: compute_covariance_matrix, riemannian_alignment
 # --------------------------------------------------------------------------
-def compute_covariance_matrix(data):
-    """Per-trial covariance (np.cov), data: (n_trials, n_channels, n_samples)."""
-    return np.array([np.cov(trial) for trial in data])
+def compute_covariance_matrix(data, reg=0.0):
+    """Per-trial covariance (np.cov), data: (n_trials, n_channels, n_samples).
+
+    ``reg`` adds ``reg * trace(C) / n_channels`` to the diagonal so that
+    rank-deficient trials stay positive definite; 0 keeps the released code.
+    """
+    covs = np.array([np.cov(trial) for trial in data])
+    if reg:
+        n = covs.shape[-1]
+        ridge = reg * np.trace(covs, axis1=1, axis2=2) / n
+        covs = covs + ridge[:, None, None] * np.eye(n)
+    return covs
 
 
 def common_reference(source_covs, target_covs):

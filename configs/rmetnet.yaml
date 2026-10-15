@@ -32,6 +32,11 @@ rmetnet:
   # (the released script defaults to 1000).
   epochs_by_dataset:
     bcic2a: 500
+  # Ridge (relative to the mean eigenvalue) added to every trial covariance.
+  # Zhou2016 trials can be rank-deficient, which makes mean_riemann fail with
+  # "Matrices must be positive definite"; the BCI IV datasets keep np.cov as is.
+  cov_reg_by_dataset:
+    zhou2016: 0.001
   batch_size: 64
   lr: 0.0002
   betas: [0.5, 0.999]

@@ -177,6 +177,7 @@ def run(config, gpu_id, dataset_name="bcic2a"):
     preprocessing = config["preprocessing"][dataset_name]
     hp = dict(config["rmetnet"])
     hp["epochs"] = hp.pop("epochs_by_dataset", {}).get(dataset_name, hp["epochs"])
+    cov_reg = hp.pop("cov_reg_by_dataset", {}).get(dataset_name, 0.0)
     args = argparse.Namespace(
         chn=module.channels, class_num=module.classes, sample_rate=preprocessing["sfreq"],
         seed=config["seed"], log_every=config.get("log_every_n_epochs", 0), **hp,
@@ -206,7 +207,7 @@ def run(config, gpu_id, dataset_name="bcic2a"):
 
         # Riemannian features from the raw EEG; reference fixed from source
         # training and unlabeled target adaptation trials only.
-        covs = {k: compute_covariance_matrix(v) for k, v in
+        covs = {k: compute_covariance_matrix(v, cov_reg) for k, v in
                 dict(s=Xs, v=Xv, a=X_adapt, t=X_test).items()}
         C_common = common_reference(covs["s"], covs["a"])
         rie = {k: to_tensor(align(c, C_common)) for k, c in covs.items()}
