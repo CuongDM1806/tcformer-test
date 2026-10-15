@@ -106,12 +106,12 @@ Each trial is an EEG matrix $X\in\mathbb{R}^{C\times T}$ with $C$ electrodes and
 \subsection{Bidirectional selective state-space encoder}
 \label{subsec:ssm}
 
-To capture dependencies across the whole trial, $H_c$ is mixed across channels and passed through five selective state-space blocks \cite{gu2022s4,gu2024mamba}. Each block normalizes its input and produces, through gated projections and a short causal convolution, a sequence $u_t$ that drives a diagonal recurrence:
+To capture trial-wide dependencies, $H_c$ is mixed across channels and passed through five selective state-space blocks \cite{gu2022s4,gu2024mamba}. Each block normalizes its input and, through gated projections and a short causal convolution, produces a sequence $u_t$ that drives a diagonal recurrence:
 \begin{align}
     h_t &= \exp(\Delta_t A)\odot h_{t-1} + \Delta_t B_t\odot u_t, \\
     z_t &= C_t^\top h_t + d\odot u_t ,
 \end{align}
-where $h_t$ is the hidden state, $A=-\exp(A_{\log})$ is a learned negative decay that keeps the recurrence stable, and the step size $\Delta_t$ and the projections $B_t$ and $C_t$ are computed from the input. This input dependence lets each block decide which time steps to retain, and its cost grows linearly with $L$. Because complete trials are available offline, the blocks alternate between forward and backward scanning, a backward block reversing the time axis before and after its recurrence (Fig.~\ref{fig:ssm_block}). This gives bidirectional context without duplicating every block. The state dimension is eight, with dropout 0.4 and depth-dependent stochastic depth; the recurrence is implemented in plain PyTorch rather than with the hardware-specific Mamba kernel.
+where $h_t$ is the hidden state, $A=-\exp(A_{\log})$ is a learned negative decay that keeps the recurrence stable, and $\Delta_t$, $B_t$, and $C_t$ are computed from the input, so each block selects which time steps to retain at a cost linear in $L$. Since complete trials are available offline, blocks alternate between forward and backward scanning, a backward block reversing the time axis around its recurrence (Fig.~\ref{fig:ssm_block}), which gives bidirectional context without duplicating blocks. The state dimension is eight, with dropout 0.4 and depth-dependent stochastic depth; the recurrence is implemented in plain PyTorch rather than with the Mamba CUDA kernel.
 
 \begin{figure*}[!htbp]
     \centering
