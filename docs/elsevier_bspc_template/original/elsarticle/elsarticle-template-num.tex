@@ -91,15 +91,15 @@ To our knowledge, selective state-space MI decoders have not been coupled with t
 
 SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder combines multi-scale convolutions for local spectral--spatial features, bidirectional selective state-space blocks for long-range dynamics, and a temporal convolutional fusion head (Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). A hierarchical adaptation scheme reduces subject shift at three levels: Riemannian whitening of the input, AutoDIAL normalization with adversarial and discrepancy losses on the features, and test-time adaptation of the predictions (Sections~\ref{subsec:ra}--\ref{subsec:imtta}). The model is trained on labeled source-subject trials and unlabeled target-subject trials (Stage~1), adapted to the unlabeled evaluation trials (Stage~2), and then used for prediction (Stage~3).
 
-\begin{figure*}[!t]
+\subsection{Multi-scale convolutional encoder}
+\label{subsec:conv_frontend}
+
+\begin{figure*}[!h]
     \centering
     \includegraphics[width=\textwidth]{figures/encoder_detail.pdf}
     \caption{Multi-scale temporal--spatial front-end. (a) Three temporal branches, depthwise electrode filtering, grouped refinement, and channel-group attention produce $H_c$. (b) Channel-group attention: grouped $1\times1$ squeeze--excitation yields one sigmoid weight per temporal scale, which rescales that scale's 16 channels and is added residually.}
     \label{fig:encoder_detail}
 \end{figure*}
-
-\subsection{Multi-scale convolutional encoder}
-\label{subsec:conv_frontend}
 
 Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes through three temporal convolutions with kernels of 20, 32, and 64 samples, as in TCFormer \cite{altaheri2025tcformer}, followed by depthwise spatial filtering, pooling, and grouped refinement to 16 channels per scale (Fig.~\ref{fig:encoder_detail}). A residual channel-group attention reweights the three scales, and a second pooling yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$.
 
