@@ -262,7 +262,7 @@ Baselines are grouped by target-data access, each group being compared with the 
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}
 
-Accuracy and Cohen's $\kappa$ ($\times100$) are reported per target subject and as mean $\pm$ standard deviation across folds. Paired accuracy differences use a two-sided Wilcoxon signed-rank test with exact $p$-values. Efficiency is measured by trainable parameters, mean Stage~1 training time per fold on the T4, and batch-one CPU response time (mean of 500 passes after 100 warm-up passes), excluding IM-TTA, preprocessing, and data transfer.
+Accuracy is reported per target subject, and accuracy and Cohen's $\kappa$ as mean $\pm$ standard deviation across folds. Paired accuracy differences use a two-sided Wilcoxon signed-rank test with exact $p$-values. Efficiency is measured by trainable parameters, mean Stage~1 training time per fold on the T4, and batch-one CPU response time (mean of 500 passes after 100 warm-up passes), excluding IM-TTA, preprocessing, and data transfer.
 
 \section{Results}
 \label{sec:results}
@@ -276,61 +276,37 @@ Table~\ref{tab:results_2a} reports the four-class results for the nine BCI IV-2a
 
 \begin{table*}[!htbp]
 \centering
-\caption{Per-subject LOSO accuracy (\%) and Cohen's $\kappa$ multiplied by 100 on BCI IV-2a (four classes). $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
+\caption{Per-subject LOSO accuracy (\%), with mean accuracy and mean Cohen's $\kappa$, on BCI IV-2a (four classes). $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
 \label{tab:results_2a}
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{ll*{9}{c}@{\hspace{14pt}}cc}
+\begin{tabular}{l*{9}{c}@{\hspace{14pt}}ccc}
 \toprule
-\multirow{2}{*}{Method} & \multirow{2}{*}{Metric} & \multicolumn{9}{c}{Target subject} & \multirow{2}{*}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} \\
-\cmidrule(lr){3-11}
- & & S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8 & S9 & & \\
+\multirow{2}{*}{Method} & \multicolumn{9}{c}{Target subject accuracy (\%)} & \multicolumn{2}{c}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} \\
+\cmidrule(lr){2-10}\cmidrule(lr){11-12}
+ & S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8 & S9 & Acc. (\%) & $\kappa$ & \\
 \midrule
 \multicolumn{13}{l}{\textit{Source-only training}} \\
-\multirow{2}{*}{\shortstack[l]{Conformer~\cite{song2023eegconformer}}} & Acc. & 58.68 & 43.06 & 78.82 & 43.06 & 44.44 & 41.67 & 72.92 & 65.28 & 49.31 & $55.25\pm13.39$ & 0.0039 \\
- & $\kappa$ & 44.91 & 24.07 & 71.76 & 24.07 & 25.93 & 22.22 & 63.89 & 53.70 & 32.41 & $40.30\pm17.90$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{ATCNet~\cite{altaheri2023atcnet}}} & Acc. & 69.44 & 40.97 & 76.74 & 50.35 & 43.40 & 42.01 & 61.81 & 70.49 & 57.99 & $57.02\pm12.74$ & 0.0039 \\
- & $\kappa$ & 59.26 & 21.30 & 68.98 & 33.80 & 24.54 & 22.69 & 49.07 & 60.65 & 43.98 & $42.70\pm17.00$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{TCFormer~\cite{altaheri2025tcformer}}} & Acc. & 65.28 & 49.65 & 79.86 & 54.86 & 61.81 & 38.89 & 71.88 & 66.67 & 58.33 & $60.80\pm11.49$ & 0.0039 \\
- & $\kappa$ & 53.70 & 32.87 & 73.15 & 39.81 & 49.07 & 18.52 & 62.50 & 55.56 & 44.44 & $47.70\pm15.30$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{EEGEncoder~\cite{liao2025eegencoder}}} & Acc. & 64.24 & 49.31 & 78.82 & 46.18 & 54.86 & 40.97 & 74.31 & 65.97 & 47.92 & $58.06\pm12.55$ & 0.0039 \\
- & $\kappa$ & 52.31 & 32.41 & 71.76 & 28.24 & 39.81 & 21.30 & 65.74 & 54.63 & 30.56 & $44.10\pm16.70$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SATrans-Net~\cite{miao2025satransnet}}} & Acc. & 68.06 & 47.92 & 73.96 & 53.47 & 61.11 & 45.14 & 73.61 & 71.53 & 63.19 & $62.00\pm10.34$ & 0.0039 \\
- & $\kappa$ & 57.41 & 30.56 & 65.28 & 37.96 & 48.15 & 26.85 & 64.81 & 62.04 & 50.93 & $49.30\pm13.80$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(source-only)}} & Acc. & 68.06 & 51.04 & 86.46 & 61.11 & 64.24 & 39.58 & 72.92 & 73.61 & 62.15 & $64.35\pm12.77$ & 0.0039 \\
- & $\kappa$ & 57.41 & 34.72 & 81.94 & 48.15 & 52.31 & 19.44 & 63.89 & 64.81 & 49.54 & $52.50\pm17.00$ &  \\
+Conformer~\cite{song2023eegconformer} & 58.68 & 43.06 & 78.82 & 43.06 & 44.44 & 41.67 & 72.92 & 65.28 & 49.31 & $55.25\pm13.39$ & $0.403\pm0.179$ & 0.0039 \\
+ATCNet~\cite{altaheri2023atcnet} & 69.44 & 40.97 & 76.74 & 50.35 & 43.40 & 42.01 & 61.81 & 70.49 & 57.99 & $57.02\pm12.74$ & $0.427\pm0.170$ & 0.0039 \\
+TCFormer~\cite{altaheri2025tcformer} & 65.28 & 49.65 & 79.86 & 54.86 & 61.81 & 38.89 & 71.88 & 66.67 & 58.33 & $60.80\pm11.49$ & $0.477\pm0.153$ & 0.0039 \\
+EEGEncoder~\cite{liao2025eegencoder} & 64.24 & 49.31 & 78.82 & 46.18 & 54.86 & 40.97 & 74.31 & 65.97 & 47.92 & $58.06\pm12.55$ & $0.441\pm0.167$ & 0.0039 \\
+SATrans-Net~\cite{miao2025satransnet} & 68.06 & 47.92 & 73.96 & 53.47 & 61.11 & 45.14 & 73.61 & 71.53 & 63.19 & $62.00\pm10.34$ & $0.493\pm0.138$ & 0.0039 \\
+SSM-DAN (source-only) & 68.06 & 51.04 & 86.46 & 61.11 & 64.24 & 39.58 & 72.92 & 73.61 & 62.15 & $64.35\pm12.77$ & $0.525\pm0.170$ & 0.0039 \\
 \midrule
 \multicolumn{13}{l}{\textit{Unsupervised domain adaptation}} \\
-\multirow{2}{*}{\shortstack[l]{CLUDA~\cite{ozyurt2023cluda}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{RMETNet~\cite{zhao2026rmetnet}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{MSD-DDA~\cite{gong2026msdda}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(Stage~1 UDA)}} & Acc. & 79.17 & 47.57 & 92.71 & 73.61 & 57.64 & 59.72 & 82.29 & 82.64 & 73.96 & $72.15\pm13.58$ & 0.0039 \\
- & $\kappa$ & 72.22 & 30.09 & 90.28 & 64.81 & 43.52 & 46.30 & 76.39 & 76.85 & 65.28 & $62.90\pm18.10$ &  \\
+CLUDA~\cite{ozyurt2023cluda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+RMETNet~\cite{zhao2026rmetnet} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+MSD-DDA~\cite{gong2026msdda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+SSM-DAN (Stage~1 UDA) & 79.17 & 47.57 & 92.71 & 73.61 & 57.64 & 59.72 & 82.29 & 82.64 & 73.96 & $72.15\pm13.58$ & $0.629\pm0.181$ & 0.0039 \\
 \midrule
 \multicolumn{13}{l}{\textit{Test-time adaptation}} \\
-\multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & 67.01 & 53.47 & 78.47 & 64.58 & 68.75 & 49.65 & 79.51 & 69.44 & 65.28 & $66.24\pm9.34$ & 0.0742 \\
- & $\kappa$ & 56.02 & 37.96 & 71.30 & 52.78 & 58.33 & 32.87 & 72.69 & 59.26 & 53.70 & $55.00\pm12.50$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 64.24 & 44.44 & 76.74 & 65.62 & 61.81 & 51.39 & 73.61 & 70.49 & 59.38 & $63.08\pm9.77$ & 0.0039 \\
- & $\kappa$ & 52.31 & 25.93 & 68.98 & 54.17 & 49.07 & 35.19 & 64.81 & 60.65 & 45.83 & $50.80\pm13.00$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(IM-TTA)}} & Acc. & 77.43 & 47.92 & 88.19 & 66.32 & 64.24 & 61.81 & 79.86 & 82.99 & 73.61 & $71.37\pm11.78$ & 0.0039 \\
- & $\kappa$ & 69.91 & 30.56 & 84.26 & 55.09 & 52.31 & 49.07 & 73.15 & 77.31 & 64.81 & $61.80\pm15.70$ &  \\
+T-TIME~\cite{li2024ttime} & 67.01 & 53.47 & 78.47 & 64.58 & 68.75 & 49.65 & 79.51 & 69.44 & 65.28 & $66.24\pm9.34$ & $0.550\pm0.125$ & 0.0742 \\
+BFT~\cite{li2026bft} & 64.24 & 44.44 & 76.74 & 65.62 & 61.81 & 51.39 & 73.61 & 70.49 & 59.38 & $63.08\pm9.77$ & $0.508\pm0.130$ & 0.0039 \\
+SSM-DAN (IM-TTA) & 77.43 & 47.92 & 88.19 & 66.32 & 64.24 & 61.81 & 79.86 & 82.99 & 73.61 & $71.37\pm11.78$ & $0.618\pm0.157$ & 0.0039 \\
 \midrule
-\multirow{2}{*}{\shortstack[l]{\textbf{SSM-DAN}}} & Acc. & \textbf{79.51} & \textbf{52.43} & \textbf{93.40} & \textbf{73.96} & \textbf{69.44} & \textbf{65.97} & \textbf{88.89} & \textbf{86.11} & \textbf{75.35} & $\mathbf{76.12\pm11.96}$ & -- \\
- & $\kappa$ & \textbf{72.69} & \textbf{36.57} & \textbf{91.20} & \textbf{65.28} & \textbf{59.26} & \textbf{54.63} & \textbf{85.19} & \textbf{81.48} & \textbf{67.13} & $\mathbf{68.20\pm15.90}$ &  \\
+\textbf{SSM-DAN} & \textbf{79.51} & \textbf{52.43} & \textbf{93.40} & \textbf{73.96} & \textbf{69.44} & \textbf{65.97} & \textbf{88.89} & \textbf{86.11} & \textbf{75.35} & $\mathbf{76.12\pm11.96}$ & $\mathbf{0.682\pm0.159}$ & -- \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -346,61 +322,37 @@ Table~\ref{tab:results_2b} reports the two-class results for the nine BCI IV-2b 
 
 \begin{table*}[!htbp]
 \centering
-\caption{Per-subject LOSO accuracy (\%) and Cohen's $\kappa$ multiplied by 100 on BCI IV-2b (two classes). $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
+\caption{Per-subject LOSO accuracy (\%), with mean accuracy and mean Cohen's $\kappa$, on BCI IV-2b (two classes). $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
 \label{tab:results_2b}
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{ll*{9}{c}@{\hspace{14pt}}cc}
+\begin{tabular}{l*{9}{c}@{\hspace{14pt}}ccc}
 \toprule
-\multirow{2}{*}{Method} & \multirow{2}{*}{Metric} & \multicolumn{9}{c}{Target subject} & \multirow{2}{*}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} \\
-\cmidrule(lr){3-11}
- & & S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8 & S9 & & \\
+\multirow{2}{*}{Method} & \multicolumn{9}{c}{Target subject accuracy (\%)} & \multicolumn{2}{c}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} \\
+\cmidrule(lr){2-10}\cmidrule(lr){11-12}
+ & S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8 & S9 & Acc. (\%) & $\kappa$ & \\
 \midrule
 \multicolumn{13}{l}{\textit{Source-only training}} \\
-\multirow{2}{*}{\shortstack[l]{Conformer~\cite{song2023eegconformer}}} & Acc. & 75.31 & 62.86 & 55.62 & 92.50 & 94.69 & 74.06 & 82.81 & 82.50 & 81.88 & $78.03\pm12.02$ & 0.0156 \\
- & $\kappa$ & 50.63 & 25.71 & 11.25 & 85.00 & 89.38 & 48.12 & 65.62 & 65.00 & 63.75 & $56.10\pm24.00$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{ATCNet~\cite{altaheri2023atcnet}}} & Acc. & 76.25 & 65.71 & 57.19 & 90.00 & 96.88 & 77.50 & 84.06 & 84.69 & 82.19 & $79.38\pm11.40$ & 0.0078 \\
- & $\kappa$ & 52.50 & 31.43 & 14.38 & 80.00 & 93.75 & 55.00 & 68.12 & 69.38 & 64.38 & $58.80\pm22.80$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{TCFormer~\cite{altaheri2025tcformer}}} & Acc. & 78.44 & 69.64 & 64.38 & 90.62 & 95.00 & 75.94 & 86.87 & 85.31 & 84.38 & $81.18\pm9.37$ & 0.0820 \\
- & $\kappa$ & 56.88 & 39.29 & 28.75 & 81.25 & 90.00 & 51.88 & 73.75 & 70.63 & 68.75 & $62.40\pm18.70$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{EEGEncoder~\cite{liao2025eegencoder}}} & Acc. & 73.44 & 65.71 & 59.06 & 92.50 & 97.19 & 85.00 & 85.94 & 86.56 & 83.75 & $81.02\pm11.76$ & 0.0547 \\
- & $\kappa$ & 46.88 & 31.43 & 18.12 & 85.00 & 94.38 & 70.00 & 71.88 & 73.12 & 67.50 & $62.00\pm23.50$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SATrans-Net~\cite{miao2025satransnet}}} & Acc. & 77.50 & 69.29 & 69.69 & 90.62 & 97.50 & 79.69 & 87.50 & 84.38 & 79.69 & $81.76\pm8.78$ & 0.2109 \\
- & $\kappa$ & 55.00 & 38.57 & 39.38 & 81.25 & 95.00 & 59.38 & 75.00 & 68.75 & 59.38 & $63.50\pm17.60$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(source-only)}} & Acc. & 77.81 & 68.57 & 63.13 & 89.38 & 96.56 & 73.44 & 84.69 & 86.25 & 85.00 & $80.54\pm10.05$ & 0.0156 \\
- & $\kappa$ & 55.62 & 37.14 & 26.25 & 78.75 & 93.12 & 46.88 & 69.38 & 72.50 & 70.00 & $61.10\pm20.10$ &  \\
+Conformer~\cite{song2023eegconformer} & 75.31 & 62.86 & 55.62 & 92.50 & 94.69 & 74.06 & 82.81 & 82.50 & 81.88 & $78.03\pm12.02$ & $0.561\pm0.240$ & 0.0156 \\
+ATCNet~\cite{altaheri2023atcnet} & 76.25 & 65.71 & 57.19 & 90.00 & 96.88 & 77.50 & 84.06 & 84.69 & 82.19 & $79.38\pm11.40$ & $0.588\pm0.228$ & 0.0078 \\
+TCFormer~\cite{altaheri2025tcformer} & 78.44 & 69.64 & 64.38 & 90.62 & 95.00 & 75.94 & 86.87 & 85.31 & 84.38 & $81.18\pm9.37$ & $0.624\pm0.187$ & 0.0820 \\
+EEGEncoder~\cite{liao2025eegencoder} & 73.44 & 65.71 & 59.06 & 92.50 & 97.19 & 85.00 & 85.94 & 86.56 & 83.75 & $81.02\pm11.76$ & $0.620\pm0.235$ & 0.0547 \\
+SATrans-Net~\cite{miao2025satransnet} & 77.50 & 69.29 & 69.69 & 90.62 & 97.50 & 79.69 & 87.50 & 84.38 & 79.69 & $81.76\pm8.78$ & $0.635\pm0.176$ & 0.2109 \\
+SSM-DAN (source-only) & 77.81 & 68.57 & 63.13 & 89.38 & 96.56 & 73.44 & 84.69 & 86.25 & 85.00 & $80.54\pm10.05$ & $0.611\pm0.201$ & 0.0156 \\
 \midrule
 \multicolumn{13}{l}{\textit{Unsupervised domain adaptation}} \\
-\multirow{2}{*}{\shortstack[l]{CLUDA~\cite{ozyurt2023cluda}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{RMETNet~\cite{zhao2026rmetnet}}} & Acc. & 73.12 & 57.86 & 55.00 & 91.56 & 94.06 & 82.81 & 85.62 & 88.75 & 83.13 & $79.10\pm13.39$ & 0.0117 \\
- & $\kappa$ & 46.25 & 15.71 & 10.00 & 83.13 & 88.12 & 65.62 & 71.25 & 77.50 & 66.25 & $58.20\pm26.80$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{MSD-DDA~\cite{gong2026msdda}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(Stage~1 UDA)}} & Acc. & 78.44 & 70.71 & 63.44 & 90.31 & 97.81 & 83.75 & 89.69 & 95.63 & 85.94 & $83.97\pm10.71$ & 1.0000 \\
- & $\kappa$ & 56.88 & 41.43 & 26.88 & 80.62 & 95.63 & 67.50 & 79.37 & 91.25 & 71.88 & $67.90\pm21.40$ &  \\
+CLUDA~\cite{ozyurt2023cluda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+RMETNet~\cite{zhao2026rmetnet} & 73.12 & 57.86 & 55.00 & 91.56 & 94.06 & 82.81 & 85.62 & 88.75 & 83.13 & $79.10\pm13.39$ & $0.582\pm0.268$ & 0.0117 \\
+MSD-DDA~\cite{gong2026msdda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+SSM-DAN (Stage~1 UDA) & 78.44 & 70.71 & 63.44 & 90.31 & 97.81 & 83.75 & 89.69 & 95.63 & 85.94 & $83.97\pm10.71$ & $0.679\pm0.214$ & 1.0000 \\
 \midrule
 \multicolumn{13}{l}{\textit{Test-time adaptation}} \\
-\multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 75.00 & 65.00 & 59.69 & 93.44 & 94.69 & 79.06 & 88.12 & 94.37 & 81.25 & $81.18\pm12.12$ & 0.0078 \\
- & $\kappa$ & 50.00 & 30.00 & 19.37 & 86.88 & 89.38 & 58.13 & 76.25 & 88.75 & 62.50 & $62.40\pm24.20$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(IM-TTA)}} & Acc. & 77.81 & 68.57 & 66.25 & 93.75 & 96.25 & 81.88 & 89.69 & 94.69 & 81.25 & $83.35\pm10.50$ & 0.2031 \\
- & $\kappa$ & 55.62 & 37.14 & 32.50 & 87.50 & 92.50 & 63.75 & 79.37 & 89.38 & 62.50 & $66.70\pm21.00$ &  \\
+T-TIME~\cite{li2024ttime} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+BFT~\cite{li2026bft} & 75.00 & 65.00 & 59.69 & 93.44 & 94.69 & 79.06 & 88.12 & 94.37 & 81.25 & $81.18\pm12.12$ & $0.624\pm0.242$ & 0.0078 \\
+SSM-DAN (IM-TTA) & 77.81 & 68.57 & 66.25 & 93.75 & 96.25 & 81.88 & 89.69 & 94.69 & 81.25 & $83.35\pm10.50$ & $0.667\pm0.210$ & 0.2031 \\
 \midrule
-\multirow{2}{*}{\shortstack[l]{\textbf{SSM-DAN}}} & Acc. & 77.81 & 69.29 & 65.94 & 90.00 & 97.19 & 84.69 & 91.56 & 95.31 & 85.00 & $\mathbf{84.09\pm10.42}$ & -- \\
- & $\kappa$ & 55.62 & 38.57 & 31.88 & 80.00 & 94.38 & 69.38 & 83.13 & 90.62 & 70.00 & $\mathbf{68.20\pm20.80}$ &  \\
+\textbf{SSM-DAN} & 77.81 & 69.29 & 65.94 & 90.00 & 97.19 & 84.69 & 91.56 & 95.31 & 85.00 & $\mathbf{84.09\pm10.42}$ & $\mathbf{0.682\pm0.208}$ & -- \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -415,61 +367,37 @@ Table~\ref{tab:results_zhou} reports the three-class results on target session~3
 
 \begin{table*}[!htbp]
 \centering
-\caption{Per-subject LOSO accuracy (\%) and Cohen's $\kappa$ multiplied by 100 on target session~3 of Zhou2016 (three classes) under the clean chronological protocol. Bold: best value in each column. $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
+\caption{Per-subject LOSO accuracy (\%), with mean accuracy and mean Cohen's $\kappa$, on target session~3 of Zhou2016 (three classes) under the clean chronological protocol. Bold: best value in each column. $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
 \label{tab:results_zhou}
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{ll*{4}{c}@{\hspace{14pt}}cc}
+\begin{tabular}{l*{4}{c}@{\hspace{14pt}}ccc}
 \toprule
-\multirow{2}{*}{Method} & \multirow{2}{*}{Metric} & \multicolumn{4}{c}{Target subject} & \multirow{2}{*}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} \\
-\cmidrule(lr){3-6}
- & & S1 & S2 & S3 & S4 & & \\
+\multirow{2}{*}{Method} & \multicolumn{4}{c}{Target subject accuracy (\%)} & \multicolumn{2}{c}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-7}
+ & S1 & S2 & S3 & S4 & Acc. (\%) & $\kappa$ & \\
 \midrule
 \multicolumn{8}{l}{\textit{Source-only training}} \\
-\multirow{2}{*}{\shortstack[l]{Conformer~\cite{song2023eegconformer}}} & Acc. & 76.00 & 79.33 & 70.67 & 82.67 & $77.17\pm4.43$ & 0.1250 \\
- & $\kappa$ & 64.00 & 69.00 & 56.00 & 74.00 & $65.75\pm6.65$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{ATCNet~\cite{altaheri2023atcnet}}} & Acc. & 72.00 & 82.67 & 76.67 & 74.67 & $76.50\pm3.93$ & 0.1250 \\
- & $\kappa$ & 58.00 & 74.00 & 65.00 & 62.00 & $64.80\pm5.90$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{TCFormer~\cite{altaheri2025tcformer}}} & Acc. & 68.00 & 78.67 & 66.67 & 80.67 & $73.50\pm6.22$ & 0.1250 \\
- & $\kappa$ & 52.00 & 68.00 & 50.00 & 71.00 & $60.25\pm9.34$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{EEGEncoder~\cite{liao2025eegencoder}}} & Acc. & 62.00 & 84.00 & 74.67 & 76.67 & $74.33\pm7.92$ & 0.2500 \\
- & $\kappa$ & 43.00 & 76.00 & 62.00 & 65.00 & $61.50\pm11.90$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SATrans-Net~\cite{miao2025satransnet}}} & Acc. & 81.33 & 80.00 & 67.33 & 70.00 & $74.67\pm6.09$ & 0.1250 \\
- & $\kappa$ & 72.00 & 70.00 & 51.00 & 55.00 & $62.00\pm9.14$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(source-only)}} & Acc. & 72.00 & 78.67 & 71.33 & 78.67 & $75.17\pm3.51$ & 0.1250 \\
- & $\kappa$ & 58.00 & 68.00 & 57.00 & 68.00 & $62.75\pm5.26$ &  \\
+Conformer~\cite{song2023eegconformer} & 76.00 & 79.33 & 70.67 & 82.67 & $77.17\pm4.43$ & $0.657\pm0.066$ & 0.1250 \\
+ATCNet~\cite{altaheri2023atcnet} & 72.00 & 82.67 & 76.67 & 74.67 & $76.50\pm3.93$ & $0.648\pm0.059$ & 0.1250 \\
+TCFormer~\cite{altaheri2025tcformer} & 68.00 & 78.67 & 66.67 & 80.67 & $73.50\pm6.22$ & $0.603\pm0.093$ & 0.1250 \\
+EEGEncoder~\cite{liao2025eegencoder} & 62.00 & 84.00 & 74.67 & 76.67 & $74.33\pm7.92$ & $0.615\pm0.119$ & 0.2500 \\
+SATrans-Net~\cite{miao2025satransnet} & 81.33 & 80.00 & 67.33 & 70.00 & $74.67\pm6.09$ & $0.620\pm0.091$ & 0.1250 \\
+SSM-DAN (source-only) & 72.00 & 78.67 & 71.33 & 78.67 & $75.17\pm3.51$ & $0.627\pm0.053$ & 0.1250 \\
 \midrule
 \multicolumn{8}{l}{\textit{Unsupervised domain adaptation}} \\
-\multirow{2}{*}{\shortstack[l]{CLUDA~\cite{ozyurt2023cluda}}} & Acc. & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{RMETNet~\cite{zhao2026rmetnet}}} & Acc. & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{MSD-DDA~\cite{gong2026msdda}}} & Acc. & -- & -- & -- & -- & -- & -- \\
- & $\kappa$ & -- & -- & -- & -- & -- &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(Stage~1 UDA)}} & Acc. & 79.33 & 84.67 & $\mathbf{87.33}$ & 78.00 & $82.33\pm3.82$ & 0.6250 \\
- & $\kappa$ & 69.00 & 77.00 & $\mathbf{81.00}$ & 67.00 & $73.50\pm5.70$ &  \\
+CLUDA~\cite{ozyurt2023cluda} & -- & -- & -- & -- & -- & -- & -- \\
+RMETNet~\cite{zhao2026rmetnet} & -- & -- & -- & -- & -- & -- & -- \\
+MSD-DDA~\cite{gong2026msdda} & -- & -- & -- & -- & -- & -- & -- \\
+SSM-DAN (Stage~1 UDA) & 79.33 & 84.67 & $\mathbf{87.33}$ & 78.00 & $82.33\pm3.82$ & $0.735\pm0.057$ & 0.6250 \\
 \midrule
 \multicolumn{8}{l}{\textit{Test-time adaptation}} \\
-\multirow{2}{*}{\shortstack[l]{T-TIME~\cite{li2024ttime}}} & Acc. & $\mathbf{88.67}$ & 84.00 & 81.33 & $\mathbf{86.00}$ & $\mathbf{85.00\pm2.69}$ & 0.5000 \\
- & $\kappa$ & $\mathbf{83.00}$ & 76.00 & 72.00 & $\mathbf{79.00}$ & $\mathbf{77.50\pm4.03}$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{BFT~\cite{li2026bft}}} & Acc. & 84.00 & $\mathbf{86.67}$ & 76.00 & 84.67 & $82.83\pm4.07$ & 0.8750 \\
- & $\kappa$ & 76.00 & $\mathbf{80.00}$ & 64.00 & 77.00 & $74.30\pm6.10$ &  \\
-\addlinespace[2pt]
-\multirow{2}{*}{\shortstack[l]{SSM-DAN\\(IM-TTA)}} & Acc. & 79.33 & 84.00 & 83.33 & 83.33 & $82.50\pm1.85$ & 0.2500 \\
- & $\kappa$ & 69.00 & 76.00 & 75.00 & 75.00 & $73.75\pm2.77$ &  \\
+T-TIME~\cite{li2024ttime} & $\mathbf{88.67}$ & 84.00 & 81.33 & $\mathbf{86.00}$ & $\mathbf{85.00\pm2.69}$ & $\mathbf{0.775\pm0.040}$ & 0.5000 \\
+BFT~\cite{li2026bft} & 84.00 & $\mathbf{86.67}$ & 76.00 & 84.67 & $82.83\pm4.07$ & $0.743\pm0.061$ & 0.8750 \\
+SSM-DAN (IM-TTA) & 79.33 & 84.00 & 83.33 & 83.33 & $82.50\pm1.85$ & $0.738\pm0.028$ & 0.2500 \\
 \midrule
-\multirow{2}{*}{\shortstack[l]{\textbf{SSM-DAN}}} & Acc. & 84.00 & 83.33 & 84.67 & 85.33 & $84.33\pm0.75$ & -- \\
- & $\kappa$ & 76.00 & 75.00 & 77.00 & 78.00 & $76.50\pm1.12$ &  \\
+\textbf{SSM-DAN} & 84.00 & 83.33 & 84.67 & 85.33 & $84.33\pm0.75$ & $0.765\pm0.011$ & -- \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -484,7 +412,7 @@ Table~\ref{tab:ablation} follows the primary chronological protocol. The variant
 
 \begin{table*}[!htbp]
 \centering
-\caption{Ablation results under the primary chronological protocol: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ ($\times100$) across target subjects. BCI IV-2a is scored on session~2, BCI IV-2b on sessions~4--5, and Zhou2016 on session~3.}
+\caption{Ablation results under the primary chronological protocol: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ across target subjects. BCI IV-2a is scored on session~2, BCI IV-2b on sessions~4--5, and Zhou2016 on session~3.}
 \label{tab:ablation}
 \small
 \setlength{\tabcolsep}{3.0pt}
@@ -494,15 +422,15 @@ Dataset & Metric & SSM-DAN & \colhead{Without\\Riemannian\\alignment} & \colhead
 \midrule
 \multirow{2}{*}{BCI IV-2a}
  & Acc. & $\mathbf{76.12\pm11.96}$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ \\
- & $\kappa$ & $\mathbf{68.20\pm15.90}$ & $60.40\pm15.50$ & $61.80\pm15.70$ & $62.90\pm18.10$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.159}$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
  & Acc. & $\mathbf{84.09\pm10.42}$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ \\
- & $\kappa$ & $\mathbf{68.20\pm20.80}$ & $67.20\pm20.90$ & $66.70\pm21.00$ & $67.90\pm21.40$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
  & Acc. & $\mathbf{84.33\pm0.75}$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
- & $\kappa$ & $\mathbf{76.50\pm1.12}$ & $76.00\pm4.70$ & $73.75\pm2.77$ & $73.50\pm5.70$ \\
+ & $\kappa$ & $\mathbf{0.765\pm0.011}$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
