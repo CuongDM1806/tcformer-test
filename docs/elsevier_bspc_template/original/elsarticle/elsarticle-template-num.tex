@@ -106,12 +106,12 @@ Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes thr
 \subsection{Bidirectional selective state-space encoder}
 \label{subsec:ssm}
 
-To capture trial-wide dependencies, $H_c$ is mixed across channels and passed through five selective state-space blocks \cite{gu2022s4,gu2024mamba}. Each block normalizes its input and, through gated projections and a short causal convolution, produces a sequence $u_t$ that drives a diagonal recurrence:
+To capture trial-wide dependencies, $H_c$ passes through five selective state-space blocks \cite{gu2022s4,gu2024mamba}, each driving a diagonal recurrence with its projected input $u_t$:
 \begin{align}
     h_t &= \exp(\Delta_t A)\odot h_{t-1} + \Delta_t B_t\odot u_t, \\
     z_t &= C_t^\top h_t + d\odot u_t ,
 \end{align}
-where $h_t$ is the hidden state, $A=-\exp(A_{\log})$ is a learned negative decay that keeps the recurrence stable, and $\Delta_t$, $B_t$, and $C_t$ are computed from the input, so each block selects which time steps to retain at a cost linear in $L$. Since complete trials are available offline, blocks alternate between forward and backward scanning, a backward block reversing the time axis around its recurrence (Fig.~\ref{fig:ssm_block}), which gives bidirectional context without duplicating blocks. The state dimension is eight, with dropout 0.4 and depth-dependent stochastic depth; the recurrence is implemented in plain PyTorch rather than with the Mamba CUDA kernel.
+where $A=-\exp(A_{\log})$ is a learned stable decay and $\Delta_t$, $B_t$, and $C_t$ depend on the input, so each block selects which time steps to retain at linear cost. Blocks alternate between forward and backward scanning (Fig.~\ref{fig:ssm_block}), giving bidirectional context without extra blocks. The state dimension is eight, with dropout 0.4 and stochastic depth.
 
 \begin{figure*}[!htbp]
     \centering
@@ -152,19 +152,19 @@ with shared affine parameters $\gamma$ and $\beta$. The mixing weight $\alpha\in
 \subsection{Training objective}
 \label{subsec:uda}
 
-A residual $64\!\rightarrow\!128\!\rightarrow\!64$ aligner maps the normalized representation into the space used by the classifier and the alignment losses. Besides the source cross-entropy $\mathcal{L}_{\mathrm{cls}}$, the only labeled term, a gradient-reversal domain discriminator \cite{ganin2016dann} gives $\mathcal{L}_{\mathrm{adv}}$, with a weight ramped from zero to one, and a five-kernel MK-MMD \cite{long2015dan} aligns source and target trial representations ($\mathcal{L}_{\mathrm{mmd}}$) and time-averaged TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$). Target predictions are made confident and class-balanced by the information-maximization loss \cite{liang2020shot}
+A residual $64\!\rightarrow\!128\!\rightarrow\!64$ aligner precedes the classifier and alignment losses. Besides the source cross-entropy $\mathcal{L}_{\mathrm{cls}}$, Stage~1 uses a gradient-reversal domain loss $\mathcal{L}_{\mathrm{adv}}$ \cite{ganin2016dann}, MK-MMD losses on trial representations ($\mathcal{L}_{\mathrm{mmd}}$) and TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$) \cite{long2015dan}, and the information-maximization loss \cite{liang2020shot}
 \begin{equation}
     \mathcal{L}_{\mathrm{IM}}
     =\frac{1}{N}\sum_{j=1}^{N} H(p_j)-H\!\left(\frac{1}{N}\sum_{j=1}^{N}p_j\right),
 \label{eq:im}
 \end{equation}
-where $p_j$ is the predicted class distribution of the $j$-th of $N$ unlabeled trials and $H(\cdot)$ the entropy. With $\mathcal{L}_{\mathrm{IM}}^{t}$ computed on a target mini-batch, the objective is
+where $p_j$ is the predicted class distribution of the $j$-th of $N$ unlabeled trials and $H(\cdot)$ the entropy. The objective is
 \begin{equation}
     \mathcal{L}=\mathcal{L}_{\mathrm{cls}}+0.1\mathcal{L}_{\mathrm{IM}}^{t}+\mathcal{L}_{\mathrm{adv}}
     +0.5\mathcal{L}_{\mathrm{mmd}}+0.1\mathcal{L}_{\mathrm{tmmd}}.
 \label{eq:total_loss}
 \end{equation}
-Target trials in this stage come only from $\mathcal{T}_a$. The alignment losses see the AutoDIAL output with $\alpha$ fixed, since they could otherwise be minimized trivially by $\alpha\rightarrow1$; $\alpha$ is thus learned only through $\mathcal{L}_{\mathrm{IM}}^{t}$.
+where $\mathcal{L}_{\mathrm{IM}}^{t}$ is computed on target trials from $\mathcal{T}_a$. The alignment losses see the AutoDIAL output with $\alpha$ fixed, so $\alpha$ is learned only through $\mathcal{L}_{\mathrm{IM}}^{t}$.
 
 \subsection{Test-time adaptation}
 \label{subsec:imtta}
