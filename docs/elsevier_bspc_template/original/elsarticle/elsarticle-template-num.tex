@@ -82,14 +82,14 @@ To our knowledge, selective state-space MI decoders have not been coupled with t
 \section{Method}
 \label{sec:method}
 
-SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder combines multi-scale convolutions for local spectral--spatial features, bidirectional selective state-space blocks for long-range dynamics, and a temporal convolutional fusion head (Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). A hierarchical adaptation scheme reduces subject shift at three levels: Riemannian whitening of the input, AutoDIAL normalization with adversarial and discrepancy losses on the features, and test-time adaptation of the predictions (Sections~\ref{subsec:ra}--\ref{subsec:imtta}). The model is trained on labeled source-subject trials and unlabeled target-subject trials (Stage~1), adapted to the unlabeled evaluation trials (Stage~2), and then used for prediction (Stage~3).
-
-\begin{figure*}[!t]
+\begin{figure*}[!h]
     \centering
     \includegraphics[width=\textwidth]{figures/architecture_overview.pdf}
     \caption{Overview of SSM-DAN: training with labeled source and unlabeled target EEG (Stage~1), label-free test-time adaptation on the unlabeled evaluation sessions $\mathcal{T}_e$ (Stage~2), and prediction (Stage~3).}
     \label{fig:architecture_overview}
 \end{figure*}
+
+SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder combines multi-scale convolutions for local spectral--spatial features, bidirectional selective state-space blocks for long-range dynamics, and a temporal convolutional fusion head (Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). A hierarchical adaptation scheme reduces subject shift at three levels: Riemannian whitening of the input, AutoDIAL normalization with adversarial and discrepancy losses on the features, and test-time adaptation of the predictions (Sections~\ref{subsec:ra}--\ref{subsec:imtta}). The model is trained on labeled source-subject trials and unlabeled target-subject trials (Stage~1), adapted to the unlabeled evaluation trials (Stage~2), and then used for prediction (Stage~3).
 
 \begin{figure*}[!t]
     \centering
