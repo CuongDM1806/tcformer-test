@@ -567,7 +567,7 @@ The method is transductive because IM-TTA accesses unlabeled evaluation-session 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented SSM-DAN, a cross-subject MI-EEG framework combining multi-scale spatial--temporal convolution, alternating selective state-space blocks, local--global TCN fusion, hierarchical UDA, and constrained IM-TTA. Its chronological LOSO protocol excludes target labels from preprocessing, training, adaptation, and checkpoint selection. SSM-DAN obtained $76.12\pm11.96\%$ session-2 accuracy on BCI IV-2a and $84.09\pm10.42\%$ sessions~4--5 accuracy on BCI IV-2b, with corresponding Cohen's $\kappa$ scores of $68.20\pm15.90$ and $68.20\pm20.80$ on the $\times100$ scale. On Zhou2016, SSM-DAN obtained $84.33\pm0.75\%$ target-session-3 accuracy and $76.50\pm1.12$ Cohen's $\kappa$. Matched baselines and repeated-seed experiments remain necessary before drawing broader conclusions.
+We presented SSM-DAN, a cross-subject MI-EEG framework that combines multi-scale convolution and bidirectional selective state-space modeling with hierarchical UDA and constrained IM-TTA, evaluated under a chronological LOSO protocol that keeps target labels out of training, adaptation, and model selection. It reached mean accuracies of 76.12\% on BCI IV-2a, 84.09\% on BCI IV-2b, and 84.33\% on Zhou2016. Matched baselines and repeated-seed experiments are still needed before drawing broader conclusions.
 
 \section*{CRediT authorship contribution statement}
 %% One line per author; keep only the CRediT roles each author actually had.
