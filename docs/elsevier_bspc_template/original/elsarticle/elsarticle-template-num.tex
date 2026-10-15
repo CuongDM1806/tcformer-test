@@ -217,7 +217,7 @@ Four healthy participants (one male, three female; 22--28 years; sex reported on
 \subsection{Chronological LOSO protocol with test-time adaptation}
 \label{subsec:clean_protocol}
 
-Each LOSO fold holds out one target subject and uses all others as labeled sources, with the chronological session split in Table~\ref{tab:protocol}. Earlier target sessions are used without labels for Stage~1 UDA. The later evaluation sessions are excluded from training, preprocessing-statistic fitting, and checkpoint selection; at inference, their unlabeled EEG is used only by IM-TTA and AutoDIAL target-statistic re-estimation, after which the withheld labels are used for scoring. This is the primary protocol for all comparisons.
+Each LOSO fold holds out one target subject and uses the others as labeled sources, with the session split in Table~\ref{tab:protocol}. Earlier target sessions are used without labels in Stage~1; the evaluation sessions are excluded from training and model selection, and their unlabeled EEG is used only by IM-TTA before scoring.
 
 \begin{table*}[!htbp]
 \centering
@@ -238,15 +238,15 @@ Zhou2016  & sessions 1--2  & session 3      & sessions 1--2  & session 3 \\
 \end{tabular}
 \end{table*}
 
-This yields nine folds for BCI IV-2a and IV-2b and four for Zhou2016, with identical rules and hyperparameters in every fold. The checkpoint with the highest source-validation accuracy is selected before IM-TTA, so evaluation labels and metrics never influence adaptation or model selection. For Zhou2016, an all-session target score is reported as an auxiliary diagnostic only.
+This gives nine folds for BCI IV-2a and IV-2b and four for Zhou2016, with identical hyperparameters in every fold; the checkpoint with the highest source-validation accuracy is used. For Zhou2016, an all-session target score is reported as an auxiliary diagnostic.
 
 
 \subsection{Preprocessing and augmentation}
 \label{subsec:preprocessing}
 
-Only EEG channels are retained, resampled to 250~Hz, and converted to microvolts. BCI IV-2a uses the full MOABB event window and BCI IV-2b removes its last 0.5~s, both without further filtering. Zhou2016 is band-pass filtered at 8--30~Hz and cropped to 0.5--5.0~s after cue onset (1125 samples) to suppress the cue transient and focus on the $\mu/\beta$ range.
+EEG channels are resampled to 250~Hz and converted to microvolts. BCI IV-2a uses the full MOABB event window and BCI IV-2b drops its last 0.5~s, both unfiltered; Zhou2016 is band-pass filtered at 8--30~Hz and cropped to 0.5--5.0~s after cue onset.
 
-Riemannian whitening follows the session-isolated rule in Section~\ref{subsec:ra}, and z-score statistics are fitted on the source-training partition and then frozen. Following TCFormer \cite{altaheri2025tcformer}, segmentation and reconstruction (S\&R) augmentation \cite{lotte2015signal} is applied to labeled source mini-batches of BCI IV-2a and IV-2b: each trial is split into eight consecutive segments, and synthetic trials concatenate same-position segments from randomly chosen same-class trials, doubling the mini-batch without using target data. Zhou2016 uses no augmentation.
+Z-score statistics are fitted on the source-training partition. For BCI IV-2a and IV-2b, labeled source mini-batches are doubled with the segmentation and reconstruction (S\&R) augmentation \cite{lotte2015signal} used by TCFormer \cite{altaheri2025tcformer}, which recombines eight-segment pieces of same-class trials; Zhou2016 uses no augmentation.
 
 \subsection{Implementation details}
 \label{subsec:training}
