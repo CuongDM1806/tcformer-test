@@ -558,11 +558,11 @@ SSM-DAN\newline (w/o RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4
 \section{Discussion}
 \label{sec:discussion}
 
-The results show that adaptation is dataset dependent. Among its variants, SSM-DAN was best on all three datasets, although on BCI IV-2b its margin over the variant without test-time adaptation was only 0.12 percentage points and all variants were statistically indistinguishable. On Zhou2016, SSM-DAN also had the lowest variability across targets, but its margins over the variants without Riemannian alignment, test-time adaptation, or Stage~1 domain adaptation were small and cannot be significant with four folds. Filtering to 8--30~Hz and excluding the first 0.5~s focus covariance estimation on MI-related activity rather than broadband drift and cue transients; repeated-seed experiments are still required to establish the stability of these differences.
+The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences.
 
-Architecturally, multi-scale and depthwise convolutions preserve local spectral--spatial evidence, while alternating selective scans and the TCN model complementary long- and short-range dynamics. The alternating scans exploit complete offline trials and are non-causal; online use would require forward-only processing and device-specific latency validation.
+The alternating scans exploit complete offline trials and are non-causal, so online use would require forward-only processing.
 
-The method is transductive because IM-TTA accesses unlabeled evaluation-session signals before scoring. Comparisons must therefore provide baselines with identical target access. Other limitations include the three-channel BCI IV-2b setting, the small Zhou2016 cohort, and the absence of repeated-seed and fully matched baseline results. Participant sex is reported only in aggregate or not at all for the public datasets, and the cohorts are too small for sex- or gender-stratified analysis; potential sex-related differences in decoding performance were therefore not assessed and limit the generalizability of the findings.
+Because IM-TTA uses unlabeled evaluation-session signals, the method is transductive and must be compared with baselines of identical target access. Further limitations are the three-channel BCI IV-2b setting, the small Zhou2016 cohort, incomplete matched baselines, and the lack of sex-stratified analysis, as participant sex is reported only in aggregate or not at all.
 
 \section{Conclusion}
 \label{sec:conclusion}
