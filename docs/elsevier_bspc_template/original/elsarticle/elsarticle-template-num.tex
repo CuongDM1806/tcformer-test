@@ -94,7 +94,7 @@ SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder com
 \subsection{Multi-scale convolutional encoder}
 \label{subsec:conv_frontend}
 
-Each trial is an EEG matrix $X\in\mathbb{R}^{C\times T}$ with $C$ electrodes and $T$ samples. Following TCFormer \cite{altaheri2025tcformer}, three temporal convolutions with kernels of 20, 32, and 64 samples each produce 32 feature maps at a different time scale (Fig.~\ref{fig:encoder_detail}). A depthwise convolution over all electrodes learns two spatial filters per map, followed by average pooling and dropout. A grouped pointwise convolution reduces the 192 maps to 48 channels (16 per scale), refined by a grouped temporal convolution. A residual channel-group attention reweights each scale with one learned coefficient, and a second pooling stage yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$ with $L$ pooled time steps.
+Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes through three temporal convolutions with kernels of 20, 32, and 64 samples, as in TCFormer \cite{altaheri2025tcformer}, followed by depthwise spatial filtering, pooling, and grouped refinement to 16 channels per scale (Fig.~\ref{fig:encoder_detail}). A residual channel-group attention reweights the three scales, and a second pooling yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$.
 
 \begin{figure*}[!htbp]
     \centering
