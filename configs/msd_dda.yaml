@@ -1,0 +1,40 @@
+# MSD-DDA (IEEE JBHI 2025) under the chronological LOSO protocol of the paper;
+# see msd_dda_baseline.py. Settings are those reported for BCI IV-2a in the
+# MSD-DDA paper (Section V-A, Eq. (3)-(5), (17)) and the authors' script.
+subject_ids: "all"
+seed: 0
+log_every_n_epochs: 20
+
+preprocessing:
+  # MSD-DDA's 8-30 Hz band-pass (paper Section IV-B) on the paper's windows.
+  bcic2a:
+    sfreq: 250
+    low_cut: 8.0
+    high_cut: 30.0
+    start: 0.0
+    stop: 0.0
+  bcic2b:
+    sfreq: 250
+    low_cut: 8.0
+    high_cut: 30.0
+    start: 0.0
+    stop: -0.5
+  zhou2016:
+    sfreq: 250
+    low_cut: 8.0
+    high_cut: 30.0
+    start: 0.5
+    trial_duration: 4.5
+
+msd_dda:
+  epochs: 200
+  batch_size: 18
+  lr: 0.0001
+  lambda_adapt: 0.3
+  pseudo_threshold: 0.6
+  # Eq. (17): w = softmax(eta / (beta * L_mmd + gamma * L_cls)).
+  weight_eta: 2.0
+  weight_beta: 10.0
+  weight_gamma: 1.0
+  # RCSP filters kept from each end of every (one-vs-rest) CSP spectrum.
+  rcsp_pairs: 3

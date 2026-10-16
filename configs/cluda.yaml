@@ -1,0 +1,48 @@
+# CLUDA (ICLR 2023) under the chronological LOSO protocol of the paper;
+# see cluda_baseline.py. Settings are the authors' configuration for
+# multivariate sensor data (HAR/HHAR, README of oezyurty/CLUDA).
+subject_ids: "all"
+seed: 0
+log_every_n_steps: 500
+
+preprocessing:
+  bcic2a:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: 0.0
+  bcic2b:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: -0.5
+  zhou2016:
+    # Same MI-focused Zhou2016 preprocessing as every method in the paper.
+    sfreq: 250
+    low_cut: 8.0
+    high_cut: 30.0
+    start: 0.5
+    trial_duration: 4.5
+
+cluda:
+  num_channels_TCN: "64-64-64"
+  kernel_size_TCN: 7
+  dilation_factor_TCN: 3
+  stride_TCN: 1
+  dropout: 0.2
+  hidden_dim_MLP: 128
+  use_batch_norm: false
+  queue_size: 8192
+  momentum: 0.99
+  batch_size: 32
+  num_steps: 10000
+  checkpoint_freq: 100
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  weight_loss_src: 0.05
+  weight_loss_trg: 0.05
+  weight_loss_ts: 0.1
+  weight_loss_disc: 1.0
+  weight_loss_pred: 1.0
