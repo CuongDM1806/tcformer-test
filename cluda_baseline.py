@@ -21,11 +21,14 @@ BCI IV-2a 1 / 2, BCI IV-2b 1-3 / 4-5, Zhou2016 1-2 / 3.
 
 Training follows the authors' main/train.py and the CLUDA step of
 main/algorithms.py with their configuration for multivariate sensor data
-(HAR/HHAR in the README): TCN 64-64-64, kernel 7, dilation 3, dropout 0.2,
+(HAR/HHAR in the README): TCN kernel 7, dilation 3, 64 channels, dropout 0.2,
 MLP hidden 128, queue 8192, momentum 0.99, batch 32, 10000 steps, Adam lr 1e-4,
 betas (0.5, 0.99), weight decay 1e-4, loss weights src/trg contrastive 0.05,
 nearest-neighbour 0.1, discriminator 1, prediction 1, GRL coefficient
-2 / (1 + exp(-10 step / 1000)) - 1, evaluation every 100 steps.
+2 / (1 + exp(-10 step / 1000)) - 1, evaluation every 100 steps. CLUDA classifies the last TCN output step; the
+HAR configuration has 3 levels (receptive field 157 samples) for 128-sample
+windows, so the depth is raised to 5 levels (1453 samples) to span the
+1000-sample EEG trials; with 3 levels the model only sees the last 0.6 s.
 """
 import argparse
 import os
@@ -46,7 +49,7 @@ from sklearn.metrics import accuracy_score, cohen_kappa_score, confusion_matrix
 
 from rmetnet_baseline import split_fold, to_tensor
 from tta_baselines import DATASETS, fix_random_seed, load_sessions
-from utils.cluda import CLUDA_NN, get_augmenter
+from utils.cluda import CLUDA_NN, get_augmenter, receptive_field
 from utils.latency import measure_latency
 from utils.metrics import write_summary
 from utils.plotting import plot_confusion_matrix
@@ -97,7 +100,7 @@ def train_fold(Xs, ys, Xa, Xv, yv, args, device):
     def augment(x):
         return augmenter(x, torch.ones_like(x, dtype=torch.long))[0]
 
-    count_step = 0
+    count_step, started = 0, time.time()
     best_acc, best_state, best_step = -1.0, None, -1
     while count_step < args.num_steps:
         target_iter = iter(target_loader)
@@ -140,7 +143,7 @@ def train_fold(Xs, ys, Xa, Xv, yv, args, device):
                           f"cl_s={loss_s.item():.4f} | cl_t={loss_t.item():.4f} | "
                           f"nn_ts={loss_ts.item():.4f} | disc={loss_disc.item():.4f} | "
                           f"val_acc={val_acc * 100:.2f}% (best {best_acc * 100:.2f}% "
-                          f"@ {best_step})", flush=True)
+                          f"@ {best_step}) | {(time.time() - started) / 60:.1f} min", flush=True)
             if count_step >= args.num_steps:
                 break
 
@@ -172,6 +175,12 @@ def run(config, gpu_id, dataset_name="bcic2a"):
 
     sessions = load_sessions(dataset_name, preprocessing)
     n_channels, n_samples = next(iter(sessions.values()))[0][0].shape[1:]
+    # CLUDA classifies the last TCN output step, so its receptive field must
+    # span the whole trial (the authors' sensor configurations do).
+    field = receptive_field(len(args.num_channels_TCN), args.kernel_size_TCN,
+                            args.dilation_factor_TCN)
+    print(f"  TCN receptive field {field} samples, trial length {n_samples}", flush=True)
+    assert field >= n_samples, "TCN receptive field shorter than the trial"
 
     subject_ids = config["subject_ids"]
     if subject_ids == "all":

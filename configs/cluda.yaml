@@ -27,7 +27,9 @@ preprocessing:
     trial_duration: 4.5
 
 cluda:
-  num_channels_TCN: "64-64-64"
+  # HAR uses 64-64-64 (receptive field 157 >= its 128-sample windows); two
+  # more levels give 1453 >= the 1000-sample EEG trials (last-step classifier).
+  num_channels_TCN: "64-64-64-64-64"
   kernel_size_TCN: 7
   dilation_factor_TCN: 3
   stride_TCN: 1

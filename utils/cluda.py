@@ -18,6 +18,11 @@ from torch.autograd import Function
 # --------------------------------------------------------------------------
 # utils/tcn_no_norm.py (taken by the authors from locuslab/TCN)
 # --------------------------------------------------------------------------
+def receptive_field(num_levels, kernel_size, dilation_factor):
+    """Time steps seen by the last output step of the TCN (two convs per level)."""
+    return 1 + 2 * (kernel_size - 1) * sum(dilation_factor ** i for i in range(num_levels))
+
+
 class Chomp1d(nn.Module):
     def __init__(self, chomp_size):
         super().__init__()
@@ -120,7 +125,11 @@ def NN(key, queue, num_neighbors=1, return_indices=False):
 # utils/augmentations.py (sequences are N x L x C, as in the authors' code)
 # --------------------------------------------------------------------------
 class Augmenter:
-    """History cutout, history crop, Gaussian noise and spatial dropout."""
+    """History cutout, history crop, Gaussian noise and spatial dropout.
+
+    The masks are built on the sequence's device and broadcast over channels
+    and time (the release materialises them on the CPU); the operations are
+    the same."""
 
     def __init__(self, cutout_length=4, cutout_prob=0.5, crop_min_history=0.5, crop_prob=0.5,
                  gaussian_std=0.1, dropout_prob=0.1):
@@ -142,12 +151,13 @@ class Augmenter:
         n_seq, n_len, n_channel = sequence.shape
         device = sequence.device
         cutout_start_index = torch.randint(low=0, high=n_len - self.cutout_length,
-                                           size=(n_seq, 1)).expand(-1, n_len)
+                                           size=(n_seq, 1), device=device)
         cutout_end_index = cutout_start_index + self.cutout_length
-        indices_tensor = torch.arange(n_len).repeat(n_seq, 1)
-        mask_cutout = (indices_tensor < cutout_start_index) + (indices_tensor >= cutout_end_index)
-        mask_cutout = mask_cutout.unsqueeze(dim=-1).expand(-1, -1, n_channel).long().to(device)
-        cutout_selection = (torch.rand(n_seq) < self.cutout_prob).long().reshape(-1, 1, 1).to(device)
+        indices_tensor = torch.arange(n_len, device=device).unsqueeze(0)
+        mask_cutout = (indices_tensor < cutout_start_index) | (indices_tensor >= cutout_end_index)
+        mask_cutout = mask_cutout.unsqueeze(dim=-1).to(sequence.dtype)       # broadcast over channels
+        cutout_selection = (torch.rand(n_seq, device=device) < self.cutout_prob).to(
+            sequence.dtype).reshape(-1, 1, 1)
         sequence_cutout = sequence * (1 - cutout_selection) + sequence * cutout_selection * mask_cutout
         sequence_mask_cutout = (sequence_mask * (1 - cutout_selection)
                                 + sequence_mask * cutout_selection * mask_cutout)
@@ -156,38 +166,38 @@ class Augmenter:
     def history_crop(self, sequence, sequence_mask):
         n_seq, n_len, n_channel = sequence.shape
         device = sequence.device
-        nonpadded = sequence_mask.sum(dim=-1).cpu()
+        nonpadded = sequence_mask.sum(dim=-1)
         first_nonpadded = self.get_first_nonzero(nonpadded).reshape(-1, 1) / n_len
-        crop_start_index = torch.rand(size=(n_seq, 1))
+        crop_start_index = torch.rand(size=(n_seq, 1), device=device)
         crop_start_index = (crop_start_index * (1 - first_nonpadded) * self.crop_min_history
                             + first_nonpadded)
-        crop_start_index = (crop_start_index * n_len).long().expand(-1, n_len)
-        indices_tensor = torch.arange(n_len).repeat(n_seq, 1)
-        mask_crop = indices_tensor >= crop_start_index
-        mask_crop = mask_crop.unsqueeze(dim=-1).expand(-1, -1, n_channel).long().to(device)
-        crop_selection = (torch.rand(n_seq) < self.crop_prob).long().reshape(-1, 1, 1).to(device)
+        crop_start_index = (crop_start_index * n_len).long()
+        indices_tensor = torch.arange(n_len, device=device).unsqueeze(0)
+        mask_crop = (indices_tensor >= crop_start_index).unsqueeze(dim=-1).to(sequence.dtype)
+        crop_selection = (torch.rand(n_seq, device=device) < self.crop_prob).to(
+            sequence.dtype).reshape(-1, 1, 1)
         sequence_crop = sequence * (1 - crop_selection) + sequence * crop_selection * mask_crop
         sequence_mask_crop = (sequence_mask * (1 - crop_selection)
                               + sequence_mask * crop_selection * mask_crop)
         return sequence_crop, sequence_mask_crop
 
     def gaussian_noise(self, sequence, sequence_mask):
-        padding_mask = (sequence_mask != 0).long()
+        padding_mask = (sequence_mask != 0).to(sequence.dtype)
         noise = nn.init.trunc_normal_(torch.empty_like(sequence), std=self.gaussian_std,
                                       a=-2 * self.gaussian_std, b=2 * self.gaussian_std)
         return sequence + padding_mask * noise, sequence_mask
 
     def spatial_dropout(self, sequence, sequence_mask):
         n_seq, n_len, n_channel = sequence.shape
-        dropout_selection = (torch.rand((n_seq, 1, n_channel)) > self.dropout_prob).long()
-        dropout_selection = dropout_selection.expand(-1, n_len, -1).to(sequence.device)
+        dropout_selection = (torch.rand((n_seq, 1, n_channel), device=sequence.device)
+                             > self.dropout_prob).to(sequence.dtype)
         return sequence * dropout_selection, sequence_mask * dropout_selection
 
     @staticmethod
     def get_first_nonzero(tensor2d):
         nonzero = tensor2d != 0
         cumsum = nonzero.cumsum(dim=-1)
-        return ((cumsum == 1) & nonzero).max(dim=-1).indices
+        return ((cumsum == 1) & nonzero).long().max(dim=-1).indices
 
 
 def get_augmenter(seq_len, num_channels):
