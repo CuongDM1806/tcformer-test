@@ -1,0 +1,34 @@
+# RMETNet under the authors' own cross-subject protocol (see
+# rmetnet_authors_protocol.py). For comparison with the published numbers only;
+# not the SSM-DAN paper protocol.
+subject_ids: "all"
+# random_state default of maingcn-mmdloss-2a-matrics.py.
+seed: 44
+log_every_n_epochs: 25
+
+# Session groups used for both source and target subjects.
+sessions:
+  bcic2a: [0]          # session T (A0xT.gdf), 288 trials per subject
+  bcic2b: [2, 3, 4]    # the three feedback sessions, 480 trials per subject
+
+preprocessing:
+  # 0.5-4.5 s after the cue (1000 samples), no extra filtering.
+  bcic2a:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.5
+    stop: 0.5
+  bcic2b:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.5
+    stop: 0.0
+
+rmetnet:
+  epochs: 500
+  batch_size: 64
+  lr: 0.0002
+  betas: [0.5, 0.999]
+  weight_decay: 0.075
