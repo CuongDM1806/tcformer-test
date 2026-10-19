@@ -138,6 +138,11 @@ model_kwargs:
   target_im_weight: 0.1
   # Re-estimate AutoDIAL target statistics after IM-TTA on the same trials.
   recalibrate_target_statistics: true
+  # Test-time selection calibration (after IM-TTA, before the AutoDIAL
+  # re-estimation): per-channel offsets of every selective-SSM step-size
+  # pre-activation make its mean over the unlabeled evaluation trials equal
+  # to its mean over the labeled source training trials, block by block.
+  selection_calibration: true
   # The residual aligner stays after AutoDIAL as a safe correction path.
   aligner_hidden_dim: 128
   domain_hidden_dim: 128

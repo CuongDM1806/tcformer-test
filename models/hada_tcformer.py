@@ -244,6 +244,7 @@ class HADATCFormer(ClassificationModule):
         domain_norm_momentum: float = 0.1,
         target_im_weight: float = 0.0,
         recalibrate_target_statistics: bool = True,
+        selection_calibration: bool = False,
         aligner_hidden_dim: int = 128,
         domain_hidden_dim: int = 128,
         adaptation_dropout: float = 0.3,
@@ -313,6 +314,10 @@ class HADATCFormer(ClassificationModule):
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
         self.temporal_mmd_weight = temporal_mmd_weight
+        # Test-time selection calibration: per-channel offsets of the SSM
+        # step-size pre-activations that match the target mean to the source.
+        self.selection_calibration = selection_calibration
+        self._selection_reference = None
         if not 0.0 < light_adaptation_factor <= 1.0:
             raise ValueError("light_adaptation_factor must be in (0, 1].")
         self.light_adaptation_factor = light_adaptation_factor
@@ -447,12 +452,74 @@ class HADATCFormer(ClassificationModule):
         """
         self._inference_domain = "target"
         stats = self._run_im_tta(target_loader) if self.im_tta_steps > 0 else None
+        if self.selection_calibration:
+            self._calibrate_selection(target_loader)
         if self.domain_norm is not None:
             if self.recalibrate_target_statistics:
                 self._recalibrate_target_statistics(target_loader)
             self.print(f"AutoDIAL alpha per feature group: {self.autodial_alpha()}")
         self.eval()
         return stats
+
+    @torch.no_grad()
+    def _mean_selection_pre_activations(self, loader, block=None):
+        """Mean SSM step-size pre-activation per channel over trials and time.
+
+        Uses the model in its current inference state; labels, if present in
+        the loader, are never read. Returns one [d_model] tensor per block, or
+        only that of `block`.
+        """
+        device = next(self.parameters()).device
+        self.model.record_selection(True)
+        sums, count = None, 0
+        try:
+            for batch in loader:
+                x = batch[0] if isinstance(batch, (tuple, list)) else batch
+                self.model.extract_temporal_features(x.to(device, non_blocking=True))
+                raws = self.model.selection_pre_activations()
+                if block is not None:
+                    raws = [raws[block]]
+                batch_sums = [raw.double().sum(dim=(0, 1)) for raw in raws]
+                sums = batch_sums if sums is None else [a + b for a, b in zip(sums, batch_sums)]
+                count += raws[0].shape[0] * raws[0].shape[1]
+        finally:
+            self.model.record_selection(False)
+        if count == 0:
+            raise RuntimeError("Selection statistics need at least one trial.")
+        return [(total / count).float() for total in sums]
+
+    @torch.no_grad()
+    def set_selection_reference(self, source_loader) -> None:
+        """Source reference of the step-size pre-activations (labeled source
+        training trials, best checkpoint, before any target adaptation)."""
+        self.eval()
+        self._selection_reference = self._mean_selection_pre_activations(source_loader)
+        self.print(
+            "Selection reference set | blocks="
+            f"{len(self._selection_reference)} | mean pre-activation per block: "
+            f"{[round(float(r.mean()), 3) for r in self._selection_reference]}"
+        )
+
+    @torch.no_grad()
+    def _calibrate_selection(self, target_loader) -> None:
+        """Shift each block's step-size pre-activation so that its target mean
+        matches the source reference, channel by channel.
+
+        Blocks are calibrated in order, because a block's input depends on the
+        offsets of the blocks before it. Only unlabeled target EEG is used.
+        """
+        if self._selection_reference is None:
+            raise RuntimeError("Call set_selection_reference() before selection calibration.")
+        self.eval()
+        mixers = self.model.ssm_mixers()
+        for mixer in mixers:
+            mixer.delta_shift.zero_()
+        shifts = []
+        for index, (mixer, reference) in enumerate(zip(mixers, self._selection_reference)):
+            target_mean = self._mean_selection_pre_activations(target_loader, block=index)[0]
+            mixer.delta_shift.copy_(reference.to(target_mean.device) - target_mean)
+            shifts.append(round(float(mixer.delta_shift.abs().mean()), 4))
+        self.print(f"Selection calibration | mean |offset| per block: {shifts}")
 
     @torch.no_grad()
     def _recalibrate_target_statistics(self, target_loader) -> None:

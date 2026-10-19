@@ -8,6 +8,7 @@ if os.environ.get("MPLBACKEND", "").startswith("module://matplotlib_inline"):
     os.environ["MPLBACKEND"] = "Agg"
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 from pathlib import Path
 from datetime import datetime
 from argparse import ArgumentParser
@@ -148,6 +149,15 @@ def train_and_test(config):
         # prepare_data/setup again. For LOSO this reloads every subject and can
         # exhaust Colab RAM. Reuse the already prepared test loader instead.
         test_loader = datamodule.test_dataloader()
+        # Test-time selection calibration needs the source reference of the SSM
+        # step sizes, taken from the labeled source training trials (no
+        # augmentation) before the source data are released.
+        if getattr(model, "selection_calibration", False):
+            model.set_selection_reference(DataLoader(
+                datamodule.train_dataset,
+                batch_size=config["preprocessing"]["batch_size"],
+                shuffle=False,
+            ))
         all_sessions_loader = (
             datamodule.all_target_dataloader()
             if datamodule.all_target_dataset is not None
