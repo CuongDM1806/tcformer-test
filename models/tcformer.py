@@ -524,6 +524,13 @@ class _SelectiveSSMMixer(nn.Module):
         )
         self.D = nn.Parameter(torch.ones(d_model))
         self.out_proj = nn.Linear(d_model, d_model, bias=False)
+        # Additive offset of the step-size pre-activation, per channel. Zero
+        # (a no-op) unless set by test-time selection calibration; not saved.
+        self.register_buffer("delta_shift", torch.zeros(d_model), persistent=False)
+        # When enabled, forward() keeps the step-size pre-activation
+        # [batch, length, d_model] of its last call for selection alignment.
+        self.record_selection = False
+        self.last_delta_raw = None
 
     def forward(self, x: Tensor) -> Tensor:
         batch, length, _ = x.shape
@@ -538,6 +545,9 @@ class _SelectiveSSMMixer(nn.Module):
         delta_raw, B, C = torch.split(
             self.x_proj(values), [self.d_model, self.d_state, self.d_state], dim=-1
         )
+        delta_raw = delta_raw + self.delta_shift
+        if self.record_selection:
+            self.last_delta_raw = delta_raw
         delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
         if self.scan_mode == "hoisted":
@@ -615,6 +625,9 @@ class _SelectiveSSMBlock(nn.Module):
         mixed = self.mixer(mixed)
         if self.reverse:
             mixed = torch.flip(mixed, dims=(1,))
+            if self.mixer.record_selection:
+                # Recorded step sizes in forward (recording) time order.
+                self.mixer.last_delta_raw = torch.flip(self.mixer.last_delta_raw, dims=(1,))
         return residual + self.drop_path(self.dropout(mixed))
         
 #   helper
@@ -752,6 +765,20 @@ class TCFormerModule(nn.Module):
 
     def forward(self, x):
         return self.classify_features(self.extract_features(x))
+
+    def ssm_mixers(self):
+        """Selective-SSM mixers in block order (empty for attention blocks)."""
+        return [blk.mixer for blk in self.transformer if isinstance(blk, _SelectiveSSMBlock)]
+
+    def record_selection(self, enabled: bool) -> None:
+        for mixer in self.ssm_mixers():
+            mixer.record_selection = enabled
+            if not enabled:
+                mixer.last_delta_raw = None
+
+    def selection_pre_activations(self):
+        """Step-size pre-activations [batch, length, d_model] of the last forward."""
+        return [mixer.last_delta_raw for mixer in self.ssm_mixers()]
         
     def _rotary_cache(self, seq_len: int, device: torch.device):
         """Build (or reuse) RoPE caches for the current sequence length."""
