@@ -67,9 +67,28 @@ def train_and_test(config):
     all_sessions_accs, all_sessions_losses, all_sessions_kappas = [], [], []
     train_times, test_times, all_sessions_test_times, response_times = [], [], [], []
     all_confmats, all_sessions_confmats = [], []
+    no_tta_accs, no_tta_kappas = [], []
+
+    # Optional wall-clock budget (hours, env MAX_RUN_HOURS, e.g. a Kaggle
+    # session): no new fold is started when it would likely not finish; the
+    # completed folds are summarized as usual.
+    max_run_hours = float(os.environ.get("MAX_RUN_HOURS", "0") or 0)
+    run_started = time.time()
+    fold_durations, completed_ids = [], []
 
     # Loop through each subject ID for training and testing   
     for subject_id in subject_ids:
+        if max_run_hours > 0 and fold_durations:
+            elapsed_hours = (time.time() - run_started) / 3600
+            next_fold_hours = 1.15 * float(np.mean(fold_durations)) / 3600
+            if elapsed_hours + next_fold_hours > max_run_hours:
+                remaining = [s for s in subject_ids if s not in completed_ids]
+                print(f"\n>>> Time budget: {elapsed_hours:.2f} h used of {max_run_hours:.2f} h, "
+                      f"next fold needs ~{next_fold_hours:.2f} h. Stopping before subject "
+                      f"{subject_id}. Completed targets: {completed_ids}. "
+                      f"Remaining targets: {remaining}", flush=True)
+                break
+        fold_started = time.time()
         print(f"\n>>> Training on subject: {subject_id}")
 
         # Set seed for reproducibility
@@ -159,6 +178,17 @@ def train_and_test(config):
         datamodule.target_dataset = None
         datamodule.all_target_dataset = None
         gc.collect()
+
+        # Same trained model scored without IM-TTA (paper's variant), before
+        # the full adaptation; labels are read only by the scoring itself.
+        if (config.get("score_without_tta", True) and hasattr(model, "adapt_to_target")
+                and getattr(model, "im_tta_steps", 0) > 0):
+            no_tta = score_without_tta(model, trainer, test_loader)
+            no_tta_accs.append(float(no_tta["test_acc"]))
+            no_tta_kappas.append(float(no_tta["test_kappa"]))
+            print(f"\nTARGET SUBJECT {subject_id} WITHOUT TEST-TIME ADAPTATION | "
+                  f"acc={no_tta_accs[-1] * 100:.2f}% | kappa={no_tta_kappas[-1]:.4f}\n",
+                  flush=True)
 
         # Optional source-free IM-TTA. The method consumes only target EEG;
         # labels carried by the test loader are deliberately ignored.
@@ -292,8 +322,26 @@ def train_and_test(config):
         if config.get("save_checkpoint", False):
             ckpt_path = result_dir / f"checkpoints/subject_{subject_id}_model.ckpt"
             trainer.save_checkpoint(ckpt_path)
+
+        completed_ids.append(subject_id)
+        fold_durations.append(time.time() - fold_started)
+        print(f">>> Fold of target {subject_id} took {fold_durations[-1] / 60:.1f} min "
+              f"| run elapsed {(time.time() - run_started) / 3600:.2f} h", flush=True)
    
-    # Summarize and save final results
+    # Summarize and save final results (completed folds only)
+    if no_tta_accs:
+        lines = ["Same trained models scored without IM-TTA (AutoDIAL target "
+                 "statistics re-estimated on the evaluation trials, as in the paper's variant).",
+                 f"Subject IDs: {completed_ids}"]
+        lines += [f"Subject {s} => Acc: {a:.4f}, Kappa: {k:.4f}"
+                  for s, a, k in zip(completed_ids, no_tta_accs, no_tta_kappas)]
+        lines += [f"Average Accuracy without TTA: {np.mean(no_tta_accs) * 100:.2f} "
+                  f"\u00b1 {np.std(no_tta_accs) * 100:.2f}",
+                  f"Average Kappa without TTA:    {np.mean(no_tta_kappas):.3f} "
+                  f"\u00b1 {np.std(no_tta_kappas):.3f}"]
+        (result_dir / "results_without_tta.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print("\n".join(lines), flush=True)
+    subject_ids = completed_ids
     write_summary(result_dir, model_name, dataset_name, subject_ids, param_count,
         test_accs, test_losses, test_kappas, train_times, test_times, response_times,
         all_sessions_accs=all_sessions_accs,
@@ -330,7 +378,7 @@ def parse_arguments():
     )        
     parser.add_argument("--dataset", type=str, default="bcic2a", 
         help="Name of the dataset to use."
-                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, reh_mi, bcic3"
+                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, openbmi, reh_mi, bcic3"
     )
     parser.add_argument("--loso", action="store_true", default=False, 
         help="Enable subject-independent (LOSO) mode"
@@ -344,6 +392,28 @@ def parse_arguments():
     parser.add_argument("--no_interaug", action="store_true", 
                         help="Disable inter-trial augmentation (overrides config if specified)")
     return parser.parse_args()
+
+def score_without_tta(model, trainer, test_loader):
+    """Score the "without test-time adaptation" variant of the same model.
+
+    As in the paper's variant, only the AutoDIAL target statistics are
+    re-estimated on the unlabeled evaluation trials (no IM-TTA). The target
+    statistics are restored afterwards, so the subsequent full adaptation is
+    exactly the one of a run without this extra score.
+    """
+    norm = getattr(model, "domain_norm", None)
+    saved = None if norm is None else (norm.target_mean.clone(), norm.target_var.clone())
+    im_tta_steps = model.im_tta_steps
+    model.im_tta_steps = 0
+    try:
+        model.adapt_to_target(test_loader)
+        return trainer.test(model, dataloaders=test_loader)[0]
+    finally:
+        model.im_tta_steps = im_tta_steps
+        if saved is not None:
+            norm.target_mean.copy_(saved[0])
+            norm.target_var.copy_(saved[1])
+
 
 # ----------------------------------------------
 # Main function to run the training and testing pipeline
@@ -365,6 +435,10 @@ def run():
         elif args.dataset == "zhou2016":
             config["max_epochs"] = config.get(
                 "max_epochs_loso_zhou2016", config["max_epochs_loso"]
+            )
+        elif args.dataset == "openbmi":
+            config["max_epochs"] = config.get(
+                "max_epochs_loso_openbmi", config["max_epochs_loso"]
             )
         else:
             config["max_epochs"] = config["max_epochs_loso"]

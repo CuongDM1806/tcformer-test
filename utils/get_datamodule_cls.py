@@ -1,6 +1,6 @@
 from datamodules import BCICIII_IVa, BCICIII_IVaLOSO, BCICIV2a, BCICIV2aTVT,\
     BCICIV2aLOSO, BCICIV2b, BCICIV2bLOSO, HighGamma, HighGammaLOSO, \
-    PhysioNetMILOSO, REH_MI, Zhou2016LOSO
+    PhysioNetMILOSO, REH_MI, Zhou2016LOSO, OpenBMIMILOSO
 
 
 def get_datamodule_cls(dataset_name):
@@ -26,6 +26,8 @@ def get_datamodule_cls(dataset_name):
         datamodule_cls = PhysioNetMILOSO
     elif dataset_name == "zhou2016_loso":
         datamodule_cls = Zhou2016LOSO
+    elif dataset_name == "openbmi_loso":
+        datamodule_cls = OpenBMIMILOSO
     elif dataset_name == "reh_mi":
         datamodule_cls = REH_MI
     else:

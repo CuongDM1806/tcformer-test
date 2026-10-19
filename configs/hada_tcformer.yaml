@@ -6,6 +6,7 @@ max_epochs_2b: 500
 max_epochs_loso: 125
 max_epochs_loso_hgd: 77
 max_epochs_loso_zhou2016: 100
+max_epochs_loso_openbmi: 125
 seed: 0
 requires_loso: true
 domain_adaptation: true
@@ -98,6 +99,34 @@ preprocessing:
     model_overrides:
       lr: 0.001
       weight_decay: 0.0001
+  openbmi:
+    # Lee2019_MI (OpenBMI): 54 subjects, two sessions on different days, one
+    # labeled offline left/right-hand MI run (100 trials) per session, 62 EEG
+    # channels at 1000 Hz. Cross-subject preprocessing of the published
+    # Ensemble-MI pipeline: 4-38 Hz, CAR, 100 Hz, the 0-4 s MI cue interval.
+    sfreq: 100
+    low_cut: 4.0
+    high_cut: 38.0
+    common_average_reference: true
+    start: 0.0
+    trial_duration: 4.0
+    z_scale: true
+    batch_size: 48
+    num_workers: 2
+    test_num_workers: 0
+    download_retries: 8
+    download_retry_delay_seconds: 5
+    # Per-subject preprocessed arrays (~20 MB each) are cached here; the raw
+    # MAT files (~1.1 GB per subject) are deleted once their cache is written.
+    # OPENBMI_CACHE_DIR / OPENBMI_CACHE_INPUT override or add directories.
+    cache_dir: openbmi_cache
+    delete_raw_after_cache: true
+    # Source references fitted on session 1 of each source subject, the target
+    # reference on its unlabeled session 1; session 2 is only transformed.
+    riemannian_alignment: true
+    # 5,300 labeled source trials per fold; no segmentation-recombination
+    # augmentation (as for Zhou2016), which would double the training cost.
+    interaug: false
 
 model: "HADATCFormer"
 model_kwargs:
