@@ -145,6 +145,13 @@ model_kwargs:
   adversarial_weight: 1.0
   mmd_weight: 0.5
   temporal_mmd_weight: 0.1
+  # Selection-dynamics alignment: MK-MMD between source and target profiles
+  # of the selective-SSM log step sizes (mean over selection_bins consecutive
+  # time bins, per channel and block). The step size decides when each
+  # channel writes its input into the state and forgets the past, so the
+  # loss aligns when, not only how strongly, the subjects' EEG is attended.
+  selection_mmd_weight: 0.1
+  selection_bins: 4
   # 1.0 disables the confidence-discrepancy gate (removed from the paper).
   light_adaptation_factor: 1.0
   # Source-free target adaptation after HADA training. Only BatchNorm affine

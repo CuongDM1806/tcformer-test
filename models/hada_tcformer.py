@@ -250,6 +250,8 @@ class HADATCFormer(ClassificationModule):
         adversarial_weight: float = 1.0,
         mmd_weight: float = 0.5,
         temporal_mmd_weight: float = 0.1,
+        selection_mmd_weight: float = 0.0,
+        selection_bins: int = 4,
         light_adaptation_factor: float = 0.25,
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
@@ -313,6 +315,10 @@ class HADATCFormer(ClassificationModule):
         self.adversarial_weight = adversarial_weight
         self.mmd_weight = mmd_weight
         self.temporal_mmd_weight = temporal_mmd_weight
+        if selection_mmd_weight < 0.0 or selection_bins < 1:
+            raise ValueError("selection_mmd_weight must be >= 0 and selection_bins >= 1.")
+        self.selection_mmd_weight = selection_mmd_weight
+        self.selection_bins = selection_bins
         if not 0.0 < light_adaptation_factor <= 1.0:
             raise ValueError("light_adaptation_factor must be in (0, 1].")
         self.light_adaptation_factor = light_adaptation_factor
@@ -607,6 +613,25 @@ class HADATCFormer(ClassificationModule):
         self.eval()
         return final_stats
 
+    def _selection_profiles(self, delta_raw: Tensor) -> Tensor:
+        """Per-trial log step-size profile: [batch, d_model * selection_bins].
+
+        The step size of the selective scan decides, per channel and time
+        step, how much of the input is written into the state and how much of
+        the state is forgotten. Averaging its logarithm over consecutive time
+        bins describes when in the trial each channel attends to its input.
+        """
+        log_step = torch.log(F.softplus(delta_raw).clamp(min=1e-6, max=1.0))
+        return F.adaptive_avg_pool1d(log_step.transpose(1, 2), self.selection_bins).flatten(1)
+
+    def _selection_mmd(self, pre_activations, source_count: int) -> Tensor:
+        """MK-MMD between source and target selection profiles, averaged over blocks."""
+        losses = []
+        for delta_raw in pre_activations:
+            profiles = self._selection_profiles(delta_raw)
+            losses.append(self.mmd_loss(profiles[:source_count], profiles[source_count:]))
+        return torch.stack(losses).mean()
+
     def training_step(self, batch, batch_idx):
         if not isinstance(batch, dict) or "source" not in batch or "target" not in batch:
             raise RuntimeError(
@@ -620,9 +645,17 @@ class HADATCFormer(ClassificationModule):
 
         # A shared forward pass also gives BatchNorm both domains without ever
         # reading target labels.
+        align_selection = self.selection_mmd_weight > 0.0
+        self.model.record_selection(align_selection)
         temporal_features = self.model.extract_temporal_features(
             torch.cat((source_x, target_x), dim=0)
         )
+        selection_mmd_loss = temporal_features.new_zeros(())
+        if align_selection:
+            selection_mmd_loss = self._selection_mmd(
+                self.model.selection_pre_activations(), source_count
+            )
+            self.model.record_selection(False)
         pooled_features = self.model.tcn_head.pool_temporal_features(temporal_features)
 
         # Auxiliary alignment before temporal compression. It sees information
@@ -696,6 +729,7 @@ class HADATCFormer(ClassificationModule):
                 self.adversarial_weight * adversarial_loss
                 + self.mmd_weight * mmd_loss
                 + self.temporal_mmd_weight * temporal_mmd_loss
+                + self.selection_mmd_weight * selection_mmd_loss
             )
         )
 
@@ -708,6 +742,8 @@ class HADATCFormer(ClassificationModule):
         self.log("train_cls_loss", classification_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_domain_loss", adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log("train_mmd_loss", mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
+        if self.selection_mmd_weight > 0.0:
+            self.log("train_selection_mmd_loss", selection_mmd_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         self.log(
             "train_da_gate",
             adaptation_gate,
@@ -772,6 +808,7 @@ class HADATCFormer(ClassificationModule):
                 f"domain={adversarial_loss.detach().item():.4f} | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
                 f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
+                f"sel={selection_mmd_loss.detach().item():.4f} | "
                 f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "
                 f"gap={target_gap.detach().item():.2f} | "
                 f"conf={target_confidence.detach().item():.2f} | "
