@@ -21,6 +21,11 @@ OPENBMI_MI_MAPPING = {
     "right_hand": 1,
 }
 OPENBMI_CHANNELS = 62
+# MOABB 0.5 downloads Lee2019 from ftp://parrot.genomics.cn, which Kaggle
+# cannot reach (connection timeout). Newer MOABB releases use GigaDB's HTTPS
+# mirror, which serves the same files; OPENBMI_URL overrides it.
+LEE2019_HTTPS_URL = ("https://s3.ap-northeast-1.wasabisys.com/gigadb-datasets/live/"
+                     "pub/10.5524/100001_101000/100542/")
 # Preprocessing entries that change the cached arrays.
 CACHE_KEYS = ("sfreq", "low_cut", "high_cut", "common_average_reference",
               "start", "trial_duration")
@@ -65,6 +70,11 @@ def _find_cached(subject_id: int, signature: str, read_dirs):
     return None
 
 
+def _use_https_mirror() -> None:
+    import moabb.datasets.Lee2019 as lee2019
+    lee2019.Lee2019_URL = os.environ.get("OPENBMI_URL", LEE2019_HTTPS_URL)
+
+
 def _download_windows(subject_id: int, preprocessing_dict: Dict, verbose: str):
     # Imported here: reading an existing cache needs neither MOABB nor braindecode.
     from braindecode.datasets import MOABBDataset
@@ -75,6 +85,7 @@ def _download_windows(subject_id: int, preprocessing_dict: Dict, verbose: str):
     )
     from requests.exceptions import RequestException
 
+    _use_https_mirror()
     download_retries = int(preprocessing_dict.get("download_retries", 8))
     retry_delay = float(preprocessing_dict.get("download_retry_delay_seconds", 5.0))
     if download_retries < 0 or retry_delay < 0:
@@ -83,7 +94,7 @@ def _download_windows(subject_id: int, preprocessing_dict: Dict, verbose: str):
         try:
             dataset = MOABBDataset(dataset_name="Lee2019_MI", subject_ids=[subject_id])
             break
-        except RequestException as exc:
+        except (RequestException, OSError) as exc:      # HTTP errors, timeouts, resets
             if attempt == download_retries:
                 raise
             wait_seconds = min(retry_delay * (2 ** attempt), 60.0)
@@ -142,6 +153,7 @@ def _delete_raw_files(subject_id: int) -> None:
     """Remove the subject's downloaded MAT files once its cache is written."""
     try:
         from moabb.datasets import Lee2019_MI
+        _use_https_mirror()                          # same URLs -> same local paths
         paths = Lee2019_MI().data_path(subject_id)
     except Exception as exc:                       # cache is already safe on disk
         print(f"  could not locate raw OpenBMI files of S{subject_id:02d}: {exc}", flush=True)
