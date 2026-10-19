@@ -132,9 +132,16 @@ model_kwargs:
   # session/subject shift, e.g. Zhou2016); alpha -> 0 keeps source statistics.
   # The same setting is used for every dataset. "none" restores HADA exactly.
   feature_alignment: autodial
+  # "shrinkage": alpha is not learned but computed per feature dimension as
+  # the positive-part James-Stein weight max(0, 1 - v / (mu_t - mu_s)^2),
+  # v = var_t / n_t + var_s / n_s: target statistics are used in proportion
+  # to how far the target shift exceeds its estimation noise. "learned"
+  # restores the original AutoDIAL weights.
+  autodial_alpha_mode: shrinkage
+  # Initial value of the logged running weight only, in shrinkage mode.
   autodial_alpha_init: 0.5
   domain_norm_momentum: 0.1
-  # Target InfoMax during training; the only signal that updates alpha.
+  # Target InfoMax during training (updates the backbone; alpha is computed).
   target_im_weight: 0.1
   # Re-estimate AutoDIAL target statistics after IM-TTA on the same trials.
   recalibrate_target_statistics: true

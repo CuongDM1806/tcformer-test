@@ -62,6 +62,19 @@ class AutoDIALFeatureNorm(nn.Module):
     domain-specific normalization (DSBN); ``alpha -> 0`` normalizes the target
     with source statistics. A shared affine transform follows, so no
     parameters are domain specific apart from the mixing weights.
+
+    ``alpha_mode="shrinkage"`` replaces the learned weights by the
+    positive-part James-Stein weight of every feature dimension,
+
+        alpha = max(0, 1 - v / (mu_t - mu_s)^2),  v = var_t / n_t + var_s / n_s,
+
+    i.e. the minimum-MSE weight Delta^2 / (Delta^2 + var_t / n_t) for
+    estimating the target mean, with Delta^2 estimated without the sampling
+    noise v of the observed gap. A shift that is large relative to the
+    estimation noise is corrected with the target statistics (alpha -> 1); a
+    shift within the noise keeps the source statistics (alpha -> 0). The
+    weight is computed, not learned: batch moments and sizes during training,
+    running moments with their effective sample sizes at inference.
     """
 
     def __init__(
@@ -71,18 +84,30 @@ class AutoDIALFeatureNorm(nn.Module):
         momentum: float = 0.1,
         eps: float = 1e-5,
         alpha_init: float = 0.5,
+        alpha_mode: str = "learned",
     ):
         super().__init__()
+        if alpha_mode not in ("learned", "shrinkage"):
+            raise ValueError("autodial_alpha_mode must be 'learned' or 'shrinkage'.")
         if feature_dim % n_groups != 0:
             raise ValueError("feature_dim must be divisible by n_groups.")
         if not 0.0 < alpha_init < 1.0:
             raise ValueError("autodial_alpha_init must be in (0, 1).")
         self.group_size = feature_dim // n_groups
+        self.n_groups = n_groups
         self.momentum = momentum
         self.eps = eps
-        self.alpha_logit = nn.Parameter(
-            torch.full((n_groups,), math.log(alpha_init / (1.0 - alpha_init)))
-        )
+        self.alpha_mode = alpha_mode
+        if alpha_mode == "learned":
+            self.alpha_logit = nn.Parameter(
+                torch.full((n_groups,), math.log(alpha_init / (1.0 - alpha_init)))
+            )
+        else:
+            # Variance factor 1/n_eff of each running mean (EMA of batch
+            # means), and the running per-dimension weight for logging.
+            for domain in ("source", "target"):
+                self.register_buffer(f"{domain}_inv_count", torch.ones(()))
+            self.register_buffer("alpha_running", torch.full((feature_dim,), alpha_init))
         self.weight = nn.Parameter(torch.ones(feature_dim))
         self.bias = nn.Parameter(torch.zeros(feature_dim))
         for domain in ("source", "target"):
@@ -90,11 +115,32 @@ class AutoDIALFeatureNorm(nn.Module):
             self.register_buffer(f"{domain}_var", torch.ones(feature_dim))
 
     def alpha(self, detach: bool = False) -> Tensor:
+        """Mixing weight per feature group (group mean in shrinkage mode)."""
+        if self.alpha_mode == "shrinkage":
+            return self.alpha_running.view(self.n_groups, self.group_size).mean(dim=1)
         logit = self.alpha_logit.detach() if detach else self.alpha_logit
         return torch.sigmoid(logit)
 
+    @torch.no_grad()
+    def shrinkage_alpha(self, source_mean, source_var, n_source,
+                        target_mean, target_var, n_target) -> Tensor:
+        """Positive-part James-Stein weight of every feature dimension."""
+        noise = target_var / n_target + source_var / n_source
+        gap = (target_mean - source_mean).square()
+        return (1.0 - noise / gap.clamp_min(1e-12)).clamp(0.0, 1.0)
+
+    def _running_alpha(self) -> Tensor:
+        if self.alpha_mode == "learned":
+            return self.alpha(detach=True)
+        return self.shrinkage_alpha(
+            self.source_mean, self.source_var, 1.0 / self.source_inv_count,
+            self.target_mean, self.target_var, 1.0 / self.target_inv_count,
+        )
+
     def _mix(self, alpha: Tensor, source_mean, source_var, target_mean, target_var):
-        a = alpha.repeat_interleave(self.group_size)
+        a = alpha if alpha.numel() == source_mean.numel() else alpha.repeat_interleave(
+            self.group_size
+        )
         mean = a * target_mean + (1.0 - a) * source_mean
         # Exact second moment of the two-component mixture.
         var = (
@@ -113,6 +159,10 @@ class AutoDIALFeatureNorm(nn.Module):
         unbiased = var * count / max(count - 1, 1)
         getattr(self, f"{domain}_mean").lerp_(mean, self.momentum)
         getattr(self, f"{domain}_var").lerp_(unbiased, self.momentum)
+        if self.alpha_mode == "shrinkage":
+            # Var(EMA mean) = (1-m)^2 Var(old) + m^2 var / count.
+            inv = getattr(self, f"{domain}_inv_count")
+            inv.mul_((1.0 - self.momentum) ** 2).add_(self.momentum ** 2 / count)
 
     def forward_pair(
         self,
@@ -129,8 +179,17 @@ class AutoDIALFeatureNorm(nn.Module):
         if update_stats:
             self._update_running("source", source_mean, source_var, source.size(0))
             self._update_running("target", target_mean, target_var, target.size(0))
+        if self.alpha_mode == "shrinkage":
+            alpha = self.shrinkage_alpha(
+                source_mean, source_var, source.size(0),
+                target_mean, target_var, target.size(0),
+            )
+            if update_stats:
+                self.alpha_running.lerp_(alpha, self.momentum)
+        else:
+            alpha = self.alpha(detach_alpha)
         mixed_mean, mixed_var = self._mix(
-            self.alpha(detach_alpha), source_mean, source_var, target_mean, target_var
+            alpha, source_mean, source_var, target_mean, target_var
         )
         return (
             self._normalize(source, source_mean, source_var),
@@ -142,7 +201,7 @@ class AutoDIALFeatureNorm(nn.Module):
         if domain == "source":
             return self._normalize(features, self.source_mean, self.source_var)
         mean, var = self._mix(
-            self.alpha(detach=True),
+            self._running_alpha(),
             self.source_mean,
             self.source_var,
             self.target_mean,
@@ -151,9 +210,15 @@ class AutoDIALFeatureNorm(nn.Module):
         return self._normalize(features, mean, var)
 
     @torch.no_grad()
-    def set_target_statistics(self, mean: Tensor, var: Tensor) -> None:
+    def set_target_statistics(self, mean: Tensor, var: Tensor, count: int | None = None) -> None:
         self.target_mean.copy_(mean)
         self.target_var.copy_(var)
+        if self.alpha_mode == "shrinkage":
+            if count is None:
+                raise ValueError("Shrinkage AutoDIAL needs the trial count of the statistics.")
+            # Exact mean over `count` trials; the weight follows the new moments.
+            self.target_inv_count.fill_(1.0 / count)
+            self.alpha_running.copy_(self._running_alpha())
 
 
 class DomainDiscriminator(nn.Module):
@@ -241,6 +306,7 @@ class HADATCFormer(ClassificationModule):
         mamba_scan_mode: str = "sequential",
         feature_alignment: str = "none",
         autodial_alpha_init: float = 0.5,
+        autodial_alpha_mode: str = "learned",
         domain_norm_momentum: float = 0.1,
         target_im_weight: float = 0.0,
         recalibrate_target_statistics: bool = True,
@@ -294,6 +360,7 @@ class HADATCFormer(ClassificationModule):
                 n_groups=model.n_groups + 1,
                 momentum=domain_norm_momentum,
                 alpha_init=autodial_alpha_init,
+                alpha_mode=autodial_alpha_mode,
             )
             if feature_alignment == "autodial"
             else None
@@ -477,7 +544,7 @@ class HADATCFormer(ClassificationModule):
             raise RuntimeError("AutoDIAL target statistics need two or more trials.")
         mean = feature_sum / count
         var = ((square_sum - count * mean.square()) / (count - 1)).clamp_min(0.0)
-        self.domain_norm.set_target_statistics(mean.float(), var.float())
+        self.domain_norm.set_target_statistics(mean.float(), var.float(), count)
         self.print(f"AutoDIAL target statistics recalibrated | samples={count}")
 
     def _run_im_tta(self, target_loader):
