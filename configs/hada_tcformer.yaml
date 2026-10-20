@@ -111,11 +111,15 @@ model_kwargs:
   use_group_attn: true
   # Legacy names retained by TCFormerModule for sequence depth and dropout.
   # q_heads/kv_heads are intentionally omitted because this stack has no GQA.
-  trans_depth: 5
+  # Ablation (feature/hada-no-ssm): no selective state-space blocks. The
+  # sequence branch keeps its channel mixing and 1x1 reduction, so the
+  # feature layout (three CNN groups + one sequence group) and every other
+  # component, loss and setting are those of SSM-DAN.
+  trans_depth: 0
   trans_dropout: 0.4
   # Full five-block lightweight Mamba-style encoder. Alternating scan direction
   # gives both temporal directions without doubling each block's parameters.
-  sequence_block_types: [mamba_forward, mamba_backward, mamba_forward, mamba_backward, mamba_forward]
+  sequence_block_types: []
   mamba_d_state: 8
   mamba_d_conv: 3
   # Scripted scan with state-independent work hoisted out of the time loop
