@@ -157,6 +157,12 @@ model_kwargs:
   lr: 0.0009
   beta_1: 0.5
   weight_decay: 0.001
+  # No weight decay on the selective-SSM mixers and the AutoDIAL mixing
+  # weights. With Adam's L2 decay (1e-3) and their weak, multiplicative
+  # gradients (B * C, gates, out_proj), these collapsed to ~0 on BCI IV-2a/2b:
+  # the SSM output was exactly zero and alpha stayed at its 0.5 initial value.
+  # Mamba likewise exempts its SSM parameters from weight decay.
+  no_weight_decay_keys: ["mixer.", "alpha_logit"]
   optimizer: "adam"
   scheduler: true
   warmup_epochs: 20

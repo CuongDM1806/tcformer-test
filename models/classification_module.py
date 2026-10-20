@@ -54,6 +54,7 @@ class ClassificationModule(pl.LightningModule):
             scheduler=False,
             max_epochs=1000,
             warmup_epochs=20,
+            no_weight_decay_keys=None,
             **kwargs
     ):
         super().__init__()
@@ -71,18 +72,39 @@ class ClassificationModule(pl.LightningModule):
         return self.model(x)
 
     # optimiser / scheduler
+    def _parameter_groups(self):
+        """All parameters, or two groups when some are exempt from weight decay.
+
+        Parameters whose name contains one of ``no_weight_decay_keys`` get no
+        weight decay. With Adam the decay is an L2 term added to the gradient,
+        so parameters whose loss gradient is weak are pulled to zero.
+        """
+        keys = tuple(self.hparams.get("no_weight_decay_keys") or ())
+        if not keys:
+            return self.parameters()
+        decay, no_decay = [], []
+        for name, parameter in self.named_parameters():
+            if not parameter.requires_grad:
+                continue
+            (no_decay if any(key in name for key in keys) else decay).append(parameter)
+        print(f"Weight decay {self.hparams.weight_decay} on {sum(p.numel() for p in decay)} "
+              f"parameters; none on {sum(p.numel() for p in no_decay)} parameters "
+              f"matching {list(keys)}", flush=True)
+        return [{"params": decay},
+                {"params": no_decay, "weight_decay": 0.0}]
+
     def configure_optimizers(self):
         betas = self.hparams.get("beta_1", 0.9), self.hparams.get("beta_2", 0.999)
         if self.hparams.optimizer == "adam":
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr,
+            optimizer = torch.optim.Adam(self._parameter_groups(), lr=self.hparams.lr,
                                          betas=betas,
                                          weight_decay=self.hparams.weight_decay)
         elif self.hparams.optimizer == "adamW":
-            optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr,
+            optimizer = torch.optim.AdamW(self._parameter_groups(), lr=self.hparams.lr,
                                           betas=betas,
                                           weight_decay=self.hparams.weight_decay)
         elif self.hparams.optimizer == "sgd":
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.lr,
+            optimizer = torch.optim.SGD(self._parameter_groups(), lr=self.hparams.lr,
                                         weight_decay=self.hparams.weight_decay)
         else:
             raise NotImplementedError

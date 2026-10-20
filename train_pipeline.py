@@ -160,6 +160,8 @@ def train_and_test(config):
         datamodule.all_target_dataset = None
         gc.collect()
 
+        report_ssm_activity(model, test_loader)
+
         # Optional source-free IM-TTA. The method consumes only target EEG;
         # labels carried by the test loader are deliberately ignored.
         if hasattr(model, "adapt_to_target"):
@@ -344,6 +346,43 @@ def parse_arguments():
     parser.add_argument("--no_interaug", action="store_true", 
                         help="Disable inter-trial augmentation (overrides config if specified)")
     return parser.parse_args()
+
+@torch.no_grad()
+def report_ssm_activity(model, loader):
+    """Print the size of the selective-SSM write/read projections (B, C) and
+    how much the logits change when every SSM mixer output is set to zero
+    (the blocks then reduce to their residual path). Labels are not read."""
+    mixers = model.model.ssm_mixers() if hasattr(model.model, "ssm_mixers") else [
+        block.mixer for block in getattr(model.model, "transformer", [])
+        if hasattr(block, "mixer")]
+    if not mixers:
+        return
+    b_max = max(float(m.x_proj.weight[m.d_model:m.d_model + m.d_state].abs().max()) for m in mixers)
+    c_max = max(float(m.x_proj.weight[m.d_model + m.d_state:].abs().max()) for m in mixers)
+    out_max = max(float(m.out_proj.weight.abs().max()) for m in mixers)
+    device = next(model.parameters()).device
+    was_training = model.training
+    model.eval()
+
+    def logits():
+        return torch.cat([model(batch[0].to(device)).float().cpu() for batch in loader])
+
+    with_ssm = logits()
+    originals = [m.forward for m in mixers]
+    for m in mixers:
+        m.forward = lambda x: torch.zeros_like(x)
+    try:
+        without_ssm = logits()
+    finally:
+        for m, forward in zip(mixers, originals):
+            m.forward = forward
+    model.train(was_training)
+    change = float((with_ssm - without_ssm).abs().max())
+    same = float((with_ssm.argmax(1) == without_ssm.argmax(1)).float().mean()) * 100
+    print(f"SSM activity | max|B| {b_max:.2e} | max|C| {c_max:.2e} | max|out_proj| {out_max:.2e} | "
+          f"max |logit change| without SSM {change:.2e} | same prediction on {same:.1f}% "
+          f"of evaluation trials", flush=True)
+
 
 # ----------------------------------------------
 # Main function to run the training and testing pipeline
