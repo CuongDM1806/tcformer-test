@@ -1,5 +1,6 @@
 import gc
 import os, time, yaml
+import shutil
 
 # Colab exports its notebook-only matplotlib backend to subprocesses. The
 # isolated Python 3.10 environment does not contain that backend, so use a
@@ -29,6 +30,48 @@ from utils.seed import seed_everything
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 # Define the path to the configuration directory
 CONFIG_DIR = Path(__file__).resolve().parent / "configs"
+
+
+def _write_no_tta_summary(result_dir, completed_ids, no_tta_accs, no_tta_kappas):
+    if not no_tta_accs:
+        return
+    lines = [
+        "Same trained models scored without IM-TTA (AutoDIAL target statistics "
+        "re-estimated on the evaluation trials, as in the paper's variant).",
+        f"Subject IDs: {completed_ids}",
+    ]
+    lines += [
+        f"Subject {subject_id} => Acc: {acc:.4f}, Kappa: {kappa:.4f}"
+        for subject_id, acc, kappa in zip(
+            completed_ids, no_tta_accs, no_tta_kappas
+        )
+    ]
+    lines += [
+        f"Average Accuracy without TTA: {np.mean(no_tta_accs) * 100:.2f} "
+        f"± {np.std(no_tta_accs) * 100:.2f}",
+        f"Average Kappa without TTA:    {np.mean(no_tta_kappas):.3f} "
+        f"± {np.std(no_tta_kappas):.3f}",
+    ]
+    (result_dir / "results_without_tta.txt").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
+
+
+def _copy_incremental_results(result_dir):
+    """Expose cumulative fold results at a stable Kaggle output path."""
+    snapshot_path = os.environ.get("INCREMENTAL_RESULTS_PATH", "").strip()
+    if not snapshot_path:
+        return
+    snapshot = Path(snapshot_path)
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(result_dir / "results.txt", snapshot)
+    no_tta_path = result_dir / "results_without_tta.txt"
+    if no_tta_path.exists():
+        shutil.copy2(
+            no_tta_path,
+            snapshot.with_name(f"{snapshot.stem}_without_tta{snapshot.suffix}"),
+        )
+    print(f">>> Incremental fold results saved to {snapshot}", flush=True)
 
 # Main training and testing pipeline
 def train_and_test(config):
@@ -325,22 +368,28 @@ def train_and_test(config):
 
         completed_ids.append(subject_id)
         fold_durations.append(time.time() - fold_started)
+        # Persist cumulative metrics immediately. OpenBMI jobs can approach the
+        # Kaggle time limit, so a later interrupted fold must not erase the
+        # results of folds that already completed.
+        _write_no_tta_summary(
+            result_dir, completed_ids, no_tta_accs, no_tta_kappas
+        )
+        write_summary(
+            result_dir, model_name, dataset_name, completed_ids, param_count,
+            test_accs, test_losses, test_kappas, train_times, test_times,
+            response_times, all_sessions_accs=all_sessions_accs,
+            all_sessions_losses=all_sessions_losses,
+            all_sessions_kappas=all_sessions_kappas,
+            all_sessions_test_times=all_sessions_test_times,
+        )
+        _copy_incremental_results(result_dir)
         print(f">>> Fold of target {subject_id} took {fold_durations[-1] / 60:.1f} min "
               f"| run elapsed {(time.time() - run_started) / 3600:.2f} h", flush=True)
    
     # Summarize and save final results (completed folds only)
-    if no_tta_accs:
-        lines = ["Same trained models scored without IM-TTA (AutoDIAL target "
-                 "statistics re-estimated on the evaluation trials, as in the paper's variant).",
-                 f"Subject IDs: {completed_ids}"]
-        lines += [f"Subject {s} => Acc: {a:.4f}, Kappa: {k:.4f}"
-                  for s, a, k in zip(completed_ids, no_tta_accs, no_tta_kappas)]
-        lines += [f"Average Accuracy without TTA: {np.mean(no_tta_accs) * 100:.2f} "
-                  f"\u00b1 {np.std(no_tta_accs) * 100:.2f}",
-                  f"Average Kappa without TTA:    {np.mean(no_tta_kappas):.3f} "
-                  f"\u00b1 {np.std(no_tta_kappas):.3f}"]
-        (result_dir / "results_without_tta.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print("\n".join(lines), flush=True)
+    _write_no_tta_summary(
+        result_dir, completed_ids, no_tta_accs, no_tta_kappas
+    )
     subject_ids = completed_ids
     write_summary(result_dir, model_name, dataset_name, subject_ids, param_count,
         test_accs, test_losses, test_kappas, train_times, test_times, response_times,
