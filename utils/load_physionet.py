@@ -79,6 +79,41 @@ def load_physionet(
     # Most annotations are about 4.1 s, but the final trial of some EDF runs is
     # only 4.0 s. The common 640-sample interval retains those trials instead
     # of dropping roughly 1/15 of the dataset via accepted_bads_ratio.
+    # A few recordings in the 109-subject cohort end mid-trial (e.g. 476
+    # samples); those truncated trials cannot form a 4.0 s epoch and are
+    # removed explicitly so every remaining trial is complete.
+    dropped = []
+    for ds in dataset.datasets:
+        raw = ds.raw
+        raw_sfreq = raw.info["sfreq"]
+        short = [
+            index
+            for index, (duration, description) in enumerate(
+                zip(raw.annotations.duration, raw.annotations.description)
+            )
+            if description in PHYSIONET_IMAGERY_MAPPING
+            # Same truncation braindecode uses to compute trial stops.
+            and int(duration * raw_sfreq) < window_size
+        ]
+        if short:
+            durations = [
+                int(raw.annotations.duration[index] * raw_sfreq)
+                for index in short
+            ]
+            raw.annotations.delete(short)
+            dropped.append(
+                f"S{int(ds.description['subject']):03d} "
+                f"run {ds.description.get('run', '?')}: "
+                f"{len(short)} trial(s) of {durations} samples"
+            )
+    if dropped:
+        print(
+            f"PhysioNet: dropped truncated trials (< {window_size} samples) "
+            f"in {len(dropped)} run(s) -> "
+            + "; ".join(dropped),
+            flush=True,
+        )
+
     return create_windows_from_events(
         dataset,
         trial_start_offset_samples=start_offset,
