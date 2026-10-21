@@ -143,8 +143,10 @@ model_kwargs:
   domain_hidden_dim: 128
   adaptation_dropout: 0.3
   adversarial_weight: 1.0
-  mmd_weight: 0.5
-  temporal_mmd_weight: 0.1
+  # No-MMD ablation: retain AutoDIAL, GRL/adversarial alignment and InfoMax,
+  # but remove both pooled-feature and temporal-feature MMD contributions.
+  mmd_weight: 0.0
+  temporal_mmd_weight: 0.0
   # 1.0 disables the confidence-discrepancy gate (removed from the paper).
   light_adaptation_factor: 1.0
   # Source-free target adaptation after HADA training. Only BatchNorm affine

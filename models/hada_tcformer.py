@@ -627,12 +627,14 @@ class HADATCFormer(ClassificationModule):
 
         # Auxiliary alignment before temporal compression. It sees information
         # from every TCN time position and introduces no trainable parameters.
-        temporal_mean_features = temporal_features.mean(dim=-1)
-        source_temporal_mean = temporal_mean_features[:source_count]
-        target_temporal_mean = temporal_mean_features[source_count:]
-        temporal_mmd_loss = self.mmd_loss(
-            source_temporal_mean, target_temporal_mean
-        )
+        temporal_mmd_loss = temporal_features.new_zeros(())
+        if self.temporal_mmd_weight > 0.0:
+            temporal_mean_features = temporal_features.mean(dim=-1)
+            source_temporal_mean = temporal_mean_features[:source_count]
+            target_temporal_mean = temporal_mean_features[source_count:]
+            temporal_mmd_loss = self.mmd_loss(
+                source_temporal_mean, target_temporal_mean
+            )
 
         source_pooled = pooled_features[:source_count]
         target_pooled = pooled_features[source_count:]
@@ -687,7 +689,9 @@ class HADATCFormer(ClassificationModule):
         adversarial_loss = F.binary_cross_entropy_with_logits(
             domain_logits, domain_targets
         )
-        mmd_loss = self.mmd_loss(source_features, target_features)
+        mmd_loss = source_features.new_zeros(())
+        if self.mmd_weight > 0.0:
+            mmd_loss = self.mmd_loss(source_features, target_features)
         loss = (
             classification_loss
             + self.target_im_weight * target_im_loss
