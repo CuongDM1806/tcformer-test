@@ -56,10 +56,10 @@ preprocessing:
     low_cut: null
     high_cut: null
     z_scale: false
-    # Full annotated task interval: one 4.1-second epoch from cue onset.
-    # This is an experimental full-trial setting, not the 0-3 s MOABB window.
+    # Common full-task interval: 0-4.0 s from cue onset. Some final trials in
+    # each EDF end at 4.0 s rather than 4.1 s, so this keeps every trial.
     start: 0.0
-    trial_duration: 4.1
+    trial_duration: 4.0
     # T4-safe micro-batch. Two accumulated steps preserve effective BS=96.
     batch_size: 48
     accumulate_grad_batches: 2

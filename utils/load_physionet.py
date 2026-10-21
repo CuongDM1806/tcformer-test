@@ -69,16 +69,16 @@ def load_physionet(
 
     sfreq = dataset.datasets[0].raw.info["sfreq"]
     start_offset = int(round(preprocessing_dict.get("start", 0.0) * sfreq))
-    trial_duration = float(preprocessing_dict.get("trial_duration", 4.1))
+    trial_duration = float(preprocessing_dict.get("trial_duration", 4.0))
     window_size = int(round(trial_duration * sfreq))
-    if start_offset != 0 or trial_duration != 4.1:
+    if start_offset != 0 or trial_duration != 4.0:
         raise ValueError(
-            "Full-Mamba PhysioNet trials must cover 0.0 to 4.1 s from cue onset."
+            "Full-Mamba PhysioNet trials must cover 0.0 to 4.0 s from cue onset."
         )
 
-    # Keep the full EDF task annotation: 4.1 s at 160 Hz is 656 samples.
-    # An explicit window size plus drop_last_window=True produces exactly one
-    # onset-aligned epoch and prevents an additional end-aligned window.
+    # Most annotations are about 4.1 s, but the final trial of some EDF runs is
+    # only 4.0 s. The common 640-sample interval retains those trials instead
+    # of dropping roughly 1/15 of the dataset via accepted_bads_ratio.
     return create_windows_from_events(
         dataset,
         trial_start_offset_samples=start_offset,
