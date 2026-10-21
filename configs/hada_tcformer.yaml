@@ -8,9 +8,8 @@ max_epochs_loso_hgd: 77
 max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
-# No-DA ablation: train only on labeled source trials. Target data are used
-# only by label-free Riemannian alignment and IM-TTA.
-domain_adaptation: false
+# No-MMD ablation: keep source/target UDA batches and adversarial alignment.
+domain_adaptation: true
 
 z_scale: true
 interaug: true
@@ -128,8 +127,8 @@ model_kwargs:
   aligner_hidden_dim: 128
   domain_hidden_dim: 128
   adaptation_dropout: 0.3
-  # No-DA ablation: disable every training-time domain-alignment objective.
-  adversarial_weight: 0.0
+  adversarial_weight: 1.0
+  # No-MMD ablation: drop the pooled-feature and temporal MMD objectives only.
   mmd_weight: 0.0
   temporal_mmd_weight: 0.0
   # High-gap, low-confidence target subjects use 25% of all DA losses.
