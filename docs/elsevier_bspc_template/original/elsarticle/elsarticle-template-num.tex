@@ -6,6 +6,7 @@
 \usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{url}
 \usepackage{array}
 \usepackage{multirow}
@@ -54,7 +55,7 @@
                    country={[Country]}}
 
 \begin{abstract}
-Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. This study proposes SSM-DAN, a domain-adaptive selective state-space network that couples a multi-scale convolutional front-end with bidirectional selective state-space blocks to capture both local and long-range temporal patterns, and reduces subject shift through hierarchical alignment, including a learned source--target normalization layer and label-free test-time adaptation. The framework was evaluated on three public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. On BCI Competition IV-2a, it reached a mean accuracy of 76.12\%, significantly higher than its source-only variant (64.35\%; $p=0.0039$) and its variant without test-time adaptation (72.15\%; $p=0.0039$). It also achieved 84.09\% on BCI Competition IV-2b and 84.33\% on Zhou2016, where it outperformed a matched TCFormer baseline on all four target subjects. Ablation studies showed that the contribution of each adaptation component depends on the dataset. These results indicate that combining selective state-space modeling with learned, hierarchical alignment improves cross-subject MI decoding without target labels.
+Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. This study proposes SSM-DAN, a domain-adaptive selective state-space network that couples a multi-scale convolutional front-end with bidirectional selective state-space blocks to capture both local and long-range temporal patterns, and reduces subject shift through hierarchical alignment, including a learned source--target normalization layer and label-free test-time adaptation. The framework was evaluated on three public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. The proposed SSM-DAN achieved mean accuracies of 76.12\% on BCI Competition IV-2a, 84.09\% on BCI Competition IV-2b, and 84.33\% on Zhou2016. Ablation studies showed that the contribution of each adaptation component depends on the dataset. These results indicate that combining selective state-space modeling with learned, hierarchical alignment improves cross-subject MI decoding without target labels.
 \end{abstract}
 
 \begin{keyword}
@@ -66,23 +67,23 @@ motor imagery \sep electroencephalography \sep brain--computer interface \sep se
 \section{Introduction}
 \label{sec:introduction}
 
-Motor-imagery brain--computer interfaces (MI-BCIs) decode movement intentions from non-invasive electroencephalography (EEG) for rehabilitation, communication, and control. Their event-related desynchronization and synchronization signatures are weak, non-stationary, and spatially distributed \cite{pfurtscheller1999erd}, and they vary between subjects and sessions, so a model trained on existing users often degrades on a new user, while calibrating every user with labeled trials is time-consuming. Cross-subject decoding must therefore learn discriminative spatial--temporal structure and handle inter-subject shift without target labels.
+Motor-imagery brain--computer interfaces (MI-BCIs) decode movement intentions from non-invasive electroencephalography (EEG) for rehabilitation, communication, and control. Because event-related desynchronization and synchronization signatures are weak, non-stationary, and differ between subjects and sessions \cite{pfurtscheller1999erd}, a decoder trained on existing users often degrades on a new one, while calibrating every user with labeled trials is time-consuming. This study therefore targets cross-subject MI decoding without target labels, which requires solving two problems together: learning local spectral--spatial and long-range temporal patterns from limited data, and reducing the shift between the training subjects and the new subject.
 
-Common spatial pattern (CSP) and filter-bank CSP rely on hand-designed, subject-specific stages that transfer poorly \cite{ramoser2000optimal,ang2012filterbank}. ConvNets and EEGNet learn filters end to end \cite{schirrmeister2017deep,lawhern2018eegnet} but capture long-range context only through depth or dilation, while hybrid decoders such as EEG Conformer, ATCNet, and TCFormer add self-attention and dilated temporal convolutional networks (TCNs) \cite{song2023eegconformer,altaheri2023atcnet,altaheri2025tcformer} at quadratic cost \cite{vaswani2017attention} and with high data demand. Selective state-space models offer linear-complexity sequence modeling \cite{gu2022s4,gu2024mamba}, and recent MI decoders combine convolution with Mamba \cite{guo2025mimamba,yang2025stmamba}, but they focus on architecture and do not address subject shift.
+For the first problem, common spatial pattern (CSP) and filter-bank CSP rely on hand-designed, subject-specific stages that transfer poorly \cite{ramoser2000optimal,ang2012filterbank}. ConvNets and EEGNet learn filters end to end \cite{schirrmeister2017deep,lawhern2018eegnet} but reach long-range context only through depth or dilation. Hybrid decoders such as EEG Conformer, ATCNet, and TCFormer add self-attention and dilated temporal convolutional networks (TCNs) \cite{song2023eegconformer,altaheri2023atcnet,altaheri2025tcformer}, but self-attention has quadratic cost \cite{vaswani2017attention} and needs more data than EEG datasets usually provide. Selective state-space models (SSMs) instead model long sequences at linear cost \cite{gu2022s4,gu2024mamba}, and recent MI decoders combine them with convolution \cite{guo2025mimamba,yang2025stmamba}; these decoders, however, do not address the shift to a new subject.
 
-Domain generalization learns subject-invariant features from source subjects only \cite{liu2023stdg,zhong2025eegdg,zheng2025crosssubject}, whereas unsupervised domain adaptation (UDA) also uses unlabeled target EEG through Riemannian or Euclidean alignment \cite{zanini2018riemannian,he2020euclidean}, MK-MMD \cite{long2015dan}, adversarial learning \cite{ganin2016dann,tang2020cdan}, or class prototypes \cite{zhang2024prototypeda}; AutoDIAL aligns domains inside normalization layers by learning how to mix source and target statistics \cite{carlucci2017autodial}. Test-time adaptation further reduces residual shift at inference through information maximization \cite{liang2020shot} or normalization-only updates \cite{wang2021tent}. However, fixed-strength alignment risks negative transfer when the shift is small, pooled-feature alignment can overlook temporal mismatch, and test-time adaptation uses evaluation-session signals, which must be disclosed and kept separate from labels.
+For the second problem, domain generalization learns subject-invariant features from source subjects only \cite{liu2023stdg,zhong2025eegdg,zheng2025crosssubject}, whereas unsupervised domain adaptation (UDA) also exploits unlabeled target EEG through Riemannian or Euclidean input alignment \cite{zanini2018riemannian,he2020euclidean}, MK-MMD \cite{long2015dan}, adversarial learning \cite{ganin2016dann,tang2020cdan}, or class prototypes \cite{zhang2024prototypeda}, and test-time adaptation adjusts a trained model on unlabeled test data \cite{liang2020shot,wang2021tent}. Most of these methods act at a single level, yet subject shift appears at several: in the covariance of the raw signals, in the feature statistics inside the network, and in the predictions on later sessions. AutoDIAL \cite{carlucci2017autodial} addresses the internal level by learning how to mix source and target statistics in normalization layers, but it was proposed for visual domain adaptation.
 
-To our knowledge, selective state-space MI decoders have not been coupled with target adaptation, and existing EEG adaptation methods neither learn how strongly to align nor align temporal representations. We therefore propose SSM-DAN, which couples a bidirectional selective state-space encoder with hierarchical, label-free adaptation and is evaluated under a chronological leave-one-subject-out (LOSO) protocol that keeps target labels hidden throughout. The contributions are:
+We therefore propose SSM-DAN, which couples a bidirectional selective state-space encoder with a hierarchical, label-free adaptation scheme in which each stage targets one level of shift: the input signals, the internal features, and the predictions. The contributions are:
 \begin{itemize}
     \item an end-to-end decoder that combines multi-scale convolution, alternating forward/backward selective state-space blocks, and local--global TCN fusion;
-    \item a hierarchical adaptation strategy that combines Riemannian alignment, an AutoDIAL normalization layer, adversarial and MK-MMD alignment, and constrained test-time adaptation within a chronological, leakage-controlled LOSO protocol; and
+    \item a hierarchical adaptation strategy that reduces subject shift at the input, feature, and prediction levels without target labels; and
     \item an evaluation on three public MI-EEG datasets with subject-wise accuracy, Cohen's $\kappa$, statistical tests, efficiency analysis, and component ablations.
 \end{itemize}
 
 \section{Method}
 \label{sec:method}
 
-\begin{figure*}[!h]
+\begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/architecture_overview.pdf}
     \caption{Overview of SSM-DAN: training with labeled source and unlabeled target EEG (Stage~1), label-free test-time adaptation on the unlabeled evaluation sessions $\mathcal{T}_e$ (Stage~2), and prediction (Stage~3).}
@@ -94,25 +95,24 @@ SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder com
 \subsection{Multi-scale convolutional encoder}
 \label{subsec:conv_frontend}
 
-\begin{figure*}[!h]
+\begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{figures/encoder_detail.pdf}
-    \caption{Multi-scale temporal--spatial front-end. (a) Three temporal branches, depthwise electrode filtering, grouped refinement, and channel-group attention produce $H_c$. (b) Channel-group attention: grouped $1\times1$ squeeze--excitation yields one sigmoid weight per temporal scale, which rescales that scale's 16 channels and is added residually.}
+    \caption{Multi-scale temporal--spatial front-end. (a) Temporal branches, depthwise electrode filtering, grouped refinement, and channel-group attention produce $H_c$. (b) Channel-group attention: one sigmoid weight per temporal scale rescales that scale's 16 channels residually.}
     \label{fig:encoder_detail}
-\end{figure*}
+\end{figure}
 
 Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes through three temporal convolutions with kernels of 20, 32, and 64 samples, as in TCFormer \cite{altaheri2025tcformer}, followed by depthwise spatial filtering, pooling, and grouped refinement to 16 channels per scale (Fig.~\ref{fig:encoder_detail}). A residual channel-group attention reweights the three scales, and a second pooling yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$.
 
-\newpage
 \subsection{Bidirectional selective state-space encoder}
 \label{subsec:ssm}
 
-\begin{figure*}[!h]
+\begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{figures/ssm_block.pdf}
     \caption{Selective SSM block. Backward blocks reverse and restore the temporal axis around the mixer; forward blocks omit these operations.}
     \label{fig:ssm_block}
-\end{figure*}
+\end{figure}
 
 To capture trial-wide dependencies, $H_c$ passes through five selective state-space blocks \cite{gu2022s4,gu2024mamba}, each driving a diagonal recurrence with its projected input $u_t$:
 \begin{align}
@@ -218,11 +218,11 @@ Four healthy participants (one male, three female; 22--28 years; sex reported on
 \subsection{Chronological LOSO protocol with test-time adaptation}
 \label{subsec:clean_protocol}
 
-Each LOSO fold holds out one target subject and uses the others as labeled sources, with the session split in Table~\ref{tab:protocol}. Earlier target sessions are used without labels in Stage~1; the evaluation sessions are excluded from training and model selection, and their unlabeled EEG is used only by IM-TTA before scoring.
+Each leave-one-subject-out (LOSO) fold holds out one target subject and uses the others as labeled sources, with the session split in Table~\ref{tab:protocol}. Earlier target sessions are used without labels in Stage~1; the evaluation sessions are excluded from training and model selection, and their unlabeled EEG is used only by IM-TTA before scoring.
 
 \begin{table*}[!htbp]
 \centering
-\caption{Chronological session allocation in each LOSO fold. Evaluation-session EEG is available without labels only to IM-TTA and AutoDIAL target-statistic re-estimation at inference time; its labels are used afterward solely for scoring.}
+\caption{Chronological session allocation in each LOSO fold. Evaluation-session labels are used only for scoring.}
 \label{tab:protocol}
 \small
 \setlength{\tabcolsep}{5pt}
@@ -257,7 +257,7 @@ All experiments run in Kaggle notebooks on one NVIDIA Tesla T4 GPU (16~GB). BCI 
 \subsection{Comparison methods}
 \label{subsec:baselines}
 
-Baselines are grouped by target-data access, each group being compared with the SSM-DAN variant of equal access. Source-only decoders (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, SATrans-Net \cite{miao2025satransnet}) are compared with SSM-DAN; UDA methods (CLUDA \cite{ozyurt2023cluda}, RMETNet \cite{zhao2026rmetnet}, MSD-DDA \cite{gong2026msdda}), which also see the unlabeled earlier target sessions, with SSM-DAN (Stage~1 UDA), i.e., without IM-TTA; and test-time adaptation methods (T-TIME \cite{li2024ttime}, BFT \cite{li2026bft}) with SSM-DAN (IM-TTA), i.e., without Stage~1 adaptation. All methods share the split, preprocessing, and checkpoint rule; for RMETNet on Zhou2016, a ridge of $10^{-3}$ times the mean eigenvalue is added to each trial covariance to keep it positive definite.
+Baselines are grouped by target-data access, each group being compared with the SSM-DAN variant of equal access. Source-only decoders (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, SATrans-Net \cite{miao2025satransnet}) are compared with SSM-DAN; the UDA method RMETNet \cite{zhao2026rmetnet}, which also sees the unlabeled earlier target sessions, with SSM-DAN (Stage~1 UDA), i.e., without IM-TTA; and test-time adaptation methods (T-TIME \cite{li2024ttime}, BFT \cite{li2026bft}) with SSM-DAN (IM-TTA), i.e., without Stage~1 adaptation. Every baseline was re-trained from its authors' released implementation under the protocol of Section~\ref{subsec:clean_protocol}: the same LOSO folds, chronological session split (Table~\ref{tab:protocol}), per-dataset preprocessing, random seed, and checkpoint selection on the labeled source-validation sessions. Evaluation-session labels never enter training, model selection, or hyperparameter choice, and the test-time adaptation methods receive the evaluation EEG only as an unlabeled stream. Architecture, loss, optimizer, and batch size follow each method's original recommendations. Results reported under other protocols are therefore not copied into Tables~\ref{tab:results_2a}--\ref{tab:results_zhou}; they are contrasted with the re-runs in Section~\ref{subsec:published}. For RMETNet on Zhou2016, a ridge of $10^{-3}$ times the mean eigenvalue is added to each trial covariance to keep it positive definite.
 
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}
@@ -276,7 +276,7 @@ Table~\ref{tab:results_2a} reports the four-class results for the nine BCI IV-2a
 
 \begin{table*}[!htbp]
 \centering
-\caption{Per-subject LOSO accuracy (\%), with mean accuracy and mean Cohen's $\kappa$, on BCI IV-2a (four classes). $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
+\caption{Per-subject LOSO accuracy (\%) and mean Cohen's $\kappa$ on BCI IV-2a (four classes). $p$: Wilcoxon signed-rank test against the SSM-DAN model of the same category (Section~\ref{subsec:baselines}). --: not available.}
 \label{tab:results_2a}
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
@@ -296,9 +296,7 @@ SATrans-Net~\cite{miao2025satransnet} & 68.06 & 47.92 & 73.96 & 53.47 & 61.11 & 
 SSM-DAN (source-only) & 68.06 & 51.04 & 86.46 & 61.11 & 64.24 & 39.58 & 72.92 & 73.61 & 62.15 & $64.35\pm12.77$ & $0.525\pm0.170$ & 0.0039 \\
 \midrule
 \multicolumn{13}{l}{\textit{Unsupervised domain adaptation}} \\
-CLUDA~\cite{ozyurt2023cluda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
-RMETNet~\cite{zhao2026rmetnet} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
-MSD-DDA~\cite{gong2026msdda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+RMETNet~\cite{zhao2026rmetnet} & 67.01 & 39.24 & 77.78 & 55.90 & 49.65 & 52.78 & 63.54 & 66.67 & 68.40 & $60.11\pm11.05$ & $0.468\pm0.147$ & 0.0039 \\
 SSM-DAN (Stage~1 UDA) & 79.17 & 47.57 & 92.71 & 73.61 & 57.64 & 59.72 & 82.29 & 82.64 & 73.96 & $72.15\pm13.58$ & $0.629\pm0.181$ & 0.0039 \\
 \midrule
 \multicolumn{13}{l}{\textit{Test-time adaptation}} \\
@@ -312,7 +310,7 @@ SSM-DAN (IM-TTA) & 77.43 & 47.92 & 88.19 & 66.32 & 64.24 & 61.81 & 79.86 & 82.99
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN obtained the highest accuracy and $\kappa$, and significantly outperformed every source-only baseline and its own source-only variant on all nine targets. IM-TTA improved every target over SSM-DAN (Stage~1 UDA). In the test-time adaptation group, SSM-DAN (IM-TTA) significantly exceeded BFT on all nine targets and exceeded T-TIME on seven, although the latter difference was not significant.
+SSM-DAN obtained the highest accuracy and $\kappa$, and significantly outperformed every source-only baseline and its own source-only variant on all nine targets. IM-TTA improved every target over SSM-DAN (Stage~1 UDA). In the UDA group, SSM-DAN (Stage~1 UDA) significantly exceeded RMETNet ($60.11\pm11.05\%$) on all nine targets. In the test-time adaptation group, SSM-DAN (IM-TTA) significantly exceeded BFT on all nine targets and exceeded T-TIME on seven, although the latter difference was not significant.
 
 
 \subsection{BCI Competition IV-2b}
@@ -322,7 +320,7 @@ Table~\ref{tab:results_2b} reports the two-class results for the nine BCI IV-2b 
 
 \begin{table*}[!htbp]
 \centering
-\caption{Per-subject LOSO accuracy (\%), with mean accuracy and mean Cohen's $\kappa$, on BCI IV-2b (two classes). $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
+\caption{Per-subject LOSO accuracy (\%) and mean Cohen's $\kappa$ on BCI IV-2b (two classes). $p$: Wilcoxon signed-rank test against the SSM-DAN model of the same category (Section~\ref{subsec:baselines}). --: not available.}
 \label{tab:results_2b}
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
@@ -342,13 +340,11 @@ SATrans-Net~\cite{miao2025satransnet} & 77.50 & 69.29 & 69.69 & 90.62 & 97.50 & 
 SSM-DAN (source-only) & 77.81 & 68.57 & 63.13 & 89.38 & 96.56 & 73.44 & 84.69 & 86.25 & 85.00 & $80.54\pm10.05$ & $0.611\pm0.201$ & 0.0156 \\
 \midrule
 \multicolumn{13}{l}{\textit{Unsupervised domain adaptation}} \\
-CLUDA~\cite{ozyurt2023cluda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
 RMETNet~\cite{zhao2026rmetnet} & 73.12 & 57.86 & 55.00 & 91.56 & 94.06 & 82.81 & 85.62 & 88.75 & 83.13 & $79.10\pm13.39$ & $0.582\pm0.268$ & 0.0117 \\
-MSD-DDA~\cite{gong2026msdda} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
 SSM-DAN (Stage~1 UDA) & 78.44 & 70.71 & 63.44 & 90.31 & 97.81 & 83.75 & 89.69 & 95.63 & 85.94 & $83.97\pm10.71$ & $0.679\pm0.214$ & 1.0000 \\
 \midrule
 \multicolumn{13}{l}{\textit{Test-time adaptation}} \\
-T-TIME~\cite{li2024ttime} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+T-TIME~\cite{li2024ttime} & 59.69 & 65.36 & 85.31 & 93.75 & 97.19 & 85.00 & 74.69 & 91.25 & 59.06 & $79.03\pm13.94$ & $0.581\pm0.279$ & 0.3125 \\
 BFT~\cite{li2026bft} & 75.00 & 65.00 & 59.69 & 93.44 & 94.69 & 79.06 & 88.12 & 94.37 & 81.25 & $81.18\pm12.12$ & $0.624\pm0.242$ & 0.0078 \\
 SSM-DAN (IM-TTA) & 77.81 & 68.57 & 66.25 & 93.75 & 96.25 & 81.88 & 89.69 & 94.69 & 81.25 & $83.35\pm10.50$ & $0.667\pm0.210$ & 0.2031 \\
 \midrule
@@ -358,7 +354,7 @@ SSM-DAN (IM-TTA) & 77.81 & 68.57 & 66.25 & 93.75 & 96.25 & 81.88 & 89.69 & 94.69
 \end{adjustbox}
 \end{table*}
 
-SSM-DAN again obtained the highest mean accuracy. It significantly outperformed its source-only variant, ATCNet, and EEG Conformer, whereas its advantages over TCFormer, EEGEncoder, SATrans-Net, and SSM-DAN (Stage~1 UDA) were small and not significant, with IM-TTA helping on only three targets. Within the matched groups, SSM-DAN (Stage~1 UDA) significantly exceeded RMETNet and SSM-DAN (IM-TTA) significantly exceeded BFT.
+SSM-DAN again obtained the highest mean accuracy. It significantly outperformed its source-only variant, ATCNet, and EEG Conformer, whereas its advantages over TCFormer, EEGEncoder, SATrans-Net, and SSM-DAN (Stage~1 UDA) were small and not significant, with IM-TTA helping on only three targets. Within the matched groups, SSM-DAN (Stage~1 UDA) significantly exceeded RMETNet and SSM-DAN (IM-TTA) significantly exceeded BFT; SSM-DAN (IM-TTA) also exceeded T-TIME ($79.03\pm13.94\%$) on average, but not significantly, as T-TIME varied far more across targets.
 
 \subsection{Zhou2016}
 \label{subsec:results_zhou}
@@ -367,7 +363,7 @@ Table~\ref{tab:results_zhou} reports the three-class results on target session~3
 
 \begin{table*}[!htbp]
 \centering
-\caption{Per-subject LOSO accuracy (\%), with mean accuracy and mean Cohen's $\kappa$, on target session~3 of Zhou2016 (three classes) under the clean chronological protocol. Bold: best value in each column. $p$: Wilcoxon signed-rank test of accuracy against SSM-DAN for source-only methods and SSM-DAN variants, against SSM-DAN (Stage~1 UDA) for unsupervised domain adaptation methods, and against SSM-DAN (IM-TTA) for test-time adaptation methods (Section~\ref{subsec:baselines}). --: not yet available.}
+\caption{Per-subject LOSO accuracy (\%) and mean Cohen's $\kappa$ on session~3 of Zhou2016 (three classes). Bold: best per column. $p$: Wilcoxon signed-rank test against the SSM-DAN model of the same category (Section~\ref{subsec:baselines}). --: not available.}
 \label{tab:results_zhou}
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
@@ -387,9 +383,7 @@ SATrans-Net~\cite{miao2025satransnet} & 81.33 & 80.00 & 67.33 & 70.00 & $74.67\p
 SSM-DAN (source-only) & 72.00 & 78.67 & 71.33 & 78.67 & $75.17\pm3.51$ & $0.627\pm0.053$ & 0.1250 \\
 \midrule
 \multicolumn{8}{l}{\textit{Unsupervised domain adaptation}} \\
-CLUDA~\cite{ozyurt2023cluda} & -- & -- & -- & -- & -- & -- & -- \\
 RMETNet~\cite{zhao2026rmetnet} & 70.00 & $\mathbf{89.33}$ & 80.67 & 84.67 & $81.17\pm7.14$ & $0.718\pm0.107$ & 0.8750 \\
-MSD-DDA~\cite{gong2026msdda} & -- & -- & -- & -- & -- & -- & -- \\
 SSM-DAN (Stage~1 UDA) & 79.33 & 84.67 & $\mathbf{87.33}$ & 78.00 & $82.33\pm3.82$ & $0.735\pm0.057$ & 0.6250 \\
 \midrule
 \multicolumn{8}{l}{\textit{Test-time adaptation}} \\
@@ -405,6 +399,41 @@ SSM-DAN (IM-TTA) & 79.33 & 84.00 & 83.33 & 83.33 & $82.50\pm1.85$ & $0.738\pm0.0
 
 SSM-DAN had the most consistent performance across targets and exceeded every source-only baseline and its source-only variant on all four targets, except EEGEncoder, which it exceeded on three. In the UDA group, RMETNet was slightly below its reference SSM-DAN (Stage~1 UDA) on average and far more variable across targets, although it obtained the highest accuracy on target~2. In the test-time adaptation group, T-TIME obtained the highest mean accuracy on this dataset, above both its reference SSM-DAN (IM-TTA) and the complete SSM-DAN, while BFT was on par with the reference. SSM-DAN also remained above TCFormer in the auxiliary score pooled over all three target sessions.
 
+\subsection{Comparison with published results}
+\label{subsec:published}
+
+Table~\ref{tab:published} contrasts the cross-subject accuracies reported in the original articles with the re-runs of this study. The published values are not directly comparable, because the protocols differ in four respects. (i) \emph{Task}: the T-TIME and BFT articles report two-class left- versus right-hand MI, whereas BCI IV-2a and Zhou2016 are evaluated here with four and three classes. (ii) \emph{Session shift and target data}: several protocols train and test within the same recording session, and the EEGEncoder article reports no cross-subject result at all, its multi-subject figure being obtained with the test subjects' own first sessions in the training set; here every target is unseen during training and scored on a later session recorded on a different day. (iii) \emph{Model selection}: the released scripts of SATrans-Net and RMETNet report the highest, or the mean of the five highest, per-epoch accuracies on the held-out subject, i.e., the evaluation labels select the epoch; here the checkpoint is chosen on source data only. (iv) \emph{Transductive access}: RMETNet uses the held-out evaluation trials themselves as the target domain of its MMD loss and Riemannian alignment, whereas here domain adaptation sees only the earlier, unlabeled target sessions. Each of (ii)--(iv) makes a protocol easier or its estimate more optimistic, which largely explains why most re-runs are lower on BCI IV-2a. Where the split matches ours, the gaps are small: the TCFormer benchmark \cite{altaheri2025tcformer} uses the same session split and differs only in averaging the last-epoch model over five seeds and in model-specific preprocessing, and the re-runs of TCFormer and ATCNet lie within three points of it on both BCI datasets, while EEG Conformer is higher here. On BCI IV-2b, where the shift between calibration and evaluation sessions is smaller, the re-runs reach or exceed several published values (e.g., SATrans-Net, 81.76 vs.\ 79.64\%).
+
+\begin{table*}[!htbp]
+\centering
+\caption{Published cross-subject accuracy (\%) of the baselines versus their re-runs under the protocol of this study (Table~\ref{tab:protocol}). --: not reported; settings (a)--(e) are given below the table.}
+\label{tab:published}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llccc@{\hspace{14pt}}ccc}
+\toprule
+ & & \multicolumn{3}{c}{Published} & \multicolumn{3}{c}{This study (chronological LOSO)} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+Method & Setting & BCI IV-2a & BCI IV-2b & Zhou2016 & BCI IV-2a & BCI IV-2b & Zhou2016 \\
+\midrule
+EEG Conformer~\cite{song2023eegconformer} & (a)~\cite{altaheri2025tcformer} & 45.59 & 75.25 & -- & 55.25 & 78.03 & 77.17 \\
+ATCNet~\cite{altaheri2023atcnet} & (a)~\cite{altaheri2025tcformer} & 59.66 & 80.94 & -- & 57.02 & 79.38 & 76.50 \\
+TCFormer~\cite{altaheri2025tcformer} & (a) & 63.00 & 81.34 & -- & 60.80 & 81.18 & 73.50 \\
+EEGEncoder~\cite{liao2025eegencoder} & (b) & -- & -- & -- & 58.06 & 81.02 & 74.33 \\
+SATrans-Net~\cite{miao2025satransnet} & (c) & 68.13 & 79.64 & -- & 62.00 & 81.76 & 74.67 \\
+RMETNet~\cite{zhao2026rmetnet} & (d) & 71.39 & 80.93 & -- & 60.11 & 79.10 & 81.17 \\
+T-TIME~\cite{li2024ttime} & (e) & 79.30$^{\dagger}$ & -- & -- & 66.24 & 79.03 & 85.00 \\
+BFT~\cite{li2026bft} & (e) & 77.47$^{\dagger}$ & -- & 84.38$^{\dagger}$ & 63.08 & 81.18 & 82.83 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\par\smallskip
+\begin{minipage}{\textwidth}\scriptsize
+(a) Same session split as here, last-epoch model averaged over five seeds, model-specific preprocessing. (b) No cross-subject result; the 74.48\% on BCI IV-2a trains on session~1 of all subjects, including the test subject. (c) LOSO without a reported session split, best per-epoch test accuracy. (d) One session per subject, held-out subject used as MMD/RA target, mean of the five best epochs. (e) Online test-time adaptation on session~1 only. $^{\dagger}$Two-class (left- vs.\ right-hand) task.
+\end{minipage}
+\end{table*}
+
 \subsection{Ablation study}
 \label{sec:ablation}
 
@@ -412,7 +441,7 @@ Table~\ref{tab:ablation} follows the primary chronological protocol. The variant
 
 \begin{table*}[!htbp]
 \centering
-\caption{Ablation results under the primary chronological protocol: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ across target subjects. BCI IV-2a is scored on session~2, BCI IV-2b on sessions~4--5, and Zhou2016 on session~3.}
+\caption{Ablation results: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ across target subjects.}
 \label{tab:ablation}
 \small
 \setlength{\tabcolsep}{3.0pt}
@@ -446,7 +475,7 @@ Stage~1 adaptation accounts for most of the extra training time of SSM-DAN over 
 
 \begin{table*}[!htbp]
 \centering
-\caption{Computational cost: trainable parameters, mean Stage~1 training time per fold, and single-trial CPU response time. SSM-DAN (Stage~1 UDA) and SSM-DAN (IM-TTA): SSM-DAN with only the named adaptation stage (Section~\ref{subsec:baselines}); SSM-DAN (w/o RA): without Riemannian alignment.}
+\caption{Computational cost: trainable parameters, mean Stage~1 training time per fold, and single-trial CPU response time. SSM-DAN variants as in Section~\ref{subsec:baselines}.}
 \label{tab:efficiency}
 \small
 \setlength{\tabcolsep}{2pt}
@@ -467,13 +496,11 @@ SATrans-Net & 155.6 & 10.19 & 12.78 & 153.7 & 4.99 & 11.10 & 155.0 & 1.32 & 11.3
 SSM-DAN (source-only) & 98.4 & 47.01 & 25.08 & 94.6 & 36.10 & 13.68 & 96.8 & 6.29 & 13.36 \\
 \midrule
 \multicolumn{10}{l}{\textit{Unsupervised domain adaptation}} \\
-CLUDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
-RMETNet & -- & -- & -- & 159.1 & 21.96 & 4.90 & 306.6 & 23.74 & 7.19 \\
-MSD-DDA & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+RMETNet & 193.8 & 45.88 & 11.15 & 159.1 & 21.96 & 4.90 & 306.6 & 23.74 & 7.19 \\
 SSM-DAN (Stage~1 UDA) & 132.0 & 58.45 & 18.44 & 128.2 & 48.08 & 13.35 & 130.4 & 11.42 & 14.65 \\
 \midrule
 \multicolumn{10}{l}{\textit{Test-time adaptation}} \\
-T-TIME & 9.5 & 5.85 & 7.71 & -- & -- & -- & 8.4 & 1.34 & 6.72 \\
+T-TIME & 9.5 & 5.85 & 7.71 & 6.3 & 3.07 & 5.08 & 8.4 & 1.34 & 6.72 \\
 BFT & 40.6 & 1.47 & 3.08 & 39.9 & 0.96 & 2.61 & 51.0 & 0.36 & 2.84 \\
 SSM-DAN (IM-TTA) & 131.9 & 40.73 & 22.12 & 128.1 & 33.21 & 14.25 & 130.3 & 6.46 & 18.41 \\
 \midrule
