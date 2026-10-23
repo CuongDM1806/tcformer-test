@@ -551,15 +551,24 @@ def plot_label_selectivity(results: pd.DataFrame, summary: pd.DataFrame,
     raw = results[results.variant == "none"].set_index(["config", "subject"])
     full = results[results.variant == "full"].set_index(["config", "subject"])
     normalized = ((full.mdm_margin - raw.mdm_margin) / raw.source_class_separation)
-    normalized_means = [normalized.loc[config].mean() for config in order]
+    normalized_values = [normalized.loc[config].to_numpy() for config in order]
+    normalized_means = [values.mean() for values in normalized_values]
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
-    axes[0].bar(np.arange(len(order)), normalized_means,
-                color=["#2a78d6", "#59a5d8", "#7eb6dc", "#a5cbe5", "#eb6834", "#1baf7a"])
+    colours = ["#2a78d6", "#59a5d8", "#7eb6dc", "#a5cbe5", "#eb6834", "#1baf7a"]
+    rng = np.random.default_rng(20261023)
+    for index, (values, mean, colour) in enumerate(zip(normalized_values, normalized_means, colours)):
+        jitter = np.linspace(-0.10, 0.10, len(values))
+        bootstrap = rng.choice(values, size=(20_000, len(values)), replace=True).mean(axis=1)
+        low, high = np.quantile(bootstrap, [0.025, 0.975])
+        axes[0].scatter(index + jitter, values, s=22, color=colour, alpha=0.72,
+                        edgecolor="white", linewidth=0.35, zorder=2)
+        axes[0].errorbar(index, mean, yerr=[[mean - low], [high - mean]], fmt="D",
+                         markersize=5, color="#111111", capsize=3, lw=1.2, zorder=3)
     axes[0].axhline(0, color="#777777", lw=0.8)
     axes[0].set_xticks(np.arange(len(order)), labels, rotation=20, ha="right")
     axes[0].set_ylabel("RA margin gain / raw class separation")
-    axes[0].set_title("Label-selective alignment effect")
+    axes[0].set_title("Label-selective alignment effect\n(dots: subjects; diamond: mean, 95% CI)")
 
     plot_summary = summary.set_index("config").loc[order]
     x = np.arange(len(order))

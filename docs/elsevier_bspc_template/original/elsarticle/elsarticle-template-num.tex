@@ -269,6 +269,13 @@ Accuracy is reported per target subject, and accuracy and Cohen's $\kappa$ as me
 \end{equation}
 where $T$ is the length of the decoded EEG window (4~s for BCI IV-2a and IV-2b and 4.5~s for Zhou2016); it is computed per target subject, set to zero at or below chance, and then averaged. Class-wise behaviour is summarised by the recall of each class and the macro-averaged F1 score, which reveal whether accuracy is concentrated on a subset of classes. Paired accuracy differences use a two-sided Wilcoxon signed-rank test with exact $p$-values. Because each method is compared with the SSM-DAN variant of the same target-data access (Section~\ref{subsec:baselines}), the $p$-values are adjusted for multiple comparisons by the Holm--Bonferroni procedure within each of these three families (eight, one, and two tests), and a difference is called significant when the adjusted $p_\mathrm{Holm}<0.05$. Efficiency is measured by trainable parameters, mean Stage~1 training time per fold on the T4, and batch-one CPU response time (mean of 500 passes after 100 warm-up passes), excluding IM-TTA, preprocessing, and data transfer.
 
+To interpret the dataset-dependent RA ablation, a model-free geometric diagnostic is also applied. OAS trial covariances from the labeled source subjects form one affine-invariant Riemannian centroid $M_k$ per class, and each held-out target evaluation trial $C_i$ is assigned to its nearest source centroid. Label selectivity is measured by the true-versus-nearest-wrong margin
+\begin{equation}
+m_i=\min_{k\ne y_i}d_R(C_i,M_k)-d_R(C_i,M_{y_i}),
+\label{eq:mdm_margin}
+\end{equation}
+where a positive change after RA means that the target trial moves toward its correct source class relative to every competing class. For comparability across channel and class configurations, the subject-level margin change is divided by the mean pre-RA separation between source-class centroids. Controlled BCI IV-2a variants retain either C3/Cz/C4, left/right trials, or both. The four primary margin comparisons use exact two-sided permutation tests between datasets or paired Wilcoxon tests within BCI IV-2a, followed by Holm correction. Target labels enter only this retrospective diagnostic and never training, adaptation, or model selection.
+
 \section{Results}
 \label{sec:results}
 
@@ -486,6 +493,20 @@ Dataset & Metric & SSM-DAN & \colhead{Without\\Riemannian\\alignment} & \colhead
 
 On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent.
 
+\subsection{Why Riemannian alignment helps BCI IV-2a}
+\label{subsec:ra_mechanism}
+
+The geometric diagnostic distinguishes generic domain contraction from alignment that is useful for classification (Fig.~\ref{fig:ra_label_selectivity}). In the original tasks, nearest-centroid accuracy increased from 30.32\% to 42.52\% on BCI IV-2a ($+12.19$ percentage points; exact paired Wilcoxon $p=0.0039$), but only from 56.66\% to 57.63\% on BCI IV-2b ($+0.97$ points; $p=0.4961$). More importantly, the normalized decision-margin gain was 0.1517 on four-class BCI IV-2a versus 0.0287 on binary BCI IV-2b (exact permutation $p_\mathrm{Holm}=0.0389$). The effect remained when BCI IV-2a was reduced to C3/Cz/C4 (0.2264; $p_\mathrm{Holm}=0.0110$ versus BCI IV-2b), ruling out channel count as the sole explanation.
+
+\begin{figure*}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{../../../../analysis/ra_mechanism_outputs/ra_label_selectivity.pdf}
+\caption{Label-selective effect of RA. Left: subject-level gain in the true-versus-nearest-wrong Riemannian margin (Eq.~\ref{eq:mdm_margin}), normalized by pre-RA source-class separation; diamonds and bars show the mean and bootstrap 95\% confidence interval. Middle: mean raw margin before and after full RA, where positive values indicate correct class geometry. Right: class-wise change in diagnostic MDM recall on the original 22-channel BCI IV-2a task. This model-free diagnostic is separate from SSM-DAN accuracy.}
+\label{fig:ra_label_selectivity}
+\end{figure*}
+
+Within BCI IV-2a, restricting the task to left/right reduced the normalized margin gain from 0.1517 to 0.0160 at 22 channels ($p_\mathrm{Holm}=0.0389$) and from 0.2264 to 0.0665 at three channels ($p_\mathrm{Holm}=0.0234$). Full RA particularly recovered classes with poor unaligned transfer: diagnostic recall increased by 22.38, 17.44, and 18.06 points for right hand, feet, and tongue, respectively, while left-hand recall decreased by 9.10 points. Conversely, after matching both the three-channel montage and left/right task, the margin-gain difference between BCI IV-2a and IV-2b was not significant ($p=0.4174$). Thus, the evidence points to the richer class-conditional covariance geometry of the original four-class BCI IV-2a task, rather than the number of electrodes or the magnitude of marginal shift alone. This diagnostic explains the direction of the neural ablation but is not itself an SSM-DAN accuracy result.
+
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
 
@@ -534,7 +555,7 @@ SSM-DAN\newline (w/o RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4
 \section{Discussion}
 \label{sec:discussion}
 
-The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences.
+The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences. The geometric analysis suggests that this difference is determined by label selectivity rather than by how strongly RA contracts the domains: full RA reduced class-conditional covariance shift on BCI IV-2b, yet produced little improvement in the correct-versus-wrong class margin. On BCI IV-2a, the effect survived reduction to three channels but weakened substantially when the four-class task was reduced to left/right. RA therefore appears particularly useful for the heterogeneous lateral and midline covariance patterns of this task; the results do not imply that increasing the number of classes will generally improve RA.
 
 The alternating scans exploit complete offline trials and are non-causal, so online use would require forward-only processing.
 
