@@ -98,10 +98,29 @@ Chính Discussion và Conclusion của bài đã tự viết "repeated-seed expe
 
 Mục tiêu là chứng minh lần lượt từng tầng: RA giảm shift ở input, AutoDIAL + MMD + adversarial giảm shift ở feature, TTA giảm shift ở output.
 
-### 2.1 Đo shift ở mức input (RA): không cần train
+### 2.1 Đo shift ở mức input (RA): không cần train, không cần mô hình
 
-- **D1. Heatmap khoảng cách Riemann giữa các subject** (9×9) giữa các ma trận covariance trung bình, trước và sau RA. Dùng `pyriemann.utils.distance.distance_riemann`. Đặt hai heatmap cạnh nhau: sau RA, các phần tử ngoài đường chéo gần như bằng 0.
-- **D2.** Biểu đồ cột thể hiện khoảng cách source → target của từng target subject, trước và sau RA, cho cả 3 dataset.
+**Nguyên tắc:** R̄ của mỗi subject được tính **chỉ từ session 1** (2b: session 1–3, Zhou: session 1–2), rồi áp lên cả hai session (xem `tcformer-autodial/datamodules/bcic4_2a.py:178-203`). Trên session 1, sau RA mọi trung bình đều **bằng I do cách xây dựng**, nên không chứng minh được gì. Vì vậy **mọi phép đo đều làm trên session đánh giá** (2a: session 2, 2b: session 4–5, Zhou: session 3), là phần dữ liệu không dùng để tính R̄.
+
+**Chuẩn bị:** load dữ liệu bằng đúng datamodule và tiền xử lý của pipeline, tính covariance từng trial (OAS), rồi áp RA bằng đúng `BaseDataModule._riemannian_whitener` (R̄ từ session 1 của chính subject). Có hai bản dữ liệu: trước RA và sau RA.
+
+- **E1. Khoảng cách giữa các subject trên session đánh giá** (kết quả chính)
+  - M_s là trung bình Riemann của các covariance session đánh giá của subject s.
+  - Tính ma trận `distance_riemann(M_s, M_t)`, trước và sau RA.
+  - Báo cáo **khoảng cách trung bình ngoài đường chéo**, trước và sau RA, cho mỗi dataset.
+  - Báo cáo **shift còn lại** d(M_s sau RA, I) của từng subject.
+- **E3. t-SNE của tangent vector** các trial session đánh giá, tô màu theo subject, trước và sau RA (chỉ làm cho 2a).
+- **So sánh 3 dataset:** shift ban đầu của 2a có lớn hơn 2b và Zhou không?
+
+**Đã bỏ:** E2 (đoán subject bằng logistic regression) và E4 (bộ phân loại Riemann chéo subject), vì cả hai phải huấn luyện thêm mô hình.
+
+**Kết quả mong muốn và điều chứng minh được:**
+- Trước RA khoảng cách lớn: **subject shift ở mức tín hiệu là có thật**.
+- Sau RA khoảng cách giảm mạnh trên session **không** dùng để fit: RA fit trên session cũ, chưa có nhãn, vẫn **căn chỉnh được session tương lai**.
+- Shift còn lại khác 0: cần thêm **DA ở mức feature và TTA**, biện minh cho thiết kế phân cấp.
+- Shift ban đầu của 2a lớn hơn: giải thích vì sao gain phụ thuộc dataset (Bảng 7).
+
+**Đưa vào bài:** 1 hình gồm (a) t-SNE trước/sau RA của 2a và (b) biểu đồ cột khoảng cách trước/sau RA kèm shift còn lại cho 3 dataset; thêm 1–2 câu trong mục "Domain discrepancy analysis".
 
 ### 2.2 Đo shift ở mức feature: dùng feature `q` (64-d) và output AutoDIAL
 
@@ -217,11 +236,12 @@ Gọi hàm này cho cả source-validation loader và target Ta loader, để c�
 ## 7. Checklist theo dõi
 
 - [x] S1: Holm, đã thêm cột p_Holm vào Bảng 3–5 và sửa mục 3.6, 4.1, 4.2 trong `docs/elsevier_bspc_template/original/elsarticle/elsarticle-template-num.tex` (bản sao lưu: `.tex.bak-holm`; script: `analysis/holm_tables.py` trong repo này)
-- [ ] S2–S7: effect size, CI, Friedman/CD, Bayesian, chance level, ITR/F1
+- [x] S7: ITR (cột mới trong Bảng 3–5) và recall từng lớp + macro-F1 của SSM-DAN (Hình 4: confusion matrix trung bình của 3 dataset, mục 4.4 mới); script `analysis/extra_metrics.py` và `analysis/make_confusion_figure.py`. Recall/F1 lấy từ ảnh confusion matrix nên mới có cho SSM-DAN; muốn có cho baseline thì cần dump dự đoán từng trial
+- [ ] S2–S6: effect size, CI, Friedman/CD, Bayesian, chance level
 - [ ] Sửa `train_pipeline.py` để dump `.npz`
 - [ ] `analysis/reinfer_from_ckpt.py`, tái tạo đúng số trong bài
 - [ ] F3/F4: α của AutoDIAL
-- [ ] D1/D2: khoảng cách Riemann trước/sau RA
+- [ ] RA ở mức input (mục 2.1): E1 khoảng cách trên session đánh giá + shift còn lại, E3 t-SNE (chạy trên Kaggle)
 - [ ] F5–F8: phân tích TTA (động học, phân phối lớp, ngân sách dữ liệu, calibration)
 - [ ] S8: McNemar theo subject
 - [ ] F13/F14: topomap và saliency theo thời gian

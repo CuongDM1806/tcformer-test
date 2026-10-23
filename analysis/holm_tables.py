@@ -105,18 +105,19 @@ def holm(pvals):
     return adj
 
 
-for dataset, acc in ACC.items():
-    rows = []
-    for method, ref, fam in COMPARISONS:
-        p, wins, n = wilcoxon_exact(acc[ref], acc[method])
-        rows.append([method, ref, fam, wins, n, p])
+if __name__ == "__main__":
+    for dataset, acc in ACC.items():
+        rows = []
+        for method, ref, fam in COMPARISONS:
+            p, wins, n = wilcoxon_exact(acc[ref], acc[method])
+            rows.append([method, ref, fam, wins, n, p])
 
-    for fam in sorted({r[2] for r in rows}):
-        idx = [i for i, r in enumerate(rows) if r[2] == fam]
-        for i, ph in zip(idx, holm([rows[i][5] for i in idx])):
-            rows[i].append(ph)
+        for fam in sorted({r[2] for r in rows}):
+            idx = [i for i, r in enumerate(rows) if r[2] == fam]
+            for i, ph in zip(idx, holm([rows[i][5] for i in idx])):
+                rows[i].append(ph)
 
-    print(f"\n== {dataset}")
-    print(f"{'Method':24s} {'Reference':24s} Fam  Wins   p_raw   p_Holm  Sig")
-    for m, ref, fam, wins, n, p, ph in rows:
-        print(f"{m:24s} {ref:24s} {fam:3s}  {wins}/{n}  {p:.4f}  {ph:.4f}  {'yes' if ph < 0.05 else 'no'}")
+        print(f"\n== {dataset}")
+        print(f"{'Method':24s} {'Reference':24s} Fam  Wins   p_raw   p_Holm  Sig")
+        for m, ref, fam, wins, n, p, ph in rows:
+            print(f"{m:24s} {ref:24s} {fam:3s}  {wins}/{n}  {p:.4f}  {ph:.4f}  {'yes' if ph < 0.05 else 'no'}")
