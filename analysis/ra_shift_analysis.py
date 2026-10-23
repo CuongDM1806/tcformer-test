@@ -21,6 +21,10 @@ import os
 import sys
 from pathlib import Path
 
+# Notebook kernels export their inline backend; the project's imports
+# (pytorch_lightning -> torchmetrics -> matplotlib) would fail on it.
+os.environ["MPLBACKEND"] = "Agg"
+
 import numpy as np
 from scipy.linalg import eigh
 from sklearn.covariance import OAS
