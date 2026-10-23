@@ -95,14 +95,7 @@ SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder com
 \subsection{Multi-scale convolutional encoder}
 \label{subsec:conv_frontend}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{figures/encoder_detail.pdf}
-    \caption{Multi-scale temporal--spatial front-end. (a) Temporal branches, depthwise electrode filtering, grouped refinement, and channel-group attention produce $H_c$. (b) Channel-group attention: one sigmoid weight per temporal scale rescales that scale's 16 channels residually.}
-    \label{fig:encoder_detail}
-\end{figure}
-
-Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes through three temporal convolutions with kernels of 20, 32, and 64 samples, as in TCFormer \cite{altaheri2025tcformer}, followed by depthwise spatial filtering, pooling, and grouped refinement to 16 channels per scale (Fig.~\ref{fig:encoder_detail}). A residual channel-group attention reweights the three scales, and a second pooling yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$.
+Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes through three temporal convolutions with kernels of 20, 32, and 64 samples, as in TCFormer \cite{altaheri2025tcformer}, followed by depthwise spatial filtering, pooling, and grouped refinement to 16 channels per scale. A residual channel-group attention assigns one sigmoid weight to each scale, and a second pooling yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$.
 
 \subsection{Bidirectional selective state-space encoder}
 \label{subsec:ssm}
@@ -257,24 +250,24 @@ All experiments run in Kaggle notebooks on one NVIDIA Tesla T4 GPU (16~GB). BCI 
 \subsection{Comparison methods}
 \label{subsec:baselines}
 
-Baselines are grouped by target-data access, each group being compared with the SSM-DAN variant of equal access. Source-only decoders (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, SATrans-Net \cite{miao2025satransnet}) are compared with SSM-DAN; the UDA method RMETNet \cite{zhao2026rmetnet}, which also sees the unlabeled earlier target sessions, with SSM-DAN (Stage~1 UDA), i.e., without IM-TTA; and test-time adaptation methods (T-TIME \cite{li2024ttime}, BFT \cite{li2026bft}) with SSM-DAN (IM-TTA), i.e., without Stage~1 adaptation. Every baseline was re-trained from its authors' released implementation under the protocol of Section~\ref{subsec:clean_protocol}: the same LOSO folds, chronological session split (Table~\ref{tab:protocol}), per-dataset preprocessing, random seed, and checkpoint selection on the labeled source-validation sessions. Evaluation-session labels never enter training, model selection, or hyperparameter choice, and the test-time adaptation methods receive the evaluation EEG only as an unlabeled stream. Architecture, loss, optimizer, and batch size follow each method's original recommendations. Results reported under other protocols are therefore not copied into Tables~\ref{tab:results_2a}--\ref{tab:results_zhou}; they are contrasted with the re-runs in Section~\ref{subsec:published}. For RMETNet on Zhou2016, a ridge of $10^{-3}$ times the mean eigenvalue is added to each trial covariance to keep it positive definite.
+Baselines are grouped by target-data access: source-only EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, and SATrans-Net \cite{miao2025satransnet}; UDA-based RMETNet \cite{zhao2026rmetnet}; and test-time methods T-TIME \cite{li2024ttime} and BFT \cite{li2026bft}. Each is compared with the SSM-DAN variant having the same target-data access. All methods are re-trained from released implementations with identical LOSO folds, chronological splits, preprocessing, seed, and source-only checkpoint selection; evaluation labels never enter training or model selection. Model-specific optimization follows the original recommendations. Published results under different protocols are reported separately in Section~\ref{subsec:published}. For numerical stability, RMETNet covariances on Zhou2016 receive a ridge of $10^{-3}$ times their mean eigenvalue.
 
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}
 
-Accuracy is reported per target subject, and accuracy and Cohen's $\kappa$ as mean $\pm$ standard deviation across folds. Because every evaluation set is balanced across classes, $\kappa$ is a linear rescaling of accuracy; two complementary measures are therefore added. The information transfer rate (ITR) of Wolpaw et al.~\cite{wolpaw2002bci} expresses accuracy $P$ with $N$ classes as communication speed,
+Accuracy and Cohen's $\kappa$ are reported as mean $\pm$ standard deviation across target subjects. Information transfer rate (ITR) \cite{wolpaw2002bci} expresses accuracy $P$ over $N$ classes as
 \begin{equation}
 \mathrm{ITR}=\frac{60}{T}\left[\log_2 N+P\log_2 P+(1-P)\log_2\frac{1-P}{N-1}\right]\ \text{bits/min},
 \label{eq:itr}
 \end{equation}
-where $T$ is the length of the decoded EEG window (4~s for BCI IV-2a and IV-2b and 4.5~s for Zhou2016); it is computed per target subject, set to zero at or below chance, and then averaged. Class-wise behaviour is summarised by the recall of each class and the macro-averaged F1 score, which reveal whether accuracy is concentrated on a subset of classes. Paired accuracy differences use a two-sided Wilcoxon signed-rank test with exact $p$-values. Because each method is compared with the SSM-DAN variant of the same target-data access (Section~\ref{subsec:baselines}), the $p$-values are adjusted for multiple comparisons by the Holm--Bonferroni procedure within each of these three families (eight, one, and two tests), and a difference is called significant when the adjusted $p_\mathrm{Holm}<0.05$. Efficiency is measured by trainable parameters, mean Stage~1 training time per fold on the T4, and batch-one CPU response time (mean of 500 passes after 100 warm-up passes), excluding IM-TTA, preprocessing, and data transfer.
+where $T$ is the decoded window (4~s for BCI IV-2a/2b; 4.5~s for Zhou2016); values at or below chance are set to zero before averaging. Per-class recall and macro-F1 assess class balance. Paired accuracy differences use exact two-sided Wilcoxon tests, with Holm correction within each target-access group (Section~\ref{subsec:baselines}); $p_\mathrm{Holm}<0.05$ denotes significance. Efficiency is reported by parameter count, Stage~1 training time, and batch-one CPU latency.
 
-To interpret the dataset-dependent RA ablation, a model-free geometric diagnostic is also applied. OAS trial covariances from the labeled source subjects form one affine-invariant Riemannian centroid $M_k$ per class, and each held-out target evaluation trial $C_i$ is assigned to its nearest source centroid. Label selectivity is measured by the true-versus-nearest-wrong margin
+To interpret the RA ablation, OAS covariances from source subjects form one Riemannian centroid $M_k$ per class. For target evaluation trial $C_i$, label selectivity is measured by
 \begin{equation}
 m_i=\min_{k\ne y_i}d_R(C_i,M_k)-d_R(C_i,M_{y_i}),
 \label{eq:mdm_margin}
 \end{equation}
-where a positive change after RA means that the target trial moves toward its correct source class relative to every competing class. For comparability across channel and class configurations, the subject-level margin change is divided by the mean pre-RA separation between source-class centroids. Controlled BCI IV-2a variants retain either C3/Cz/C4, left/right trials, or both. The four primary margin comparisons use exact two-sided permutation tests between datasets or paired Wilcoxon tests within BCI IV-2a, followed by Holm correction. Target labels enter only this retrospective diagnostic and never training, adaptation, or model selection.
+where a positive RA-induced change moves the trial toward its correct class relative to all competitors. Margin change is normalized by pre-RA source-class separation. Controls retain either C3/Cz/C4, left/right trials, or both from BCI IV-2a. Four primary comparisons use exact two-sided between-dataset permutation or within-dataset paired Wilcoxon tests with Holm correction. Target labels are used only for this retrospective diagnostic.
 
 \section{Results}
 \label{sec:results}
