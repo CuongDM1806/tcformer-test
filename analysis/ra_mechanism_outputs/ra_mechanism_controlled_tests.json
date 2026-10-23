@@ -1,0 +1,58 @@
+{
+  "channel_effect_4class": {
+    "config_a": "2a-22ch-4class",
+    "config_b": "2a-3ch-4class",
+    "mean_reduction_a_pct": 20.752568684937685,
+    "mean_reduction_b_pct": 54.73357660271954,
+    "mean_paired_difference_pct": -33.98100791778185,
+    "wilcoxon_p": 0.0078125
+  },
+  "channel_effect_LR": {
+    "config_a": "2a-22ch-LR",
+    "config_b": "2a-3ch-LR",
+    "mean_reduction_a_pct": 18.92055869077852,
+    "mean_reduction_b_pct": 56.66326137919171,
+    "mean_paired_difference_pct": -37.74270268841318,
+    "wilcoxon_p": 0.00390625
+  },
+  "class_effect_22ch": {
+    "config_a": "2a-22ch-4class",
+    "config_b": "2a-22ch-LR",
+    "mean_reduction_a_pct": 20.752568684937685,
+    "mean_reduction_b_pct": 18.92055869077852,
+    "mean_paired_difference_pct": 1.8320099941591625,
+    "wilcoxon_p": 0.1640625
+  },
+  "class_effect_3ch": {
+    "config_a": "2a-3ch-4class",
+    "config_b": "2a-3ch-LR",
+    "mean_reduction_a_pct": 54.73357660271954,
+    "mean_reduction_b_pct": 56.66326137919171,
+    "mean_paired_difference_pct": -1.9296847764721674,
+    "wilcoxon_p": 1.0
+  },
+  "mdm_channel_effect_4class": {
+    "config_a": "2a-22ch-4class",
+    "config_b": "2a-3ch-4class",
+    "mean_mdm_gain_a_pp": 12.19135802469136,
+    "mean_mdm_gain_b_pp": 9.45216049382716,
+    "mean_paired_difference_pp": 2.739197530864199,
+    "wilcoxon_p": 0.25
+  },
+  "mdm_channel_effect_LR": {
+    "config_a": "2a-22ch-LR",
+    "config_b": "2a-3ch-LR",
+    "mean_mdm_gain_a_pp": 8.256172839506172,
+    "mean_mdm_gain_b_pp": 6.018518518518519,
+    "mean_paired_difference_pp": 2.237654320987654,
+    "wilcoxon_p": 0.203125
+  },
+  "mdm_2a_vs_2b_matched_design": {
+    "config_a": "2a-3ch-LR",
+    "config_b": "2b-3ch-LR",
+    "mean_mdm_gain_a_pp": 6.018518518518519,
+    "mean_mdm_gain_b_pp": 0.9672619047619028,
+    "mean_difference_pp": 5.051256613756617,
+    "mann_whitney_p": 0.3865076100370218
+  }
+}

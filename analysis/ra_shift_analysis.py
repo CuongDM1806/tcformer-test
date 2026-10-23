@@ -78,11 +78,15 @@ SHAPE, SCALE = "#2a78d6", "#eb6834"
 INK, MUTED = "#0b0b0b", "#52514e"
 
 
-def load_dataset(name):
+def load_subject(name, subject):
+    """Load one subject; preprocessing is per recording, so this matches the
+    all-subject loading of training while keeping memory low."""
     if name == "Zhou2016":
-        return load_zhou2016(list(SUBJECTS[name]), PREPROCESSING[name])
-    return load_bcic4(list(SUBJECTS[name]), "2a" if name == "BCI IV-2a" else "2b",
-                      PREPROCESSING[name])
+        dataset = load_zhou2016([subject], PREPROCESSING[name])
+    else:
+        dataset = load_bcic4([subject], "2a" if name == "BCI IV-2a" else "2b",
+                             PREPROCESSING[name])
+    return dataset.split("subject")[str(subject)]
 
 
 def split_sessions(name, subject_dataset):
@@ -145,14 +149,13 @@ def tangent_vectors(covs, reference):
 
 def analyse(name):
     print(f"\n=== {name}: loading", flush=True)
-    by_subject = load_dataset(name).split("subject")
     subjects = list(SUBJECTS[name])
     mean = BaseDataModule._riemannian_mean
     M = {key: [] for key in ("fit_raw", "eval_raw", "fit_ra", "eval_ra")}
     eval_covs = {"raw": [], "ra": []}
     labels = []
     for s in subjects:
-        fit, evaluation = split_sessions(name, by_subject[str(s)])
+        fit, evaluation = split_sessions(name, load_subject(name, s))
         X_fit, X_eval = to_array(fit), to_array(evaluation)
         # The whitener used in training (reference = fitting sessions). RA maps
         # every covariance by the congruence W C W; re-estimating OAS on the
