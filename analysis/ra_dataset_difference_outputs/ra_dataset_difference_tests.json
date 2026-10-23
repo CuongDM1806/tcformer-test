@@ -1,0 +1,30 @@
+{
+  "H1_2b_feedback_matched_reference_improves_full_RA_gain": {
+    "mean_gain_pooled_pp": 0.9672619047619028,
+    "mean_gain_feedback_S3_reference_pp": 3.6805555555555562,
+    "mean_paired_improvement_pp": 2.713293650793653,
+    "wilcoxon_one_sided_p": 0.234375,
+    "holm_p_three_primary_tests": 0.46875
+  },
+  "H2_RA_gain_2a_exceeds_2b_original_22ch": {
+    "mean_gain_2a_pp": 8.256172839506172,
+    "mean_gain_2b_pp": 0.9672619047619028,
+    "difference_pp": 7.28891093474427,
+    "exact_independent_permutation_one_sided_p": 0.061641299876593995,
+    "note": "Descriptive original-design test; not in the three-test matched primary family."
+  },
+  "H2_RA_gain_2a_exceeds_2b_matched_3ch_LR": {
+    "mean_gain_2a_pp": 6.018518518518519,
+    "mean_gain_2b_pp": 0.9672619047619028,
+    "difference_pp": 5.051256613756617,
+    "exact_independent_permutation_one_sided_p": 0.14368572603866722,
+    "holm_p_three_primary_tests": 0.43105717811600164
+  },
+  "H3_RA_improves_cross_subject_class_contrast_more_on_2a_matched_3ch_LR": {
+    "contrast_cosine_delta_2a": -0.015827086550656733,
+    "contrast_cosine_delta_2b": -0.009929007016068025,
+    "difference_in_deltas": -0.005898079534588707,
+    "exact_subject_label_permutation_one_sided_p": 0.7039078568490333,
+    "holm_p_three_primary_tests": 0.7039078568490333
+  }
+}

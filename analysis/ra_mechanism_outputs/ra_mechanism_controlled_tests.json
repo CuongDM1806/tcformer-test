@@ -54,5 +54,41 @@
     "mean_mdm_gain_b_pp": 0.9672619047619028,
     "mean_difference_pp": 5.051256613756617,
     "mann_whitney_p": 0.3865076100370218
+  },
+  "label_margin_2a22_4class_vs_2b": {
+    "config_a": "2a-22ch-4class",
+    "config_b": "2b-3ch-LR",
+    "mean_normalized_margin_gain_a": 0.15171184085829392,
+    "mean_normalized_margin_gain_b": 0.028678922558260513,
+    "mean_difference": 0.1230329183000334,
+    "exact_permutation_two_sided_p": 0.019457013574660634,
+    "holm_p_four_margin_tests": 0.03891402714932127
+  },
+  "label_margin_2a3_4class_vs_2b": {
+    "config_a": "2a-3ch-4class",
+    "config_b": "2b-3ch-LR",
+    "mean_normalized_margin_gain_a": 0.22637490640373834,
+    "mean_normalized_margin_gain_b": 0.028678922558260513,
+    "mean_difference": 0.19769598384547782,
+    "exact_permutation_two_sided_p": 0.002756067461949815,
+    "holm_p_four_margin_tests": 0.01102426984779926
+  },
+  "label_margin_class_structure_effect_22ch": {
+    "config_a": "2a-22ch-4class",
+    "config_b": "2a-22ch-LR",
+    "mean_normalized_margin_gain_a": 0.15171184085829392,
+    "mean_normalized_margin_gain_b": 0.016036638557036346,
+    "mean_paired_difference": 0.13567520230125757,
+    "wilcoxon_two_sided_p": 0.01953125,
+    "holm_p_four_margin_tests": 0.03891402714932127
+  },
+  "label_margin_class_structure_effect_3ch": {
+    "config_a": "2a-3ch-4class",
+    "config_b": "2a-3ch-LR",
+    "mean_normalized_margin_gain_a": 0.22637490640373834,
+    "mean_normalized_margin_gain_b": 0.06648531279764541,
+    "mean_paired_difference": 0.15988959360609295,
+    "wilcoxon_two_sided_p": 0.0078125,
+    "holm_p_four_margin_tests": 0.0234375
   }
 }

@@ -304,10 +304,20 @@ def analyse_configuration(config_name: str, dataset: str, fit_session_count: int
                 riemann_distance(source_classes[a], source_classes[b]) / norm
                 for a, b in combinations(range(n_classes), 2)
             ])
-            predictions = np.asarray([
-                np.argmin([riemann_distance(centroid, trial) for centroid in source_classes])
+            trial_distances = np.asarray([
+                [riemann_distance(centroid, trial) for centroid in source_classes]
                 for trial in own["eval_trials"]
             ])
+            predictions = np.argmin(trial_distances, axis=1)
+            trial_indices = np.arange(len(predictions))
+            true_distance = trial_distances[trial_indices, own["eval_y"]]
+            wrong_distances = trial_distances.copy()
+            wrong_distances[trial_indices, own["eval_y"]] = np.inf
+            nearest_wrong_distance = np.min(wrong_distances, axis=1)
+            # Positive means the trial is closer to its true source centroid
+            # than to every wrong source centroid.  Unlike marginal shift,
+            # this directly measures whether alignment is label-selective.
+            mdm_margin = nearest_wrong_distance - true_distance
             mdm_accuracy = float(np.mean(predictions == own["eval_y"]))
             session = riemann_distance(own["fit"], own["eval"]) / norm
             row = {
@@ -317,8 +327,15 @@ def analyse_configuration(config_name: str, dataset: str, fit_session_count: int
                 "source_class_separation": between,
                 "conditional_quality": between / max(conditional, 1e-12),
                 "mdm_accuracy": mdm_accuracy,
+                "mdm_margin": float(np.mean(mdm_margin) / norm),
+                "true_class_distance": float(np.mean(true_distance) / norm),
+                "nearest_wrong_distance": float(np.mean(nearest_wrong_distance) / norm),
                 "session_shift": session,
             }
+            for label in range(n_classes):
+                class_mask = own["eval_y"] == label
+                row[f"mdm_recall_class_{label}"] = float(np.mean(predictions[class_mask] == label))
+                row[f"mdm_margin_class_{label}"] = float(np.mean(mdm_margin[class_mask]) / norm)
             if variant == "none":
                 _, scale, shape = distance_parts(source, own["eval"])
                 row.update(raw_scale=scale, raw_shape=shape,
@@ -342,6 +359,9 @@ def summarise(results: pd.DataFrame) -> pd.DataFrame:
         source_class_separation=("source_class_separation", "mean"),
         conditional_quality=("conditional_quality", "mean"),
         mdm_accuracy=("mdm_accuracy", "mean"),
+        mdm_margin=("mdm_margin", "mean"),
+        true_class_distance=("true_class_distance", "mean"),
+        nearest_wrong_distance=("nearest_wrong_distance", "mean"),
         session_shift=("session_shift", "mean"),
         n_subjects=("subject", "nunique"),
         n_channels=("n_channels", "first"),
@@ -353,19 +373,29 @@ def summarise(results: pd.DataFrame) -> pd.DataFrame:
         config, dataset, n_subjects, n_channels, n_classes = index
         record = dict(config=config, dataset=dataset, n_subjects=n_subjects,
                       n_channels=n_channels, n_classes=n_classes)
-        for metric in ("marginal_shift", "same_class_shift", "source_class_separation", "conditional_quality", "mdm_accuracy", "session_shift"):
+        for metric in ("marginal_shift", "same_class_shift", "source_class_separation", "conditional_quality",
+                       "mdm_accuracy", "mdm_margin", "true_class_distance", "nearest_wrong_distance",
+                       "session_shift"):
             for variant in VARIANTS:
                 record[f"{metric}_{variant}"] = float(values[(metric, variant)])
         record["marginal_reduction_full_pct"] = 100 * (1 - record["marginal_shift_full"] / record["marginal_shift_none"])
         record["same_class_reduction_full_pct"] = 100 * (1 - record["same_class_shift_full"] / record["same_class_shift_none"])
         record["quality_change_full_pct"] = 100 * (record["conditional_quality_full"] / record["conditional_quality_none"] - 1)
         record["mdm_gain_full_pp"] = 100 * (record["mdm_accuracy_full"] - record["mdm_accuracy_none"])
+        record["mdm_margin_gain_full"] = record["mdm_margin_full"] - record["mdm_margin_none"]
+        # Positive: full RA reduces distance to the true class more than it
+        # reduces distance to the closest wrong class.
+        record["label_selective_pull_full"] = (
+            (record["true_class_distance_none"] - record["true_class_distance_full"])
+            - (record["nearest_wrong_distance_none"] - record["nearest_wrong_distance_full"])
+        )
         subset = results[results.config == config]
         record["p_same_class_none_vs_full"] = paired_p(subset, "same_class_shift")
         record["p_quality_none_vs_full"] = paired_p(subset, "conditional_quality")
         record["mdm_full_minus_scalar_pp"] = 100 * (record["mdm_accuracy_full"] - record["mdm_accuracy_scalar"])
         record["mdm_full_minus_diagonal_pp"] = 100 * (record["mdm_accuracy_full"] - record["mdm_accuracy_diagonal"])
         record["p_mdm_none_vs_full"] = paired_p(subset, "mdm_accuracy")
+        record["p_mdm_margin_none_vs_full"] = paired_p(subset, "mdm_margin")
         record["p_mdm_scalar_vs_full"] = paired_p(subset, "mdm_accuracy", "scalar", "full")
         record["p_mdm_diagonal_vs_full"] = paired_p(subset, "mdm_accuracy", "diagonal", "full")
         records.append(record)
@@ -378,6 +408,8 @@ def controlled_tests(results: pd.DataFrame) -> dict:
     raw = results[results.variant == "none"].set_index(["config", "subject"])
     reduction = 100 * (1 - full.same_class_shift / raw.same_class_shift)
     mdm_gain = 100 * (full.mdm_accuracy - raw.mdm_accuracy)
+    margin_gain = full.mdm_margin - raw.mdm_margin
+    normalized_margin_gain = margin_gain / raw.source_class_separation
 
     def compare(config_a, config_b):
         a = reduction.loc[config_a]
@@ -412,6 +444,60 @@ def controlled_tests(results: pd.DataFrame) -> dict:
             "mann_whitney_p": float(mannwhitneyu(a, b, alternative="two-sided", method="exact").pvalue),
         }
 
+    def exact_permutation_two_sided(a, b):
+        a, b = np.asarray(a), np.asarray(b)
+        combined = np.concatenate([a, b])
+        observed = float(a.mean() - b.mean())
+        all_indices = set(range(len(combined)))
+        exceed = total = 0
+        for selected_tuple in combinations(range(len(combined)), len(a)):
+            selected = list(selected_tuple)
+            other = list(all_indices - set(selected))
+            statistic = float(combined[selected].mean() - combined[other].mean())
+            exceed += abs(statistic) >= abs(observed) - 1e-15
+            total += 1
+        return observed, exceed / total
+
+    def compare_normalized_margin_independent(config_a, config_b):
+        a, b = normalized_margin_gain.loc[config_a], normalized_margin_gain.loc[config_b]
+        difference, p_value = exact_permutation_two_sided(a, b)
+        return {
+            "config_a": config_a, "config_b": config_b,
+            "mean_normalized_margin_gain_a": float(a.mean()),
+            "mean_normalized_margin_gain_b": float(b.mean()),
+            "mean_difference": difference,
+            "exact_permutation_two_sided_p": p_value,
+        }
+
+    def compare_normalized_margin_paired(config_a, config_b):
+        a, b = normalized_margin_gain.loc[config_a], normalized_margin_gain.loc[config_b]
+        return {
+            "config_a": config_a, "config_b": config_b,
+            "mean_normalized_margin_gain_a": float(a.mean()),
+            "mean_normalized_margin_gain_b": float(b.mean()),
+            "mean_paired_difference": float((a - b).mean()),
+            "wilcoxon_two_sided_p": float(wilcoxon(a, b, method="exact").pvalue),
+        }
+
+    margin_tests = [
+        compare_normalized_margin_independent("2a-22ch-4class", "2b-3ch-LR"),
+        compare_normalized_margin_independent("2a-3ch-4class", "2b-3ch-LR"),
+        compare_normalized_margin_paired("2a-22ch-4class", "2a-22ch-LR"),
+        compare_normalized_margin_paired("2a-3ch-4class", "2a-3ch-LR"),
+    ]
+    raw_p = np.asarray([
+        item.get("exact_permutation_two_sided_p", item.get("wilcoxon_two_sided_p"))
+        for item in margin_tests
+    ])
+    order = np.argsort(raw_p)
+    running = 0.0
+    adjusted = np.empty_like(raw_p)
+    for rank, index in enumerate(order):
+        running = max(running, (len(raw_p) - rank) * raw_p[index])
+        adjusted[index] = min(running, 1.0)
+    for item, adjusted_p in zip(margin_tests, adjusted):
+        item["holm_p_four_margin_tests"] = float(adjusted_p)
+
     return {
         "channel_effect_4class": compare("2a-22ch-4class", "2a-3ch-4class"),
         "channel_effect_LR": compare("2a-22ch-LR", "2a-3ch-LR"),
@@ -420,7 +506,86 @@ def controlled_tests(results: pd.DataFrame) -> dict:
         "mdm_channel_effect_4class": compare_mdm("2a-22ch-4class", "2a-3ch-4class"),
         "mdm_channel_effect_LR": compare_mdm("2a-22ch-LR", "2a-3ch-LR"),
         "mdm_2a_vs_2b_matched_design": compare_mdm_independent("2a-3ch-LR", "2b-3ch-LR"),
+        "label_margin_2a22_4class_vs_2b": margin_tests[0],
+        "label_margin_2a3_4class_vs_2b": margin_tests[1],
+        "label_margin_class_structure_effect_22ch": margin_tests[2],
+        "label_margin_class_structure_effect_3ch": margin_tests[3],
     }
+
+
+def classwise_summary(results: pd.DataFrame) -> pd.DataFrame:
+    names = {
+        "2a-22ch-4class": ("left_hand", "right_hand", "feet", "tongue"),
+        "2a-3ch-4class": ("left_hand", "right_hand", "feet", "tongue"),
+        "2a-22ch-LR": ("left_hand", "right_hand"),
+        "2a-3ch-LR": ("left_hand", "right_hand"),
+        "2b-3ch-LR": ("left_hand", "right_hand"),
+        "Zhou-14ch-3class": ("left_hand", "right_hand", "feet"),
+    }
+    rows = []
+    for config, class_names in names.items():
+        frame = results[results.config == config]
+        for label, class_name in enumerate(class_names):
+            recall = frame.pivot(index="subject", columns="variant", values=f"mdm_recall_class_{label}")
+            margin = frame.pivot(index="subject", columns="variant", values=f"mdm_margin_class_{label}")
+            rows.append({
+                "config": config,
+                "class_id": label,
+                "class_name": class_name,
+                "recall_none_pct": 100 * recall.none.mean(),
+                "recall_full_pct": 100 * recall.full.mean(),
+                "recall_gain_pp": 100 * (recall.full - recall.none).mean(),
+                "p_recall_none_vs_full": paired_p(frame, f"mdm_recall_class_{label}"),
+                "margin_none": margin.none.mean(),
+                "margin_full": margin.full.mean(),
+                "margin_gain": (margin.full - margin.none).mean(),
+                "p_margin_none_vs_full": paired_p(frame, f"mdm_margin_class_{label}"),
+            })
+    return pd.DataFrame(rows)
+
+
+def plot_label_selectivity(results: pd.DataFrame, summary: pd.DataFrame,
+                           classwise: pd.DataFrame, output_dir: Path) -> None:
+    order = ["2a-22ch-4class", "2a-3ch-4class", "2a-22ch-LR", "2a-3ch-LR", "2b-3ch-LR", "Zhou-14ch-3class"]
+    labels = ["2a 22ch\n4-class", "2a 3ch\n4-class", "2a 22ch\nL/R", "2a 3ch\nL/R", "2b 3ch\nL/R", "Zhou"]
+    raw = results[results.variant == "none"].set_index(["config", "subject"])
+    full = results[results.variant == "full"].set_index(["config", "subject"])
+    normalized = ((full.mdm_margin - raw.mdm_margin) / raw.source_class_separation)
+    normalized_means = [normalized.loc[config].mean() for config in order]
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
+    axes[0].bar(np.arange(len(order)), normalized_means,
+                color=["#2a78d6", "#59a5d8", "#7eb6dc", "#a5cbe5", "#eb6834", "#1baf7a"])
+    axes[0].axhline(0, color="#777777", lw=0.8)
+    axes[0].set_xticks(np.arange(len(order)), labels, rotation=20, ha="right")
+    axes[0].set_ylabel("RA margin gain / raw class separation")
+    axes[0].set_title("Label-selective alignment effect")
+
+    plot_summary = summary.set_index("config").loc[order]
+    x = np.arange(len(order))
+    axes[1].bar(x - 0.18, plot_summary.mdm_margin_none, 0.36, label="Before RA", color="#a3a29c")
+    axes[1].bar(x + 0.18, plot_summary.mdm_margin_full, 0.36, label="Full RA", color="#2a78d6")
+    axes[1].axhline(0, color="#777777", lw=0.8)
+    axes[1].set_xticks(x, labels, rotation=20, ha="right")
+    axes[1].set_ylabel("True-vs-nearest-wrong MDM margin")
+    axes[1].set_title("Positive margin means correct geometry")
+    axes[1].legend(frameon=False)
+
+    class_frame = classwise[classwise.config == "2a-22ch-4class"]
+    axes[2].bar(class_frame.class_name, class_frame.recall_gain_pp,
+                color=["#a3a29c", "#2a78d6", "#1baf7a", "#eda100"])
+    axes[2].axhline(0, color="#777777", lw=0.8)
+    axes[2].set_ylabel("Recall gain after full RA (pp)")
+    axes[2].set_title("BCI IV-2a class-wise effect")
+    axes[2].tick_params(axis="x", rotation=20)
+
+    for axis in axes:
+        axis.spines[["top", "right"]].set_visible(False)
+        axis.grid(axis="y", color="#dddddd", linewidth=0.6)
+    fig.tight_layout()
+    fig.savefig(output_dir / "ra_label_selectivity.png", dpi=220, bbox_inches="tight")
+    fig.savefig(output_dir / "ra_label_selectivity.pdf", bbox_inches="tight")
+    plt.close(fig)
 
 
 def plot_summary(summary: pd.DataFrame, output_dir: Path) -> None:
@@ -471,10 +636,13 @@ def run_analysis(data_root="/tmp/tcformer-ra-data", cache_root="/tmp/tcformer-ra
     results = pd.concat(frames, ignore_index=True)
     summary = summarise(results)
     tests = controlled_tests(results)
+    classwise = classwise_summary(results)
     results.to_csv(output_dir / "ra_mechanism_subject_results.csv", index=False)
     summary.to_csv(output_dir / "ra_mechanism_summary.csv", index=False)
+    classwise.to_csv(output_dir / "ra_classwise_results.csv", index=False)
     (output_dir / "ra_mechanism_controlled_tests.json").write_text(json.dumps(tests, indent=2))
     plot_summary(summary, output_dir)
+    plot_label_selectivity(results, summary, classwise, output_dir)
     print(f"Saved results to {output_dir.resolve()}")
     return results, summary, tests
 
