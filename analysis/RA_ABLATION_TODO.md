@@ -13,8 +13,7 @@ nhưng **chưa đủ cho ablation study**. Còn thiếu:
 | 1 | Bắt buộc | Ablation RA on/off trên TCFormer (LOSO, 3 seed) | 2a 22ch 4 lớp (đã có, lấy lại số); 2a 22ch LR; 2a 3ch (C3/Cz/C4) LR; 2b LR (đã có) | Wilcoxon theo subject + Holm | Mức tăng nhờ RA cùng thứ tự với margin MDM: 4 lớp ≫ LR ≈ 2b | Trung bình (chỉ chạy 2 cấu hình mới) | ☐ |
 | 2 | Cao | Tỉ lệ dự đoán và confusion matrix MDM theo từng subject, trước/sau RA | 2a 22ch 4 lớp, 2b LR; dùng epoch đã cache + `ra_mechanism_core.py` | Mô tả theo subject | Chỉ ra subject nào bị dồn dự đoán về Left/Tongue trước RA và RA sửa lại (thay cho class-wise test hậu nghiệm) | Thấp (1 script nhỏ) | ☐ |
 | 3 | Cao | Tương quan giữa cơ chế MDM và mô hình | Spearman: normalized margin gain (MDM) vs accuracy gain nhờ RA (TCFormer), theo subject × cấu hình | Spearman ρ, p | ρ > 0, nối phân tích cơ chế với mô hình | Rất thấp (khi có việc 1) | ☐ |
-| 4 | Tùy chọn | Thêm cấu hình 2a 3ch 4 lớp cho TCFormer | Chỉ làm nếu còn thời gian; MDM đã loại trừ số kênh | Wilcoxon + Holm | Xác nhận số kênh không phải nguyên nhân chính | Trung bình | ☐ |
-| 5 | Bắt buộc | Viết lại kết luận và phụ lục | Xem mục "Cách viết" bên dưới | — | Lập luận không bị reviewer bắt lỗi | Thấp | ☐ |
+| 4 | Bắt buộc | Lặp lại trên PhysioNet MI (20 subject đầu, 64ch, LOSO) | TCFormer RA on/off cho 4 lớp (L, R, both hands, feet) và tập con LR; thêm PhysioNet vào `SPECS` của `ra_mechanism_core.py` để tính margin MDM | Wilcoxon theo subject + Holm (n = 20) | Dataset độc lập thứ hai: nếu 4 lớp cũng ≫ LR thì kết luận "cấu trúc lớp" được nhân rộng, n lớn hơn 2a/2b | Trung bình | ☐ |
 
 ## Cách viết kết luận
 
