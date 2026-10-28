@@ -67,17 +67,19 @@ motor imagery \sep electroencephalography \sep brain--computer interface \sep se
 \section{Introduction}
 \label{sec:introduction}
 
-Motor-imagery brain--computer interfaces (MI-BCIs) decode movement intentions from non-invasive electroencephalography (EEG) for rehabilitation, communication, and control. Because event-related desynchronization and synchronization signatures are weak, non-stationary, and differ between subjects and sessions \cite{pfurtscheller1999erd}, a decoder trained on existing users often degrades on a new one, while calibrating every user with labeled trials is time-consuming. This study therefore targets cross-subject MI decoding without target labels, which requires solving two problems together: learning local spectral--spatial and long-range temporal patterns from limited data, and reducing the shift between the training subjects and the new subject.
+Motor-imagery brain--computer interfaces (MI-BCIs) decode movement intentions from non-invasive electroencephalography (EEG) for rehabilitation, communication, and control. The event-related desynchronization and synchronization patterns on which they rely are weak, non-stationary, and differ between subjects and between sessions of the same subject \cite{pfurtscheller1999erd}. A decoder trained on existing users therefore often degrades on a new one, while calibrating every new user with labeled trials is time-consuming and tiring \cite{lotte2015signal}. Reducing or removing this labeled calibration is thus a central requirement for practical MI-BCIs.
 
-For the first problem, common spatial pattern (CSP) and filter-bank CSP rely on hand-designed, subject-specific stages that transfer poorly \cite{ramoser2000optimal,ang2012filterbank}. ConvNets and EEGNet learn filters end to end \cite{schirrmeister2017deep,lawhern2018eegnet} but reach long-range context only through depth or dilation. Hybrid decoders such as EEG Conformer, ATCNet, and TCFormer add self-attention and dilated temporal convolutional networks (TCNs) \cite{song2023eegconformer,altaheri2023atcnet,altaheri2025tcformer}, but self-attention has quadratic cost \cite{vaswani2017attention} and needs more data than EEG datasets usually provide. Selective state-space models (SSMs) instead model long sequences at linear cost \cite{gu2022s4,gu2024mamba}, and recent MI decoders combine them with convolution \cite{guo2025mimamba,yang2025stmamba}; these decoders, however, do not address the shift to a new subject.
+Early MI decoders followed a classical machine-learning pipeline. Common spatial pattern (CSP) filtering \cite{ramoser2000optimal} and its filter-bank extension FBCSP \cite{ang2012filterbank}, which won BCI Competition~IV, extract band-power features through hand-designed, subject-specific stages and pass them to a linear classifier. Deep learning later replaced these stages with end-to-end feature learning: ShallowConvNet and DeepConvNet \cite{schirrmeister2017deep} and the compact EEGNet \cite{lawhern2018eegnet} learn spectral and spatial filters directly from raw EEG. Later models extended the temporal context: EEG Conformer adds self-attention to a convolutional front-end \cite{song2023eegconformer}, ATCNet combines attention with dilated temporal convolutional networks (TCNs) \cite{altaheri2023atcnet}, and TCFormer joins multi-scale convolution, a Transformer, and a TCN \cite{altaheri2025tcformer}. Self-attention, however, has quadratic cost in sequence length \cite{vaswani2017attention} and needs more data than EEG datasets usually provide. More recently, state-space models (SSMs), from the structured S4 \cite{gu2022s4} to the selective Mamba \cite{gu2024mamba}, have emerged as an alternative that scales linearly with sequence length; in language modeling, Mamba matched or exceeded Transformers of comparable size while providing several times higher generation throughput \cite{gu2024mamba}. MI-Mamba and a spatial--temporal Mamba network have since combined SSMs with convolution for MI decoding \cite{guo2025mimamba,yang2025stmamba}. All of these decoders, from CSP to Mamba, learn only from source subjects, so their accuracy on a new subject depends on its similarity to them.
 
-For the second problem, domain generalization learns subject-invariant features from source subjects only \cite{liu2023stdg,zhong2025eegdg,zheng2025crosssubject}, whereas unsupervised domain adaptation (UDA) also exploits unlabeled target EEG through Riemannian or Euclidean input alignment \cite{zanini2018riemannian,he2020euclidean}, MK-MMD \cite{long2015dan}, adversarial learning \cite{ganin2016dann,tang2020cdan}, or class prototypes \cite{zhang2024prototypeda}, and test-time adaptation adjusts a trained model on unlabeled test data \cite{liang2020shot,wang2021tent}. Most of these methods act at a single level, yet subject shift appears at several: in the covariance of the raw signals, in the feature statistics inside the network, and in the predictions on later sessions. AutoDIAL \cite{carlucci2017autodial} addresses the internal level by learning how to mix source and target statistics in normalization layers, but it was proposed for visual domain adaptation.
+A complementary line of work reduces this dependence on the training population and on per-user labeled calibration. EEG foundation models, pretrained on large and diverse corpora such as the roughly 2,500 hours of EEG used by LaBraM \cite{jiang2024labram,wang2024eegpt}, are a promising direction, but they require collecting and harmonizing large heterogeneous datasets and are usually fine-tuned with labeled data of the target task. Transfer across subjects of the same task is a lighter alternative. Domain generalization learns, from several source subjects, features intended to remain valid for unseen subjects, so that a new user can be served without any calibration \cite{liu2023stdg,zhong2025eegdg,zheng2025crosssubject}; because the target subject is never observed, however, its specific shift cannot be compensated. Domain adaptation removes this limitation by also using unlabeled EEG of the new subject. Such data require no trial labels, so the decoder can adapt to the individual user while the labeled calibration session is still avoided.
 
-We therefore propose SSM-DAN, which couples a bidirectional selective state-space encoder with a hierarchical, label-free adaptation scheme in which each stage targets one level of shift: the input signals, the internal features, and the predictions. The contributions are:
+In unsupervised domain adaptation (UDA), Riemannian alignment (RA) and Euclidean alignment reduce input-level shift by whitening each subject's trials with that subject's mean covariance \cite{zanini2018riemannian,he2020euclidean}. At the feature level, the maximum mean discrepancy (MMD), introduced into deep networks in its multi-kernel form by DAN \cite{long2015dan}, is among the most widely used alignment criteria in domain adaptation methods owing to its non-parametric form and stable optimization, and is also adopted by EEG models such as RMETNet \cite{zhao2026rmetnet}. Adversarial training with a domain discriminator \cite{ganin2016dann,tang2020cdan} and prototype-based alignment \cite{zhang2024prototypeda} provide complementary objectives. Domain alignment can also be performed inside the network through its normalization layers: in visual domain adaptation, AutoDIAL \cite{carlucci2017autodial} introduced domain alignment layers that learn how strongly source and target statistics are mixed during normalization. This idea motivates the feature-level normalization used in the present work.
+
+Reported cross-subject accuracies are, moreover, difficult to compare, because some protocols test within the same session, select the epoch with target labels, or adapt on the evaluation trials themselves \cite{miao2025satransnet,zhao2026rmetnet,liao2025eegencoder} (Section~\ref{subsec:published}). We therefore propose SSM-DAN, a bidirectional selective state-space network with hierarchical, label-free adaptation, and evaluate it under a chronological protocol that keeps target labels out of training, adaptation, and model selection \cite{jayaram2018moabb}. The contributions are:
 \begin{itemize}
     \item an end-to-end decoder that combines multi-scale convolution, alternating forward/backward selective state-space blocks, and local--global TCN fusion;
-    \item a hierarchical adaptation strategy that reduces subject shift at the input, feature, and prediction levels without target labels; and
-    \item an evaluation on three public MI-EEG datasets with subject-wise accuracy, Cohen's $\kappa$, statistical tests, efficiency analysis, and component ablations.
+    \item a hierarchical adaptation strategy that reduces subject shift at the input, feature, and prediction levels without target labels, including a learned source--target normalization inspired by AutoDIAL; and
+    \item a strict chronological leave-one-subject-out evaluation on three public MI-EEG datasets, in which all baselines are re-trained under identical conditions, with subject-wise accuracy, Cohen's $\kappa$, statistical tests, efficiency analysis, and component ablations.
 \end{itemize}
 
 \section{Method}
@@ -179,34 +181,31 @@ Three public MI-EEG datasets, accessed through MOABB/Braindecode \cite{jayaram20
 \label{tab:datasets}
 \small
 \setlength{\tabcolsep}{4.5pt}
-\begin{tabular}{lccccl}
+\begin{tabular}{lcccl}
 \toprule
-Dataset & Subjects & Sex (M/F) & Channels & Sessions & Classes \\
+Dataset & Subjects & Channels & Sessions & Classes \\
 \midrule
-BCI IV-2a & 9 & n.r.          & 22 & 2 & left hand, right hand, feet, tongue \\
-BCI IV-2b & 9 & n.r.$^{a}$    & 3  & 5 & left hand, right hand \\
-Zhou2016  & 4 & 1/3           & 14 & 3 & left hand, right hand, feet \\
+BCI IV-2a & 9 & 22 & 2 & left hand, right hand, feet, tongue \\
+BCI IV-2b & 9 & 3  & 5 & left hand, right hand \\
+Zhou2016  & 4 & 14 & 3 & left hand, right hand, feet \\
 \bottomrule
 \end{tabular}
-
-\vspace{2pt}
-{\footnotesize n.r.: not reported in the dataset description. $^{a}$The nine participants were drawn from a study of ten (6/4, 24.7 $\pm$ 3.3 years) \cite{leeb2007virtual}; the split of the nine released participants is not reported.\par}
 \end{table*}
 
 \subsubsection{BCI Competition IV-2a}
 \label{subsec:bcic2a}
 
-Nine participants were recorded in two sessions on different days, each with 288 trials of left-hand, right-hand, both-feet, and tongue imagery, from 22 EEG electrodes at 250~Hz (0.5--100~Hz band-pass, 50-Hz notch; the three EOG channels are not used) \cite{tangermann2012review}. Participant sex and age are not reported.
+Nine participants were recorded in two sessions on different days, each with 288 trials of left-hand, right-hand, both-feet, and tongue imagery, from 22 EEG electrodes at 250~Hz (0.5--100~Hz band-pass, 50-Hz notch; the three EOG channels are not used) \cite{tangermann2012review}.
 
 \subsubsection{BCI Competition IV-2b}
 \label{subsec:bcic2b}
 
-Nine right-handed participants, drawn from a study of ten (six male, four female; $24.7\pm3.3$ years) \cite{leeb2007virtual}, performed left- versus right-hand imagery recorded from three bipolar derivations around C3, Cz, and C4 at 250~Hz (the three EOG channels are not used). Sessions 1--3 form the calibration portion and sessions 4--5 the evaluation portion \cite{tangermann2012review}; this chronological split is kept, and the dataset tests whether the method remains useful with only three electrodes.
+Nine right-handed participants, drawn from a study of ten ($24.7\pm3.3$ years) \cite{leeb2007virtual}, performed left- versus right-hand imagery recorded from three bipolar derivations around C3, Cz, and C4 at 250~Hz (the three EOG channels are not used). Sessions 1--3 form the calibration portion and sessions 4--5 the evaluation portion \cite{tangermann2012review}; this chronological split is kept, and the dataset tests whether the method remains useful with only three electrodes.
 
 \subsubsection{Zhou2016}
 \label{subsec:zhou2016}
 
-Four healthy participants (one male, three female; 22--28 years; sex reported only at group level) were each recorded in three sessions separated by days to months \cite{zhou2016trialselection}. Each session has two runs of 75 trials (25 per class: left hand, right hand, feet) from 14 electrodes at 250~Hz; each trial has a 5-s imagery cue followed by a 4-s rest.
+Four healthy participants (22--28 years) were each recorded in three sessions separated by days to months \cite{zhou2016trialselection}. Each session has two runs of 75 trials (25 per class: left hand, right hand, feet) from 14 electrodes at 250~Hz; each trial has a 5-s imagery cue followed by a 4-s rest.
 
 \subsection{Chronological LOSO protocol with test-time adaptation}
 \label{subsec:clean_protocol}
@@ -552,7 +551,7 @@ The benefit of each adaptation component is dataset dependent: it was clear on B
 
 The alternating scans exploit complete offline trials and are non-causal, so online use would require forward-only processing.
 
-Because IM-TTA uses unlabeled evaluation-session signals, the method is transductive and must be compared with baselines of identical target access. Further limitations are the three-channel BCI IV-2b setting, the small Zhou2016 cohort, incomplete matched baselines, and the lack of sex-stratified analysis, as participant sex is reported only in aggregate or not at all.
+Because IM-TTA uses unlabeled evaluation-session signals, the method is transductive and must be compared with baselines of identical target access. Further limitations are the three-channel BCI IV-2b setting, the small Zhou2016 cohort, and incomplete matched baselines.
 
 \section{Conclusion}
 \label{sec:conclusion}
