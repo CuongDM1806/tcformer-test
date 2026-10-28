@@ -54,8 +54,9 @@ preprocessing:
     riemannian_alignment: false
     # Drop trials truncated by the end of a run (at most 3 of 15 per run).
     accepted_bads_ratio: 0.2
-    # Recordings at 128 Hz or with incomplete imagery runs.
-    exclude_subject_ids: [88, 89, 92, 100, 104]
+    # Recorded at 128 Hz with 5.125-s trials and 12 or 19 trials per run,
+    # inconsistent with the 160-Hz, 4.1-s, 15-trial protocol of the others.
+    exclude_subject_ids: [88, 92, 100]
   zhou2016:
     sfreq: 250
     # Focus feature learning on the MI mu/beta range.
