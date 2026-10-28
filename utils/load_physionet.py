@@ -86,6 +86,9 @@ def load_physionet(
         window_size_samples=window_size,
         window_stride_samples=window_size,
         drop_last_window=True,
+        # A few runs end before the last 4.1 s annotation is complete; drop
+        # those truncated trials instead of failing the whole subject.
+        accepted_bads_ratio=float(preprocessing_dict.get("accepted_bads_ratio", 0.0)),
         mapping=PHYSIONET_IMAGERY_MAPPING,
         preload=False,
         on_missing="ignore",

@@ -52,6 +52,8 @@ preprocessing:
     # Per-source split: 95% training, 5% source-only validation.
     validation_fraction: 0.05
     riemannian_alignment: false
+    # Drop trials truncated by the end of a run (at most 3 of 15 per run).
+    accepted_bads_ratio: 0.2
     # Recordings at 128 Hz or with incomplete imagery runs.
     exclude_subject_ids: [88, 89, 92, 100, 104]
   zhou2016:
