@@ -1,4 +1,5 @@
 import gc
+import json
 import os, time, yaml
 
 # Colab exports its notebook-only matplotlib backend to subprocesses. The
@@ -265,6 +266,31 @@ def train_and_test(config):
         # The [C × C] tensor is inside the LightningModule:
         cm = primary_confmat
         all_confmats.append(cm)
+
+        # Persist every fold immediately so a timed-out job keeps its results.
+        subject_dir = result_dir / "subjects"
+        subject_dir.mkdir(exist_ok=True)
+        with open(subject_dir / f"subject_{subject_id}.json", "w") as f:
+            json.dump({
+                "subject_id": subject_id,
+                "test_acc": subject_acc,
+                "test_loss": subject_loss,
+                "test_kappa": subject_kappa,
+                "best_val_acc": best_val_acc,
+                "train_time_min": train_times[-1],
+                "confusion_matrix": cm.tolist(),
+                "class_names": list(datamodule_cls.class_names),
+            }, f, indent=2)
+        write_summary(result_dir, model_name, dataset_name,
+            subject_ids[:len(test_accs)], param_count,
+            test_accs, test_losses, test_kappas, train_times, test_times,
+            response_times,
+            all_sessions_accs=all_sessions_accs,
+            all_sessions_losses=all_sessions_losses,
+            all_sessions_kappas=all_sessions_kappas,
+            all_sessions_test_times=all_sessions_test_times,
+            all_sessions_test_label=all_sessions_test_label,
+            primary_test_label=primary_test_label)
 
         # plot per-subject if requested
         if config.get("plot_cm_per_subject", False):

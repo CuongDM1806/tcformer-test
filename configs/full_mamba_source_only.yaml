@@ -33,6 +33,27 @@ preprocessing:
     riemannian_alignment: false
     num_workers: 2
     test_num_workers: 0
+  physionet:
+    # PhysioNet EEGMMIDB subjects 1..109; four imagined movement classes.
+    sfreq: 160
+    # Raw voltage: no microvolt scaling and no frequency filtering.
+    low_cut: null
+    high_cut: null
+    z_scale: false
+    # Full annotated task interval: one 4.1-second epoch from cue onset.
+    start: 0.0
+    trial_duration: 4.1
+    batch_size: 96
+    accumulate_grad_batches: 1
+    num_workers: 2
+    test_num_workers: 0
+    download_retries: 8
+    download_retry_delay_seconds: 5
+    # Per-source split: 95% training, 5% source-only validation.
+    validation_fraction: 0.05
+    riemannian_alignment: false
+    # Recordings at 128 Hz or with incomplete imagery runs.
+    exclude_subject_ids: [88, 89, 92, 100, 104]
   zhou2016:
     sfreq: 250
     # Focus feature learning on the MI mu/beta range.
