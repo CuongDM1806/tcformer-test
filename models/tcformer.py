@@ -495,17 +495,22 @@ class _SelectiveSSMMixer(nn.Module):
             values = values.transpose(1, 2)
         values = torch.nn.functional.silu(values)
 
-        delta_raw, B, C = torch.split(
-            self.x_proj(values), [self.d_model, self.d_state, self.d_state], dim=-1
-        )
-        delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
-        A = -torch.exp(self.A_log).to(dtype=x.dtype)
-        if self.scan_mode == "hoisted":
-            y = _hoisted_selective_scan(values, delta, A, B, C, self.D)
-        elif self.scan_mode == "scripted":
-            y = _scripted_selective_scan(values, delta, A, B, C, self.D)
-        else:
-            y = self._sequential_scan(values, delta, A, B, C)
+        # Under mixed precision the selective scan stays in FP32: exp(dt * A)
+        # and the recurrent state are sensitive to FP16 rounding. In FP32
+        # training this block is unchanged.
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            values = values.float()
+            delta_raw, B, C = torch.split(
+                self.x_proj(values), [self.d_model, self.d_state, self.d_state], dim=-1
+            )
+            delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
+            A = -torch.exp(self.A_log).to(dtype=values.dtype)
+            if self.scan_mode == "hoisted":
+                y = _hoisted_selective_scan(values, delta, A, B, C, self.D)
+            elif self.scan_mode == "scripted":
+                y = _scripted_selective_scan(values, delta, A, B, C, self.D)
+            else:
+                y = self._sequential_scan(values, delta, A, B, C)
         y = y * torch.nn.functional.silu(gate)
         return self.out_proj(y)
 
