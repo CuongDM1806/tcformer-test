@@ -10,7 +10,7 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import TensorDataset
 import os
 
-from utils.interaug import interaug
+from utils.interaug import interaug, interaug_vectorized
 
 
 class InterAugCollate:
@@ -23,7 +23,11 @@ class InterAugCollate:
         x = torch.stack(xs)
         y = torch.tensor(ys, dtype=torch.long)
         if self.preproc.get("interaug", False):
-            x, y = interaug([x, y])
+            # "vectorized" gives the same output as "loop" under the same seed.
+            if self.preproc.get("interaug_impl", "loop") == "vectorized":
+                x, y = interaug_vectorized([x, y])
+            else:
+                x, y = interaug([x, y])
         return x, y
 
 
