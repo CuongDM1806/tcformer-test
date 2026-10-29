@@ -138,6 +138,37 @@ class BCICIV2aLOSO(BCICIV2a):
         super().__init__(preprocessing_dict, subject_id)
         self._setup_complete = False
 
+    @classmethod
+    def with_subset(cls, preprocessing_dict: dict):
+        # Optional channel/class subsets (e.g. C3/Cz/C4, left/right) for the
+        # RA ablation; the returned class reports the reduced input shape.
+        keep_channels = preprocessing_dict.get("keep_channels")
+        keep_classes = preprocessing_dict.get("keep_classes")
+        if not keep_channels and not keep_classes:
+            return cls
+        attrs = {}
+        if keep_channels:
+            attrs["channels"] = len(keep_channels)
+        if keep_classes:
+            unknown = set(keep_classes) - set(BCICIV2a.class_names)
+            if unknown:
+                raise ValueError(f"Unknown BCIC IV-2a classes: {sorted(unknown)}")
+            attrs["class_names"] = list(keep_classes)
+            attrs["classes"] = len(keep_classes)
+        return type(cls.__name__, (cls,), attrs)
+
+    def _select_subset(self, X, y, channel_idx):
+        if channel_idx is not None:
+            X = X[:, channel_idx]
+        keep_classes = self.preprocessing_dict.get("keep_classes")
+        if keep_classes:
+            label_ids = [BCICIV2a.class_names.index(name) for name in keep_classes]
+            lookup = np.full(len(BCICIV2a.class_names), -1)
+            lookup[label_ids] = np.arange(len(label_ids))
+            keep = np.isin(y, label_ids)
+            X, y = X[keep], lookup[y[keep]]
+        return X, y
+
     def prepare_data(self) -> None:
         # ``Trainer.test`` may call the data hooks again after ``fit``.  The
         # LOSO dataset is large, so do not reload all subjects once the tensor
@@ -174,6 +205,22 @@ class BCICIV2aLOSO(BCICIV2a):
         val_arrays = [BaseDataModule._dataset_to_arrays(ds) for ds in val_datasets]
         X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
         X_target, y_target = BaseDataModule._dataset_to_arrays(target_dataset)
+
+        keep_channels = self.preprocessing_dict.get("keep_channels")
+        channel_idx = None
+        if keep_channels:
+            ch_names = list(test_dataset.datasets[0].windows.ch_names)
+            channel_idx = [ch_names.index(name) for name in keep_channels]
+        if keep_channels or self.preprocessing_dict.get("keep_classes"):
+            print(f"BCIC IV-2a subset | channels={keep_channels or 'all'} | "
+                  f"classes={self.preprocessing_dict.get('keep_classes') or 'all'}",
+                  flush=True)
+            train_arrays = [self._select_subset(X_s, y_s, channel_idx)
+                            for X_s, y_s in train_arrays]
+            val_arrays = [self._select_subset(X_s, y_s, channel_idx)
+                          for X_s, y_s in val_arrays]
+            X_test, y_test = self._select_subset(X_test, y_test, channel_idx)
+            X_target, y_target = self._select_subset(X_target, y_target, channel_idx)
 
         if self.preprocessing_dict.get("riemannian_alignment", False):
             # Fit one reference per subject using only that subject's training

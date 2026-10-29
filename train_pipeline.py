@@ -53,6 +53,8 @@ def train_and_test(config):
     # Retrieve model and datamodule classes
     model_cls = get_model_cls(model_name)
     datamodule_cls = get_datamodule_cls(dataset_name)
+    if hasattr(datamodule_cls, "with_subset"):
+        datamodule_cls = datamodule_cls.with_subset(config["preprocessing"])
 
     config["model_kwargs"]["n_channels"] = datamodule_cls.channels
     config["model_kwargs"]["n_classes"] = datamodule_cls.classes
