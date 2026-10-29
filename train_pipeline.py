@@ -102,6 +102,7 @@ def train_and_test(config):
         # Initialize PyTorch Lightning Trainer
         trainer = Trainer(
             max_epochs=config["max_epochs"],
+            precision=config.get("precision", "32-true"),
             accumulate_grad_batches=config["preprocessing"].get(
                 "accumulate_grad_batches", 1
             ),
