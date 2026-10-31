@@ -608,10 +608,34 @@ class HADATCFormer(ClassificationModule):
         return final_stats
 
     def training_step(self, batch, batch_idx):
+        # The no-domain-adaptation ablation receives the ordinary labeled
+        # source batch: no target trials are forwarded during training, so
+        # AutoDIAL, target InfoMax, adversarial and both MMD losses are absent.
+        # RA preprocessing and label-free IM-TTA remain independent of this.
+        if isinstance(batch, (tuple, list)) and len(batch) == 2:
+            if self.domain_norm is not None:
+                raise RuntimeError(
+                    "Source-only training needs feature_alignment: none; "
+                    "AutoDIAL has no target statistics without target batches."
+                )
+            source_x, source_y = batch
+            source_logits = self.model.classify_features(
+                self.aligner(self.model.extract_features(source_x))
+            )
+            loss = F.cross_entropy(source_logits, source_y)
+            acc = accuracy(
+                source_logits, source_y, task="multiclass", num_classes=self.hparams.n_classes
+            )
+            batch_size = source_x.size(0)
+            self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
+            self.log("train_acc", acc, prog_bar=True, on_step=False, on_epoch=True, batch_size=batch_size)
+            self.log("train_cls_loss", loss, on_step=False, on_epoch=True, batch_size=batch_size)
+            return loss
+
         if not isinstance(batch, dict) or "source" not in batch or "target" not in batch:
             raise RuntimeError(
-                "HADATCFormer requires LOSO UDA batches with 'source' and 'target'. "
-                "Run it with --loso and a UDA-enabled config."
+                "Expected either a labeled source batch or LOSO UDA batches "
+                "with 'source' and 'target'."
             )
 
         source_x, source_y = batch["source"]

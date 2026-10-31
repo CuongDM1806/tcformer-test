@@ -1,8 +1,12 @@
-"""Generate the per-shard Kaggle notebooks for the full SSM-DAN PhysioNet run.
+"""Generate the per-shard Kaggle notebooks for the SSM-DAN PhysioNet runs.
 
+Three variants share one code branch and differ only in config overrides:
+  full   RA + Stage-1 DA (AutoDIAL, target InfoMax, adversarial, MMD) + IM-TTA
+  no_ra  the full model without Riemannian alignment
+  no_da  RA + IM-TTA, every Stage-1 DA component removed (the paper's w/o DA)
 Each notebook trains the target folds of one 11-subject range, two at a time on Kaggle T4 x2,
-and records the full model (RA + AutoDIAL + IM-TTA) and the same weights scored
-without IM-TTA. Run:  python kaggle_physionet106_full/make_notebooks.py
+and also scores the same weights without IM-TTA.
+Run:  python kaggle_physionet106_full/make_notebooks.py
 """
 import json
 from pathlib import Path
@@ -16,11 +20,25 @@ RANGES = [list(range(start, min(start + SUBJECTS_PER_JOB, 110)))
           for start in range(1, 110, SUBJECTS_PER_JOB)]
 SUBJECTS = [s for s in range(1, 110) if s not in EXCLUDED]
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
 
-TEMPLATE = r'''# PhysioNet MI full SSM-DAN LOSO (RA + AutoDIAL + IM-TTA) | Kaggle job __JOB__/__TOTAL__ | targets __TARGETS__
+# Every variant uses 54 trials per step and 2 accumulated steps (effective
+# batch 108), so the optimizer steps and the IM-TTA batches are identical.
+NO_DA_MODEL = {'feature_alignment': 'none', 'target_im_weight': 0.0, 'adversarial_weight': 0.0,
+               'mmd_weight': 0.0, 'temporal_mmd_weight': 0.0}
+VARIANTS = {
+    'full': dict(folder='kaggle_physionet106_full', label='RA + AutoDIAL + IM-TTA',
+                 ra=True, da=True, model={}, estimate_h=4.5),
+    'no_ra': dict(folder='kaggle_physionet106_no_ra', label='no RA: AutoDIAL + IM-TTA',
+                  ra=False, da=True, model={}, estimate_h=4.5),
+    'no_da': dict(folder='kaggle_physionet106_no_da', label='no DA: RA + IM-TTA',
+                  ra=True, da=False, model=NO_DA_MODEL, estimate_h=3.0),
+}
+
+TEMPLATE = r'''# PhysioNet MI SSM-DAN LOSO, variant __VARIANT__ (__LABEL__) | Kaggle job __JOB__/__TOTAL__ | targets __TARGETS__
 # Settings: Accelerator = GPU T4 x2, Internet = On. Run with "Save Version -> Save & Run All".
 # Two folds train at the same time, one per GPU; each fold has its own log file.
-# Every fold reports the full model and the same weights without IM-TTA (summary.csv).
+# Every fold reports this variant and the same weights without IM-TTA (summary.csv).
 # Data: dataset dmc2003vn/physionet-mi-106subj (attach via Add Input, or it is downloaded from the public API).
 # Resume: if folds are left over, add this notebook's previous Output via
 # "Add Input -> Your Work -> Notebook Output" and run again; finished folds are skipped.
@@ -37,10 +55,13 @@ EXCLUDED = {88, 92, 100}   # must match exclude_subject_ids in the config
 SEEDS = [0]
 GPUS = [0, 1]              # one fold per GPU at a time
 EPOCHS = 65                # same as the source-only PhysioNet runs
-BATCH_SIZE = 54            # source + target share a forward pass; 2 accumulated steps = 108
+BATCH_SIZE = 54            # 2 accumulated steps = effective batch 108 in every variant
 ACCUMULATE = 2
 TIME_BUDGET_H = 11.5       # stop starting new folds so the version ends before Kaggle's 12 h limit
-FIRST_FOLD_ESTIMATE_H = 4.5  # used until a fold has finished in this run
+FIRST_FOLD_ESTIMATE_H = __ESTIMATE__  # used until a fold has finished in this run
+RIEMANNIAN_ALIGNMENT = __RA__
+DOMAIN_ADAPTATION = __DA__
+MODEL_OVERRIDES = __MODEL__
 DATASET_REF = 'dmc2003vn/physionet-mi-106subj'   # public Kaggle Dataset with the decoded epochs
 CACHE_FILE = 'physionet_106subj_140d39fd97.npz'  # name must match the config hash
 
@@ -49,7 +70,7 @@ MNE_DATA = Path('/tmp/mne_data')
 ARRAY_CACHE = Path('/tmp/physionet_arrays')  # decoded epochs shared by every fold
 OUTPUT = Path(f'/kaggle/working/{RUN_TAG}')
 OUTPUT.mkdir(parents=True, exist_ok=True)
-PREPROCESSING = {'riemannian_alignment': True, 'batch_size': BATCH_SIZE,
+PREPROCESSING = {'riemannian_alignment': RIEMANNIAN_ALIGNMENT, 'batch_size': BATCH_SIZE,
                  'accumulate_grad_batches': ACCUMULATE, 'array_cache_dir': str(ARRAY_CACHE)}
 
 
@@ -160,7 +181,8 @@ def worker(gpu, jobs):
             "import yaml; from pathlib import Path; "
             "c=yaml.safe_load(Path('configs/hada_tcformer.yaml').read_text()); "
             f"c['subject_ids']=[{subject}]; c['max_epochs_loso']={EPOCHS}; "
-            "c['domain_adaptation']=True; c['evaluate_without_im_tta']=True; "
+            f"c['domain_adaptation']={DOMAIN_ADAPTATION}; c['evaluate_without_im_tta']=True; "
+            f"c['model_kwargs'].update({MODEL_OVERRIDES!r}); "
             "c['log_every_n_epochs']=5; c['enable_progress_bar']=False; "
             "c['model_kwargs']['log_every_n_batches']=0; "
             f"c['preprocessing'][{DATASET!r}].update({PREPROCESSING!r}); "
@@ -172,7 +194,7 @@ def worker(gpu, jobs):
             shutil.rmtree(old, ignore_errors=True)
         with print_lock:
             print(f'===== {prefix} {RUN_TAG} | seed {seed} | epochs {EPOCHS} | '
-                  f'BS={BATCH_SIZE}x{ACCUMULATE} | RA + AutoDIAL + IM-TTA =====', flush=True)
+                  f'BS={BATCH_SIZE}x{ACCUMULATE} | __LABEL__ =====', flush=True)
         code = stream([PYTHON, '-u', 'train_pipeline.py', '--model', config_name,
                        '--dataset', DATASET, '--loso', '--gpu_id', gpu, '--seed', seed],
                       OUTPUT / f'{fold}.log', prefix)
@@ -271,21 +293,30 @@ def notebook(code):
 
 
 def main():
-    for old in HERE.glob('job*.ipynb'):
-        old.unlink()
-    for index, shard in enumerate(RANGES, start=1):
-        first, last = shard[0], shard[-1]
-        code = (TEMPLATE
-                .replace('__JOB__', str(index))
-                .replace('__TOTAL__', str(len(RANGES)))
-                .replace('__TARGETS__', f'S{first}-S{last}')
-                .replace('__RUN_TAG__', f'physionet_4cls_full_s{first:03d}-s{last:03d}')
-                .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
-        path = HERE / f'job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
-        path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
-                        encoding='utf-8')
     folds = sum(s not in EXCLUDED for shard in RANGES for s in shard)
-    print(f'{len(RANGES)} notebooks, {folds} folds, {SUBJECTS_PER_JOB} subjects per job')
+    for variant, spec in VARIANTS.items():
+        folder = REPO / spec['folder']
+        folder.mkdir(exist_ok=True)
+        for old in folder.glob('job*.ipynb'):
+            old.unlink()
+        for index, shard in enumerate(RANGES, start=1):
+            first, last = shard[0], shard[-1]
+            code = (TEMPLATE
+                    .replace('__VARIANT__', variant)
+                    .replace('__LABEL__', spec['label'])
+                    .replace('__ESTIMATE__', str(spec['estimate_h']))
+                    .replace('__RA__', str(spec['ra']))
+                    .replace('__DA__', str(spec['da']))
+                    .replace('__MODEL__', repr(spec['model']))
+                    .replace('__JOB__', str(index))
+                    .replace('__TOTAL__', str(len(RANGES)))
+                    .replace('__TARGETS__', f'S{first}-S{last}')
+                    .replace('__RUN_TAG__', f'physionet_4cls_{variant}_s{first:03d}-s{last:03d}')
+                    .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
+            path = folder / f'job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
+            path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
+                            encoding='utf-8')
+        print(f'{variant}: {len(RANGES)} notebooks, {folds} folds, {SUBJECTS_PER_JOB} subjects per job')
 
 
 if __name__ == '__main__':
