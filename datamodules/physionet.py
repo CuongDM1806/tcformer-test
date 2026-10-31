@@ -1,3 +1,5 @@
+import hashlib
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -9,47 +11,74 @@ from utils.load_physionet import load_physionet
 
 
 class PhysioNetMILOSO(BaseDataModule):
-    """First-20-subject PhysioNet motor-imagery LOSO benchmark.
+    """PhysioNet EEGMMIDB motor-imagery LOSO benchmark (subjects 1..109).
 
     PhysioNet has no separate train/evaluation session. In each fold, the
-    target subject's complete imagery set is exposed without labels to HADA
-    and is scored only after training (and optional IM-TTA). Each of the 19
-    source subjects contributes a stratified 95/5 train/validation split.
+    target subject's complete imagery set is scored only after training.
+    Every other retained subject is a source and contributes a stratified
+    95/5 train/validation split. Subjects listed in ``exclude_subject_ids``
+    (recordings with a different sampling rate or incomplete runs) are
+    neither sources nor targets.
     """
 
-    all_subject_ids = list(range(1, 21))
+    all_subject_ids = list(range(1, 110))
     class_names = ["hand(L)", "hand(R)", "both hands", "feet"]
     channels = 64
     classes = 4
     primary_test_label = "IMAGERY TEST SET"
 
-    # Materializing all 20 subjects once avoids decoding and windowing the
+    # Materializing all subjects once avoids decoding and windowing the
     # same EDF files again for every fold in a single LOSO process.
     _subject_arrays_cache = None
 
     def __init__(self, preprocessing_dict: dict, subject_id: int):
         super().__init__(preprocessing_dict, subject_id)
-        if subject_id not in self.all_subject_ids:
+        excluded = set(preprocessing_dict.get("exclude_subject_ids", []))
+        self.subject_ids = [s for s in self.all_subject_ids if s not in excluded]
+        if subject_id not in self.subject_ids:
             raise ValueError(
-                f"PhysioNet target subject must be in 1..20, got {subject_id}."
+                f"PhysioNet target subject must be in 1..109 and not excluded "
+                f"{sorted(excluded)}, got {subject_id}."
             )
         self._setup_complete = False
 
     def prepare_data(self) -> None:
         if self._setup_complete or type(self)._subject_arrays_cache is not None:
             return
+        if self._array_cache_path() is not None and self._array_cache_path().exists():
+            return
         if self.dataset is None:
             self.dataset = load_physionet(
-                self.all_subject_ids, self.preprocessing_dict
+                self.subject_ids, self.preprocessing_dict
             )
+
+    def _array_cache_path(self):
+        # Optional on-disk cache shared by separate per-fold processes.
+        cache_dir = self.preprocessing_dict.get("array_cache_dir")
+        if not cache_dir:
+            return None
+        ids = "-".join(map(str, self.subject_ids))
+        digest = hashlib.sha1(ids.encode()).hexdigest()[:10]
+        return Path(cache_dir) / f"physionet_{len(self.subject_ids)}subj_{digest}.npz"
 
     def _materialize_subject_arrays(self):
         if type(self)._subject_arrays_cache is not None:
             return type(self)._subject_arrays_cache
 
+        cache_path = self._array_cache_path()
+        if cache_path is not None and cache_path.exists():
+            saved = np.load(cache_path)
+            arrays = {
+                subject_id: (saved[f"X_{subject_id}"], saved[f"y_{subject_id}"])
+                for subject_id in self.subject_ids
+            }
+            print(f"Loaded PhysioNet arrays from {cache_path}", flush=True)
+            type(self)._subject_arrays_cache = arrays
+            return arrays
+
         split_by_subject = self.dataset.split("subject")
         arrays = {}
-        for subject_id in self.all_subject_ids:
+        for subject_id in self.subject_ids:
             subject_dataset = split_by_subject.get(str(subject_id))
             if subject_dataset is None:
                 subject_dataset = split_by_subject.get(subject_id)
@@ -64,7 +93,7 @@ class PhysioNetMILOSO(BaseDataModule):
             expected_timepoints = int(
                 round(
                     self.preprocessing_dict["sfreq"]
-                    * self.preprocessing_dict.get("trial_duration", 4.0)
+                    * self.preprocessing_dict.get("trial_duration", 4.1)
                 )
             )
             if (
@@ -93,8 +122,16 @@ class PhysioNetMILOSO(BaseDataModule):
                 flush=True,
             )
 
-        if set(arrays) != set(self.all_subject_ids):
-            raise RuntimeError("PhysioNet loader did not materialize subjects 1..20.")
+        if set(arrays) != set(self.subject_ids):
+            raise RuntimeError("PhysioNet loader did not materialize every subject.")
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {}
+            for subject_id, (X, y) in arrays.items():
+                payload[f"X_{subject_id}"] = X
+                payload[f"y_{subject_id}"] = y
+            np.savez(cache_path, **payload)
+            print(f"Saved PhysioNet arrays to {cache_path}", flush=True)
         type(self)._subject_arrays_cache = arrays
         return arrays
 
@@ -117,10 +154,10 @@ class PhysioNetMILOSO(BaseDataModule):
 
         source_ids = [
             subject_id
-            for subject_id in self.all_subject_ids
+            for subject_id in self.subject_ids
             if subject_id != self.subject_id
         ]
-        if len(source_ids) != 19 or self.subject_id in source_ids:
+        if len(source_ids) != len(self.subject_ids) - 1 or self.subject_id in source_ids:
             raise RuntimeError("Invalid PhysioNet LOSO source/target separation.")
 
         train_arrays = []

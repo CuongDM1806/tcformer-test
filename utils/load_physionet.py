@@ -69,51 +69,16 @@ def load_physionet(
 
     sfreq = dataset.datasets[0].raw.info["sfreq"]
     start_offset = int(round(preprocessing_dict.get("start", 0.0) * sfreq))
-    trial_duration = float(preprocessing_dict.get("trial_duration", 4.0))
+    trial_duration = float(preprocessing_dict.get("trial_duration", 4.1))
     window_size = int(round(trial_duration * sfreq))
-    if start_offset != 0 or trial_duration != 4.0:
+    if start_offset != 0 or trial_duration != 4.1:
         raise ValueError(
-            "Full-Mamba PhysioNet trials must cover 0.0 to 4.0 s from cue onset."
+            "Full-Mamba PhysioNet trials must cover 0.0 to 4.1 s from cue onset."
         )
 
-    # Most annotations are about 4.1 s, but the final trial of some EDF runs is
-    # only 4.0 s. The common 640-sample interval retains those trials instead
-    # of dropping roughly 1/15 of the dataset via accepted_bads_ratio.
-    # A few recordings in the 109-subject cohort end mid-trial (e.g. 476
-    # samples); those truncated trials cannot form a 4.0 s epoch and are
-    # removed explicitly so every remaining trial is complete.
-    dropped = []
-    for ds in dataset.datasets:
-        raw = ds.raw
-        raw_sfreq = raw.info["sfreq"]
-        short = [
-            index
-            for index, (duration, description) in enumerate(
-                zip(raw.annotations.duration, raw.annotations.description)
-            )
-            if description in PHYSIONET_IMAGERY_MAPPING
-            # Same truncation braindecode uses to compute trial stops.
-            and int(duration * raw_sfreq) < window_size
-        ]
-        if short:
-            durations = [
-                int(raw.annotations.duration[index] * raw_sfreq)
-                for index in short
-            ]
-            raw.annotations.delete(short)
-            dropped.append(
-                f"S{int(ds.description['subject']):03d} "
-                f"run {ds.description.get('run', '?')}: "
-                f"{len(short)} trial(s) of {durations} samples"
-            )
-    if dropped:
-        print(
-            f"PhysioNet: dropped truncated trials (< {window_size} samples) "
-            f"in {len(dropped)} run(s) -> "
-            + "; ".join(dropped),
-            flush=True,
-        )
-
+    # Keep the full EDF task annotation: 4.1 s at 160 Hz is 656 samples.
+    # An explicit window size plus drop_last_window=True produces exactly one
+    # onset-aligned epoch and prevents an additional end-aligned window.
     return create_windows_from_events(
         dataset,
         trial_start_offset_samples=start_offset,
@@ -121,6 +86,9 @@ def load_physionet(
         window_size_samples=window_size,
         window_stride_samples=window_size,
         drop_last_window=True,
+        # A few runs end before the last 4.1 s annotation is complete; drop
+        # those truncated trials instead of failing the whole subject.
+        accepted_bads_ratio=float(preprocessing_dict.get("accepted_bads_ratio", 0.0)),
         mapping=PHYSIONET_IMAGERY_MAPPING,
         preload=False,
         on_missing="ignore",

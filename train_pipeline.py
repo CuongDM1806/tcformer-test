@@ -1,4 +1,5 @@
 import gc
+import json
 import os, time, yaml
 
 # Colab exports its notebook-only matplotlib backend to subprocesses. The
@@ -160,6 +161,36 @@ def train_and_test(config):
         datamodule.all_target_dataset = None
         gc.collect()
 
+        # The "without IM-TTA" ablation comes from the same trained weights: a
+        # copy gets every label-free step except IM-TTA (AutoDIAL target
+        # statistics are still re-estimated), so one run yields both rows.
+        no_tta_result = None
+        if (
+            config.get("evaluate_without_im_tta", False)
+            and hasattr(model, "adapt_to_target")
+            and getattr(model, "im_tta_steps", 0) > 0
+        ):
+            # A fresh instance with the same weights and buffers (incl. the
+            # AutoDIAL statistics) avoids deep-copying the attached trainer.
+            reference = model_cls(
+                **config["model_kwargs"], max_epochs=config["max_epochs"]
+            )
+            reference.load_state_dict(model.state_dict())
+            reference.to(next(model.parameters()).device)
+            # adapt_to_target logs through self.print, which needs a trainer.
+            reference.trainer = trainer
+            reference.im_tta_steps = 0
+            reference.adapt_to_target(test_loader)
+            no_tta_result = trainer.test(reference, dataloaders=test_loader)[0]
+            print(
+                f"\nTARGET SUBJECT {subject_id} WITHOUT IM-TTA | "
+                f"acc={no_tta_result['test_acc'] * 100:.2f}% | "
+                f"kappa={no_tta_result['test_kappa']:.4f}\n",
+                flush=True,
+            )
+            del reference
+            gc.collect()
+
         # Optional source-free IM-TTA. The method consumes only target EEG;
         # labels carried by the test loader are deliberately ignored.
         if hasattr(model, "adapt_to_target"):
@@ -242,6 +273,28 @@ def train_and_test(config):
         # The [C × C] tensor is inside the LightningModule:
         cm = primary_confmat
         all_confmats.append(cm)
+
+        # Persist every fold immediately so a timed-out job keeps its results.
+        subject_dir = result_dir / "subjects"
+        subject_dir.mkdir(exist_ok=True)
+        subject_record = {
+            "subject_id": subject_id,
+            "test_acc": subject_acc,
+            "test_loss": subject_loss,
+            "test_kappa": subject_kappa,
+            "best_val_acc": best_val_acc,
+            "train_time_min": train_times[-1],
+            "confusion_matrix": cm.tolist(),
+            "class_names": list(datamodule_cls.class_names),
+        }
+        if no_tta_result is not None:
+            subject_record.update({
+                "no_tta_acc": float(no_tta_result["test_acc"]),
+                "no_tta_loss": float(no_tta_result["test_loss"]),
+                "no_tta_kappa": float(no_tta_result["test_kappa"]),
+            })
+        with open(subject_dir / f"subject_{subject_id}.json", "w") as f:
+            json.dump(subject_record, f, indent=2)
 
         # plot per-subject if requested
         if config.get("plot_cm_per_subject", False):

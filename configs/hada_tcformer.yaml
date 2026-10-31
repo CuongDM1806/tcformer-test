@@ -9,6 +9,10 @@ max_epochs_loso_zhou2016: 100
 seed: 0
 requires_loso: true
 domain_adaptation: true
+# Also score each fold without IM-TTA (same trained weights, AutoDIAL target
+# statistics still re-estimated), giving the "without test-time adaptation"
+# ablation from the same run.
+evaluate_without_im_tta: false
 
 z_scale: true
 interaug: true
@@ -51,18 +55,21 @@ preprocessing:
     batch_size: 48
     remove_artifacts: true
   physionet:
-    # First 20 PhysioNet EEGMMIDB subjects; four imagined movement classes.
+    # PhysioNet EEGMMIDB subjects 1..109 (minus the 128-Hz recordings);
+    # four imagined movement classes. Same data protocol as the source-only
+    # runs of feature/full-mamba-source-only-physionet109.
     sfreq: 160
     # Raw voltage: no microvolt scaling and no frequency filtering.
     low_cut: null
     high_cut: null
     z_scale: false
-    # Common full-task interval: 0-4.0 s from cue onset. Some final trials in
-    # each EDF end at 4.0 s rather than 4.1 s, so this keeps every trial.
+    # Full annotated task interval: one 4.1-second epoch from cue onset.
     start: 0.0
-    trial_duration: 4.0
-    # T4-safe micro-batch. Two accumulated steps preserve effective BS=96.
-    batch_size: 48
+    trial_duration: 4.1
+    # Source and target batches share one forward pass, so a T4 runs
+    # 54 + 54 trials per step; two accumulated steps give an effective 108,
+    # the batch size of the source-only runs.
+    batch_size: 54
     accumulate_grad_batches: 2
     num_workers: 2
     test_num_workers: 0
@@ -71,11 +78,15 @@ preprocessing:
     download_retry_delay_seconds: 5
     # Per-source split: 95% training, 5% source-only validation.
     validation_fraction: 0.05
-    # Disabled by default: 64-channel Riemannian means are expensive.
-    riemannian_alignment: false
-    # Keep the IM-TTA implementation available, but skip it for PhysioNet.
-    model_overrides:
-      im_tta_steps: 0
+    # Full system: strict per-subject RA. Each source reference is fit on that
+    # source's training trials; the target reference uses the target's
+    # unlabeled imagery trials (PhysioNet has a single session).
+    riemannian_alignment: true
+    # Drop trials truncated by the end of a run (at most 3 of 15 per run).
+    accepted_bads_ratio: 0.2
+    # Recorded at 128 Hz with 5.125-s trials and 12 or 19 trials per run,
+    # inconsistent with the 160-Hz, 4.1-s, 15-trial protocol of the others.
+    exclude_subject_ids: [88, 92, 100]
   zhou2016:
     # Zhou et al. (2016): 14 EEG channels, 250 Hz, 3 MI classes.
     sfreq: 250
