@@ -1,6 +1,6 @@
 """Generate the per-shard Kaggle notebooks for the full SSM-DAN PhysioNet run.
 
-Each notebook trains FOLDS_PER_JOB target folds, two at a time on Kaggle T4 x2,
+Each notebook trains the target folds of one 11-subject range, two at a time on Kaggle T4 x2,
 and records the full model (RA + AutoDIAL + IM-TTA) and the same weights scored
 without IM-TTA. Run:  python kaggle_physionet106_full/make_notebooks.py
 """
@@ -8,7 +8,12 @@ import json
 from pathlib import Path
 
 EXCLUDED = [88, 92, 100]
-FOLDS_PER_JOB = 4
+# Same subject ranges as the source-only jobs (S1-S11, S12-S22, ..., S100-S109);
+# excluded recordings are skipped inside each job. A job that cannot finish in
+# one Kaggle version is resumed from its previous output.
+SUBJECTS_PER_JOB = 11
+RANGES = [list(range(start, min(start + SUBJECTS_PER_JOB, 110)))
+          for start in range(1, 110, SUBJECTS_PER_JOB)]
 SUBJECTS = [s for s in range(1, 110) if s not in EXCLUDED]
 HERE = Path(__file__).resolve().parent
 
@@ -266,21 +271,21 @@ def notebook(code):
 
 
 def main():
-    shards = [SUBJECTS[i:i + FOLDS_PER_JOB] for i in range(0, len(SUBJECTS), FOLDS_PER_JOB)]
     for old in HERE.glob('job*.ipynb'):
         old.unlink()
-    for index, shard in enumerate(shards, start=1):
+    for index, shard in enumerate(RANGES, start=1):
         first, last = shard[0], shard[-1]
         code = (TEMPLATE
                 .replace('__JOB__', str(index))
-                .replace('__TOTAL__', str(len(shards)))
-                .replace('__TARGETS__', ', '.join(f'S{s}' for s in shard))
+                .replace('__TOTAL__', str(len(RANGES)))
+                .replace('__TARGETS__', f'S{first}-S{last}')
                 .replace('__RUN_TAG__', f'physionet_4cls_full_s{first:03d}-s{last:03d}')
-                .replace('__TARGET_LIST__', repr(shard)))
+                .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
         path = HERE / f'job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
         path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
                         encoding='utf-8')
-    print(f'{len(shards)} notebooks, {len(SUBJECTS)} folds, {FOLDS_PER_JOB} per job')
+    folds = sum(s not in EXCLUDED for shard in RANGES for s in shard)
+    print(f'{len(RANGES)} notebooks, {folds} folds, {SUBJECTS_PER_JOB} subjects per job')
 
 
 if __name__ == '__main__':
