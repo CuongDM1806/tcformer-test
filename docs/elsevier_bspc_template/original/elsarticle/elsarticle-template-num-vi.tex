@@ -464,32 +464,42 @@ BFT~\cite{li2026bft} & (e) & 77.47$^{\dagger}$ & -- & 84.38$^{\dagger}$ & 63.08 
 
 Bảng~\ref{tab:ablation} tuân theo giao thức chính theo thời gian. Biến thể không có thích ứng miền loại bỏ mọi thành phần thích ứng miền ở Giai đoạn~1 (AutoDIAL, cực đại hóa thông tin trên đích, hàm mất mát đối kháng và cả hai hàm MMD) nhưng giữ lại căn chỉnh Riemann và IM-TTA; ngoài ra, mọi biến thể dùng cùng các lượt và cùng quy tắc chọn checkpoint.
 
+PhysioNet MI (EEG Motor Movement/Imagery Dataset) \cite{schalk2004bci2000,goldberger2000physiobank} được bổ sung như một tập chủ thể lớn hơn, chỉ dùng cho nghiên cứu loại bỏ thành phần. Dữ liệu 64 kênh, 160~Hz gồm bốn lớp tưởng tượng vận động (nắm tay trái, nắm tay phải, nắm cả hai tay và cử động hai bàn chân). Các chủ thể 88, 92 và 100 bị loại vì được ghi ở 128~Hz với cách định thời trial khác, còn lại 106 chủ thể. Mỗi trial là khoảng 4,1~s sau tín hiệu gợi ý (656 mẫu), không lọc tần số và không chuẩn hóa z-score; các trial bị cắt ở cuối lượt ghi bị loại, còn 84--90 trial mỗi chủ thể. Đánh giá theo LOSO với 106 lượt: 105 chủ thể nguồn được chia 95/5 thành trial huấn luyện và trial kiểm định để chọn checkpoint, mọi mô hình được huấn luyện 65 epoch với kích thước batch hiệu dụng 108. Vì PhysioNet chỉ có một phiên cho mỗi chủ thể, cùng một tập trial đích không nhãn vừa dùng để thích ứng vừa dùng để đánh giá; thiết lập transductive này kém chặt chẽ hơn giao thức theo thời gian của các bộ dữ liệu còn lại, nên kết quả PhysioNet không được so sánh trực tiếp với chúng.
+
 \begin{table*}[!htbp]
 \centering
 \caption{Kết quả loại bỏ thành phần: trung bình $\pm$ độ lệch chuẩn của độ chính xác (\%) và $\kappa$ của Cohen trên các chủ thể đích.}
 \label{tab:ablation}
-\small
+\footnotesize
 \setlength{\tabcolsep}{3.0pt}
-\begin{tabular}{llcccc}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llccccc}
 \toprule
-Bộ dữ liệu & Thước đo & SSM-DAN & \colhead{Không có\\căn chỉnh\\Riemann} & \colhead{Không có\\thích ứng\\miền} & \colhead{Không có\\thích ứng tại\\thời điểm kiểm thử} \\
+Bộ dữ liệu & Thước đo & SSM-DAN & \colhead{Chỉ huấn\\luyện trên\\nguồn} & \colhead{Không có\\căn chỉnh\\Riemann} & \colhead{Không có\\thích ứng\\miền} & \colhead{Không có\\thích ứng tại\\thời điểm kiểm thử} \\
 \midrule
 \multirow{2}{*}{BCI IV-2a}
- & Đ.c.x. & $\mathbf{76.12\pm11.96}$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.159}$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ \\
+ & Đ.c.x. & $\mathbf{76.12\pm11.96}$ & $64.35\pm12.77$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.159}$ & $0.525\pm0.170$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
- & Đ.c.x. & $\mathbf{84.09\pm10.42}$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ \\
+ & Đ.c.x. & $\mathbf{84.09\pm10.42}$ & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Đ.c.x. & $\mathbf{84.33\pm0.75}$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
- & $\kappa$ & $\mathbf{0.765\pm0.011}$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ \\
+ & Đ.c.x. & $\mathbf{84.33\pm0.75}$ & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
+ & $\kappa$ & $\mathbf{0.765\pm0.011}$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ \\
+\midrule
+% TODO: fill the adaptive PhysioNet cells from the full / no_ra / no_da Kaggle runs
+% (feature/hada-autodial-physionet106); without IM-TTA = no_tta_acc of the full run.
+\multirow{2}{*}{PhysioNet MI}
+ & Đ.c.x. & -- & $60.68\pm13.89$ & -- & -- & -- \\
+ & $\kappa$ & -- & $0.476\pm0.185$ & -- & -- & -- \\
 \bottomrule
 \end{tabular}
+\end{adjustbox}
 \end{table*}
 
-Trên BCI IV-2a, việc loại bỏ căn chỉnh Riemann, thích ứng miền Giai đoạn~1, hoặc thích ứng tại thời điểm kiểm thử đều làm giảm độ chính xác có ý nghĩa thống kê. Trên BCI IV-2b và Zhou2016, mô hình đầy đủ vẫn là biến thể tốt nhất, nhưng mức chênh nhỏ và không có ý nghĩa. Do đó, đóng góp của từng thành phần phụ thuộc vào bộ dữ liệu.
+Trên BCI IV-2a, việc loại bỏ căn chỉnh Riemann, thích ứng miền Giai đoạn~1, hoặc thích ứng tại thời điểm kiểm thử đều làm giảm độ chính xác có ý nghĩa thống kê. Trên BCI IV-2b và Zhou2016, mô hình đầy đủ vẫn là biến thể tốt nhất, nhưng mức chênh nhỏ và không có ý nghĩa. Do đó, đóng góp của từng thành phần phụ thuộc vào bộ dữ liệu. Trên PhysioNet MI, mô hình chỉ huấn luyện trên nguồn đạt $60,68\pm13,89\%$ ($\kappa=0,476\pm0,185$) trên 106 chủ thể đích, với độ chính xác từng chủ thể từ 32,22\% đến 90,00\%.
 
 \subsection{Vì sao căn chỉnh Riemann giúp ích trên BCI IV-2a}
 \label{subsec:ra_mechanism}

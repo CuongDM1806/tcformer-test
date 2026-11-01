@@ -458,32 +458,42 @@ BFT~\cite{li2026bft} & (e) & 77.47$^{\dagger}$ & -- & 84.38$^{\dagger}$ & 63.08 
 
 Table~\ref{tab:ablation} follows the primary chronological protocol. The variant without domain adaptation removes every Stage~1 domain-adaptation component (AutoDIAL, target information maximization, and the adversarial and both MMD losses) while retaining Riemannian alignment and IM-TTA; all variants otherwise use the same folds and checkpoint rule.
 
+PhysioNet MI (EEG Motor Movement/Imagery Dataset) \cite{schalk2004bci2000,goldberger2000physiobank} is added as a larger cohort for the ablation only. Its 64-channel, 160-Hz recordings provide four imagined movements (left fist, right fist, both fists, and both feet). Subjects 88, 92, and 100 were excluded because they were recorded at 128~Hz with a different trial timing, leaving 106 subjects. Each trial is the 4.1-s cue interval (656 samples) without filtering or z-scoring, and trials truncated by the end of a run were discarded, leaving 84--90 trials per subject. Evaluation is LOSO with 106 folds: the 105 source subjects are split 95/5 into training and validation trials for checkpoint selection, and all models are trained for 65 epochs with an effective batch size of 108. Because PhysioNet has a single session per subject, the same unlabeled target trials serve for adaptation and evaluation; this transductive setting is less strict than the chronological protocol of the other datasets, so PhysioNet results are not compared with them directly.
+
 \begin{table*}[!htbp]
 \centering
 \caption{Ablation results: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ across target subjects.}
 \label{tab:ablation}
-\small
+\footnotesize
 \setlength{\tabcolsep}{3.0pt}
-\begin{tabular}{llcccc}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llccccc}
 \toprule
-Dataset & Metric & SSM-DAN & \colhead{Without\\Riemannian\\alignment} & \colhead{Without\\domain\\adaptation} & \colhead{Without\\test-time\\adaptation} \\
+Dataset & Metric & SSM-DAN & \colhead{Source-\\only} & \colhead{Without\\Riemannian\\alignment} & \colhead{Without\\domain\\adaptation} & \colhead{Without\\test-time\\adaptation} \\
 \midrule
 \multirow{2}{*}{BCI IV-2a}
- & Acc. & $\mathbf{76.12\pm11.96}$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.159}$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ \\
+ & Acc. & $\mathbf{76.12\pm11.96}$ & $64.35\pm12.77$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.159}$ & $0.525\pm0.170$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
- & Acc. & $\mathbf{84.09\pm10.42}$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ \\
+ & Acc. & $\mathbf{84.09\pm10.42}$ & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Acc. & $\mathbf{84.33\pm0.75}$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
- & $\kappa$ & $\mathbf{0.765\pm0.011}$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ \\
+ & Acc. & $\mathbf{84.33\pm0.75}$ & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
+ & $\kappa$ & $\mathbf{0.765\pm0.011}$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ \\
+\midrule
+% TODO: fill the adaptive PhysioNet cells from the full / no_ra / no_da Kaggle runs
+% (feature/hada-autodial-physionet106); without IM-TTA = no_tta_acc of the full run.
+\multirow{2}{*}{PhysioNet MI}
+ & Acc. & -- & $60.68\pm13.89$ & -- & -- & -- \\
+ & $\kappa$ & -- & $0.476\pm0.185$ & -- & -- & -- \\
 \bottomrule
 \end{tabular}
+\end{adjustbox}
 \end{table*}
 
-On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent.
+On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent. On PhysioNet MI, the source-only model reached $60.68\pm13.89\%$ ($\kappa=0.476\pm0.185$) across the 106 targets, with per-target accuracy from 32.22\% to 90.00\%.
 
 \subsection{Why Riemannian alignment helps BCI IV-2a}
 \label{subsec:ra_mechanism}
