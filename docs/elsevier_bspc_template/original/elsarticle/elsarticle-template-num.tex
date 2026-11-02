@@ -85,14 +85,14 @@ We therefore propose SSM-DAN, a selective state-space network with hierarchical,
 \section{Method}
 \label{sec:method}
 
-\begin{figure*}[!htbp]
+\begin{figure*}[p]
     \centering
-    \includegraphics[width=\textwidth]{figures/architecture_overview.pdf}
-    \caption{Overview of SSM-DAN: training with labeled source and unlabeled target EEG (Stage~1), label-free test-time adaptation on the unlabeled evaluation sessions $\mathcal{T}_e$ (Stage~2), and prediction (Stage~3).}
+    \includegraphics[width=\textwidth,height=0.80\textheight,keepaspectratio]{figures/method_overview_ab.pdf}
+    \caption{Architecture of SSM-DAN. (a) SSM backbone; tensor sizes are channels $\times$ time, $\|$ denotes channel concatenation, $\oplus$ addition, and $\times N$ the $N=5$ selective SSM blocks with alternating scan direction. (b) Adaptation head: AutoDIAL normalization and a residual aligner feed three parallel branches (MMD, classifier, and GRL with a domain discriminator); their losses and the temporal MMD on the TCN output in (a) form the Stage~1 objective.}
     \label{fig:architecture_overview}
 \end{figure*}
 
-SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}). An EEG encoder combines multi-scale convolutions for local spectral--spatial features, bidirectional selective state-space blocks for long-range dynamics, and a temporal convolutional fusion head (Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). A hierarchical adaptation scheme reduces subject shift at three levels: Riemannian whitening of the input, AutoDIAL normalization with adversarial and discrepancy losses on the features, and test-time adaptation of the predictions (Sections~\ref{subsec:ra}--\ref{subsec:imtta}). The model is trained on labeled source-subject trials and unlabeled target-subject trials (Stage~1), adapted to the unlabeled evaluation trials (Stage~2), and then used for prediction (Stage~3).
+SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}) and is trained in two stages (Fig.~\ref{fig:two_stage}). An EEG encoder combines multi-scale convolutions for local spectral--spatial features, bidirectional selective state-space blocks for long-range dynamics, and a temporal convolutional fusion head (Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). A hierarchical adaptation scheme reduces subject shift at three levels: Riemannian whitening of the input, AutoDIAL normalization with adversarial and discrepancy losses on the features, and test-time adaptation of the predictions (Sections~\ref{subsec:ra}--\ref{subsec:imtta}). The model is trained on labeled source-subject trials and unlabeled target-subject trials (Stage~1), adapted to the unlabeled evaluation trials (Stage~2), and then used for prediction (Stage~3).
 
 \subsection{Multi-scale convolutional encoder}
 \label{subsec:conv_frontend}
@@ -102,19 +102,12 @@ Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes thr
 \subsection{Bidirectional selective state-space encoder}
 \label{subsec:ssm}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{figures/ssm_block.pdf}
-    \caption{Selective SSM block. Backward blocks reverse and restore the temporal axis around the mixer; forward blocks omit these operations.}
-    \label{fig:ssm_block}
-\end{figure}
-
 To capture trial-wide dependencies, $H_c$ passes through five selective state-space blocks \cite{gu2022s4,gu2024mamba}, each driving a diagonal recurrence with its projected input $u_t$:
 \begin{align}
     h_t &= \exp(\Delta_t A)\odot h_{t-1} + \Delta_t B_t\odot u_t, \\
     z_t &= C_t^\top h_t + d\odot u_t ,
 \end{align}
-where $A=-\exp(A_{\log})$ is a learned stable decay and $\Delta_t$, $B_t$, and $C_t$ depend on the input, so each block selects which time steps to retain at linear cost. Blocks alternate between forward and backward scanning (Fig.~\ref{fig:ssm_block}), giving bidirectional context without extra blocks. The state dimension is eight, with dropout 0.4 and stochastic depth.
+where $A=-\exp(A_{\log})$ is a learned stable decay and $\Delta_t$, $B_t$, and $C_t$ depend on the input, so each block selects which time steps to retain at linear cost. Blocks alternate between forward and backward scanning (Fig.~\ref{fig:architecture_overview}a), giving bidirectional context without extra blocks. The state dimension is eight, with dropout 0.4 and stochastic depth.
 
 \subsection{Local--global fusion and classification}
 \label{subsec:tcn}
@@ -165,7 +158,14 @@ where $\mathcal{L}_{\mathrm{IM}}^{t}$ is computed on target trials from $\mathca
 \subsection{Test-time adaptation}
 \label{subsec:imtta}
 
-The checkpoint with the highest source-validation accuracy is adapted to the unlabeled evaluation trials $\mathcal{T}_e$ by information-maximization test-time adaptation (IM-TTA): only the BatchNorm scales and shifts are updated, which limits overfitting to a small target set \cite{wang2021tent}, by minimizing Eq.~\eqref{eq:im} over $\mathcal{T}_e$ for five Adam passes (learning rate $10^{-4}$). The AutoDIAL target moments are then re-estimated in one pass over the same trials, with $\alpha$ and the source moments fixed. The labels of $\mathcal{T}_e$ are used only for scoring.
+The checkpoint with the highest source-validation accuracy is adapted to the unlabeled evaluation trials $\mathcal{T}_e$ by information-maximization test-time adaptation (IM-TTA): only the BatchNorm scales and shifts are updated, which limits overfitting to a small target set \cite{wang2021tent}, by minimizing Eq.~\eqref{eq:im} over $\mathcal{T}_e$ for five Adam passes (learning rate $10^{-4}$). The AutoDIAL target moments are then re-estimated in one pass over the same trials, with $\alpha$ and the source moments fixed. The labels of $\mathcal{T}_e$ are used only for scoring. Fig.~\ref{fig:two_stage} summarizes both stages.
+
+\begin{figure*}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/method_overview_c.pdf}
+    \caption{Two-stage adaptation. Stage~1 trains the backbone and the adaptation head (Fig.~\ref{fig:architecture_overview}), including $\alpha$, on labeled source and unlabeled target trials. Stage~2 (IM-TTA) starts from these weights, updates only the backbone BatchNorm parameters $\gamma,\beta$ with $\mathcal{L}_\mathrm{IM}$ for five steps, and then re-estimates the AutoDIAL target statistics before predicting.}
+    \label{fig:two_stage}
+\end{figure*}
 
 \section{Experimental Setup}
 \label{sec:experiments}
@@ -260,13 +260,6 @@ Accuracy and Cohen's $\kappa$ are reported as mean $\pm$ standard deviation acro
 \label{eq:itr}
 \end{equation}
 where $T$ is the decoded window (4~s for BCI IV-2a/2b; 4.5~s for Zhou2016); values at or below chance are set to zero before averaging. Per-class recall and macro-F1 assess class balance. Paired accuracy differences use exact two-sided Wilcoxon tests, with Holm correction within each target-access group (Section~\ref{subsec:baselines}); $p_\mathrm{Holm}<0.05$ denotes significance. Efficiency is reported by parameter count, Stage~1 training time, and batch-one CPU latency.
-
-To interpret the RA ablation, OAS covariances from source subjects form one Riemannian centroid $M_k$ per class. For target evaluation trial $C_i$, label selectivity is measured by
-\begin{equation}
-m_i=\min_{k\ne y_i}d_R(C_i,M_k)-d_R(C_i,M_{y_i}),
-\label{eq:mdm_margin}
-\end{equation}
-where a positive RA-induced change moves the trial toward its correct class relative to all competitors. Margin change is normalized by pre-RA source-class separation. Controls retain either C3/Cz/C4, left/right trials, or both from BCI IV-2a. Four primary comparisons use exact two-sided between-dataset permutation or within-dataset paired Wilcoxon tests with Holm correction. Target labels are used only for this retrospective diagnostic.
 
 \section{Results}
 \label{sec:results}
@@ -495,20 +488,6 @@ Dataset & Metric & SSM-DAN & \colhead{Source-\\only} & \colhead{Without\\Riemann
 
 On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent. On PhysioNet MI, the source-only model reached $60.68\pm13.89\%$ ($\kappa=0.476\pm0.185$) across the 106 targets, with per-target accuracy from 32.22\% to 90.00\%.
 
-\subsection{Why Riemannian alignment helps BCI IV-2a}
-\label{subsec:ra_mechanism}
-
-The geometric diagnostic distinguishes generic domain contraction from alignment that is useful for classification (Fig.~\ref{fig:ra_label_selectivity}). In the original tasks, nearest-centroid accuracy increased from 30.32\% to 42.52\% on BCI IV-2a ($+12.19$ percentage points; exact paired Wilcoxon $p=0.0039$), but only from 56.66\% to 57.63\% on BCI IV-2b ($+0.97$ points; $p=0.4961$). More importantly, the normalized decision-margin gain was 0.1517 on four-class BCI IV-2a versus 0.0287 on binary BCI IV-2b (exact permutation $p_\mathrm{Holm}=0.0389$). The effect remained when BCI IV-2a was reduced to C3/Cz/C4 (0.2264; $p_\mathrm{Holm}=0.0110$ versus BCI IV-2b), ruling out channel count as the sole explanation.
-
-\begin{figure*}[!htbp]
-\centering
-\includegraphics[width=\textwidth]{../../../../analysis/ra_mechanism_outputs/ra_label_selectivity.pdf}
-\caption{Label-selective effect of RA. Left: subject-level gain in the true-versus-nearest-wrong Riemannian margin (Eq.~\ref{eq:mdm_margin}), normalized by pre-RA source-class separation; diamonds and bars show the mean and bootstrap 95\% confidence interval. Middle: mean raw margin before and after full RA, where positive values indicate correct class geometry. Right: class-wise change in diagnostic MDM recall on the original 22-channel BCI IV-2a task. This model-free diagnostic is separate from SSM-DAN accuracy.}
-\label{fig:ra_label_selectivity}
-\end{figure*}
-
-Within BCI IV-2a, restricting the task to left/right reduced the normalized margin gain from 0.1517 to 0.0160 at 22 channels ($p_\mathrm{Holm}=0.0389$) and from 0.2264 to 0.0665 at three channels ($p_\mathrm{Holm}=0.0234$). Full RA particularly recovered classes with poor unaligned transfer: diagnostic recall increased by 22.38, 17.44, and 18.06 points for right hand, feet, and tongue, respectively, while left-hand recall decreased by 9.10 points. Conversely, after matching both the three-channel montage and left/right task, the margin-gain difference between BCI IV-2a and IV-2b was not significant ($p=0.4174$). Thus, the evidence points to the richer class-conditional covariance geometry of the original four-class BCI IV-2a task, rather than the number of electrodes or the magnitude of marginal shift alone. This diagnostic explains the direction of the neural ablation but is not itself an SSM-DAN accuracy result.
-
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
 
@@ -557,7 +536,7 @@ SSM-DAN\newline (w/o RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4
 \section{Discussion}
 \label{sec:discussion}
 
-The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences. The geometric analysis suggests that this difference is determined by label selectivity rather than by how strongly RA contracts the domains: full RA reduced class-conditional covariance shift on BCI IV-2b, yet produced little improvement in the correct-versus-wrong class margin. On BCI IV-2a, the effect survived reduction to three channels but weakened substantially when the four-class task was reduced to left/right. RA therefore appears particularly useful for the heterogeneous lateral and midline covariance patterns of this task; the results do not imply that increasing the number of classes will generally improve RA.
+The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences.
 
 The alternating scans exploit complete offline trials and are non-causal, so online use would require forward-only processing.
 

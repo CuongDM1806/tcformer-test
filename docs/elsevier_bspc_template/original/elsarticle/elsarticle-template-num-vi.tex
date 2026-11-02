@@ -91,14 +91,14 @@ Vì vậy, chúng tôi đề xuất SSM-DAN, một mạng không gian trạng th
 \section{Phương pháp}
 \label{sec:method}
 
-\begin{figure*}[!htbp]
+\begin{figure*}[p]
     \centering
-    \includegraphics[width=\textwidth]{figures/architecture_overview.pdf}
-    \caption{Tổng quan SSM-DAN: huấn luyện với EEG nguồn có nhãn và EEG đích không nhãn (Giai đoạn~1), thích ứng tại thời điểm kiểm thử không cần nhãn trên các phiên đánh giá không nhãn $\mathcal{T}_e$ (Giai đoạn~2), và dự đoán (Giai đoạn~3).}
+    \includegraphics[width=\textwidth,height=0.80\textheight,keepaspectratio]{figures/method_overview_ab.pdf}
+    \caption{Kiến trúc SSM-DAN. (a) Backbone SSM; kích thước tensor ghi theo kênh $\times$ thời gian, $\|$ là phép ghép theo kênh, $\oplus$ là phép cộng, và $\times N$ là $N=5$ khối SSM chọn lọc với chiều quét xen kẽ. (b) Đầu thích ứng: chuẩn hóa AutoDIAL và bộ căn chỉnh có kết nối tắt dẫn vào ba nhánh song song (MMD, bộ phân loại, và GRL với bộ phân biệt miền); các hàm mất mát của chúng cùng MMD theo thời gian trên đầu ra TCN ở (a) tạo thành hàm mục tiêu Giai đoạn~1.}
     \label{fig:architecture_overview}
 \end{figure*}
 
-SSM-DAN gồm hai phần (Hình~\ref{fig:architecture_overview}). Bộ mã hóa EEG kết hợp tích chập đa thang cho đặc trưng phổ--không gian cục bộ, các khối không gian trạng thái chọn lọc hai chiều cho động học tầm xa, và một đầu hợp nhất tích chập thời gian (Mục~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). Lược đồ thích ứng phân cấp giảm độ dịch chuyển giữa các chủ thể ở ba mức: làm trắng Riemann cho đầu vào, chuẩn hóa AutoDIAL kèm hàm mất mát đối kháng và sai khác phân phối cho đặc trưng, và thích ứng tại thời điểm kiểm thử cho dự đoán (Mục~\ref{subsec:ra}--\ref{subsec:imtta}). Mô hình được huấn luyện trên các lần thử có nhãn của chủ thể nguồn và các lần thử không nhãn của chủ thể đích (Giai đoạn~1), được thích ứng với các lần thử đánh giá không nhãn (Giai đoạn~2), rồi dùng để dự đoán (Giai đoạn~3).
+SSM-DAN gồm hai phần (Hình~\ref{fig:architecture_overview}) và được huấn luyện qua hai giai đoạn (Hình~\ref{fig:two_stage}). Bộ mã hóa EEG kết hợp tích chập đa thang cho đặc trưng phổ--không gian cục bộ, các khối không gian trạng thái chọn lọc hai chiều cho động học tầm xa, và một đầu hợp nhất tích chập thời gian (Mục~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). Lược đồ thích ứng phân cấp giảm độ dịch chuyển giữa các chủ thể ở ba mức: làm trắng Riemann cho đầu vào, chuẩn hóa AutoDIAL kèm hàm mất mát đối kháng và sai khác phân phối cho đặc trưng, và thích ứng tại thời điểm kiểm thử cho dự đoán (Mục~\ref{subsec:ra}--\ref{subsec:imtta}). Mô hình được huấn luyện trên các lần thử có nhãn của chủ thể nguồn và các lần thử không nhãn của chủ thể đích (Giai đoạn~1), được thích ứng với các lần thử đánh giá không nhãn (Giai đoạn~2), rồi dùng để dự đoán (Giai đoạn~3).
 
 \subsection{Bộ mã hóa tích chập đa thang}
 \label{subsec:conv_frontend}
@@ -108,19 +108,12 @@ Mỗi lần thử $X\in\mathbb{R}^{C\times T}$ ($C$ điện cực, $T$ mẫu) đ
 \subsection{Bộ mã hóa không gian trạng thái chọn lọc hai chiều}
 \label{subsec:ssm}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{figures/ssm_block.pdf}
-    \caption{Khối SSM chọn lọc. Khối quét ngược đảo và khôi phục trục thời gian quanh bộ trộn; khối quét xuôi bỏ qua các thao tác này.}
-    \label{fig:ssm_block}
-\end{figure}
-
 Để nắm bắt các phụ thuộc trên toàn bộ lần thử, $H_c$ đi qua năm khối không gian trạng thái chọn lọc \cite{gu2022s4,gu2024mamba}, mỗi khối điều khiển một phép hồi quy đường chéo với đầu vào đã chiếu $u_t$:
 \begin{align}
     h_t &= \exp(\Delta_t A)\odot h_{t-1} + \Delta_t B_t\odot u_t, \\
     z_t &= C_t^\top h_t + d\odot u_t ,
 \end{align}
-trong đó $A=-\exp(A_{\log})$ là hệ số suy giảm ổn định được học, còn $\Delta_t$, $B_t$ và $C_t$ phụ thuộc vào đầu vào, nhờ đó mỗi khối chọn bước thời gian cần giữ lại với chi phí tuyến tính. Các khối xen kẽ quét xuôi và quét ngược (Hình~\ref{fig:ssm_block}), cho ngữ cảnh hai chiều mà không cần thêm khối. Số chiều trạng thái là tám, với dropout 0,4 và độ sâu ngẫu nhiên (stochastic depth).
+trong đó $A=-\exp(A_{\log})$ là hệ số suy giảm ổn định được học, còn $\Delta_t$, $B_t$ và $C_t$ phụ thuộc vào đầu vào, nhờ đó mỗi khối chọn bước thời gian cần giữ lại với chi phí tuyến tính. Các khối xen kẽ quét xuôi và quét ngược (Hình~\ref{fig:architecture_overview}a), cho ngữ cảnh hai chiều mà không cần thêm khối. Số chiều trạng thái là tám, với dropout 0,4 và độ sâu ngẫu nhiên (stochastic depth).
 
 \subsection{Hợp nhất cục bộ--toàn cục và phân loại}
 \label{subsec:tcn}
@@ -171,7 +164,14 @@ trong đó $\mathcal{L}_{\mathrm{IM}}^{t}$ được tính trên các lần thử
 \subsection{Thích ứng tại thời điểm kiểm thử}
 \label{subsec:imtta}
 
-Checkpoint có độ chính xác kiểm định nguồn cao nhất được thích ứng với các lần thử đánh giá không nhãn $\mathcal{T}_e$ bằng thích ứng tại thời điểm kiểm thử dựa trên cực đại hóa thông tin (IM-TTA): chỉ các hệ số tỉ lệ và độ dời của BatchNorm được cập nhật, giúp hạn chế quá khớp với tập đích nhỏ \cite{wang2021tent}, bằng cách cực tiểu hóa Pt.~\eqref{eq:im} trên $\mathcal{T}_e$ trong năm lượt Adam (tốc độ học $10^{-4}$). Sau đó, các mô-men đích của AutoDIAL được ước lượng lại trong một lượt trên cùng các lần thử đó, với $\alpha$ và mô-men nguồn cố định. Nhãn của $\mathcal{T}_e$ chỉ được dùng để chấm điểm.
+Checkpoint có độ chính xác kiểm định nguồn cao nhất được thích ứng với các lần thử đánh giá không nhãn $\mathcal{T}_e$ bằng thích ứng tại thời điểm kiểm thử dựa trên cực đại hóa thông tin (IM-TTA): chỉ các hệ số tỉ lệ và độ dời của BatchNorm được cập nhật, giúp hạn chế quá khớp với tập đích nhỏ \cite{wang2021tent}, bằng cách cực tiểu hóa Pt.~\eqref{eq:im} trên $\mathcal{T}_e$ trong năm lượt Adam (tốc độ học $10^{-4}$). Sau đó, các mô-men đích của AutoDIAL được ước lượng lại trong một lượt trên cùng các lần thử đó, với $\alpha$ và mô-men nguồn cố định. Nhãn của $\mathcal{T}_e$ chỉ được dùng để chấm điểm. Hình~\ref{fig:two_stage} tóm tắt cả hai giai đoạn.
+
+\begin{figure*}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/method_overview_c.pdf}
+    \caption{Thích ứng hai giai đoạn. Giai đoạn~1 huấn luyện backbone và đầu thích ứng (Hình~\ref{fig:architecture_overview}), kể cả $\alpha$, trên các lần thử nguồn có nhãn và đích không nhãn. Giai đoạn~2 (IM-TTA) bắt đầu từ các trọng số này, chỉ cập nhật tham số BatchNorm $\gamma,\beta$ của backbone bằng $\mathcal{L}_\mathrm{IM}$ trong năm bước, rồi ước lượng lại thống kê đích của AutoDIAL trước khi dự đoán.}
+    \label{fig:two_stage}
+\end{figure*}
 
 \section{Thiết lập thực nghiệm}
 \label{sec:experiments}
@@ -266,13 +266,6 @@ Các phương pháp cơ sở được nhóm theo mức truy cập dữ liệu đ
 \label{eq:itr}
 \end{equation}
 trong đó $T$ là cửa sổ giải mã (4~s cho BCI IV-2a/2b; 4,5~s cho Zhou2016); các giá trị bằng hoặc thấp hơn mức ngẫu nhiên được đặt bằng không trước khi lấy trung bình. Độ nhạy (recall) theo lớp và macro-F1 đánh giá sự cân bằng giữa các lớp. Hiệu độ chính xác theo cặp được kiểm định bằng phép Wilcoxon hai phía chính xác, có hiệu chỉnh Holm trong mỗi nhóm truy cập dữ liệu đích (Mục~\ref{subsec:baselines}); $p_\mathrm{Holm}<0,05$ biểu thị có ý nghĩa thống kê. Hiệu năng tính toán được báo cáo bằng số tham số, thời gian huấn luyện Giai đoạn~1 và độ trễ CPU với batch bằng một.
-
-Để diễn giải phép loại bỏ RA, hiệp phương sai OAS từ các chủ thể nguồn tạo thành một tâm Riemann $M_k$ cho mỗi lớp. Với lần thử đánh giá đích $C_i$, tính chọn lọc theo nhãn được đo bằng
-\begin{equation}
-m_i=\min_{k\ne y_i}d_R(C_i,M_k)-d_R(C_i,M_{y_i}),
-\label{eq:mdm_margin}
-\end{equation}
-trong đó một thay đổi dương do RA gây ra nghĩa là lần thử được dịch về phía lớp đúng của nó so với mọi lớp cạnh tranh. Mức thay đổi biên được chuẩn hóa bằng độ tách biệt giữa các lớp nguồn trước RA. Các cấu hình đối chứng giữ lại C3/Cz/C4, các lần thử trái/phải, hoặc cả hai từ BCI IV-2a. Bốn phép so sánh chính dùng kiểm định hoán vị chính xác hai phía giữa các bộ dữ liệu hoặc kiểm định Wilcoxon theo cặp trong cùng bộ dữ liệu, có hiệu chỉnh Holm. Nhãn đích chỉ được dùng cho phân tích chẩn đoán hồi cứu này.
 
 \section{Kết quả}
 \label{sec:results}
@@ -501,20 +494,6 @@ Bộ dữ liệu & Thước đo & SSM-DAN & \colhead{Chỉ huấn\\luyện trên
 
 Trên BCI IV-2a, việc loại bỏ căn chỉnh Riemann, thích ứng miền Giai đoạn~1, hoặc thích ứng tại thời điểm kiểm thử đều làm giảm độ chính xác có ý nghĩa thống kê. Trên BCI IV-2b và Zhou2016, mô hình đầy đủ vẫn là biến thể tốt nhất, nhưng mức chênh nhỏ và không có ý nghĩa. Do đó, đóng góp của từng thành phần phụ thuộc vào bộ dữ liệu. Trên PhysioNet MI, mô hình chỉ huấn luyện trên nguồn đạt $60,68\pm13,89\%$ ($\kappa=0,476\pm0,185$) trên 106 chủ thể đích, với độ chính xác từng chủ thể từ 32,22\% đến 90,00\%.
 
-\subsection{Vì sao căn chỉnh Riemann giúp ích trên BCI IV-2a}
-\label{subsec:ra_mechanism}
-
-Phân tích chẩn đoán hình học phân biệt việc co các miền lại gần nhau nói chung với kiểu căn chỉnh thực sự hữu ích cho phân loại (Hình~\ref{fig:ra_label_selectivity}). Trên các tác vụ gốc, độ chính xác theo tâm gần nhất tăng từ 30,32\% lên 42,52\% trên BCI IV-2a ($+12,19$ điểm phần trăm; Wilcoxon theo cặp chính xác $p=0,0039$), nhưng chỉ từ 56,66\% lên 57,63\% trên BCI IV-2b ($+0,97$ điểm; $p=0,4961$). Quan trọng hơn, mức tăng biên quyết định chuẩn hóa là 0,1517 trên BCI IV-2a bốn lớp so với 0,0287 trên BCI IV-2b hai lớp (kiểm định hoán vị chính xác $p_\mathrm{Holm}=0,0389$). Hiệu ứng vẫn còn khi BCI IV-2a được rút xuống C3/Cz/C4 (0,2264; $p_\mathrm{Holm}=0,0110$ so với BCI IV-2b), loại trừ khả năng số kênh là nguyên nhân duy nhất.
-
-\begin{figure*}[!htbp]
-\centering
-\includegraphics[width=\textwidth]{../../../../analysis/ra_mechanism_outputs/ra_label_selectivity.pdf}
-\caption{Hiệu ứng chọn lọc theo nhãn của RA. Trái: mức tăng theo từng chủ thể của biên Riemann giữa lớp đúng và lớp sai gần nhất (Pt.~\ref{eq:mdm_margin}), chuẩn hóa bằng độ tách biệt giữa các lớp nguồn trước RA; hình thoi và thanh biểu thị trung bình và khoảng tin cậy bootstrap 95\%. Giữa: biên thô trung bình trước và sau RA đầy đủ, giá trị dương biểu thị hình học lớp đúng. Phải: thay đổi theo lớp của độ nhạy MDM chẩn đoán trên tác vụ BCI IV-2a 22 kênh gốc. Phân tích chẩn đoán không dùng mô hình này tách biệt với độ chính xác của SSM-DAN.}
-\label{fig:ra_label_selectivity}
-\end{figure*}
-
-Trong BCI IV-2a, giới hạn tác vụ về trái/phải làm mức tăng biên chuẩn hóa giảm từ 0,1517 xuống 0,0160 với 22 kênh ($p_\mathrm{Holm}=0,0389$) và từ 0,2264 xuống 0,0665 với ba kênh ($p_\mathrm{Holm}=0,0234$). RA đầy đủ đặc biệt phục hồi các lớp có khả năng chuyển giao kém khi chưa căn chỉnh: độ nhạy chẩn đoán tăng lần lượt 22,38, 17,44 và 18,06 điểm cho tay phải, chân và lưỡi, trong khi độ nhạy tay trái giảm 9,10 điểm. Ngược lại, khi khớp cả cấu hình ba kênh lẫn tác vụ trái/phải, khác biệt về mức tăng biên giữa BCI IV-2a và IV-2b không có ý nghĩa ($p=0,4174$). Như vậy, bằng chứng chỉ về phía hình học hiệp phương sai có điều kiện theo lớp phong phú hơn của tác vụ bốn lớp gốc trên BCI IV-2a, chứ không phải chỉ số điện cực hay độ lớn của dịch chuyển biên. Phân tích chẩn đoán này giải thích chiều hướng của phép loại bỏ trên mạng nơ-ron nhưng bản thân nó không phải là kết quả độ chính xác của SSM-DAN.
-
 \subsection{Hiệu năng tính toán}
 \label{subsec:results_efficiency}
 
@@ -563,7 +542,7 @@ SSM-DAN\newline (không RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 13
 \section{Thảo luận}
 \label{sec:discussion}
 
-Lợi ích của từng thành phần thích ứng phụ thuộc vào bộ dữ liệu: rõ rệt trên BCI IV-2a nhưng nhỏ và không có ý nghĩa trên BCI IV-2b và Zhou2016, nơi cần các thí nghiệm lặp với nhiều hạt giống để xác nhận khác biệt. Phân tích hình học gợi ý rằng sự khác biệt này được quyết định bởi tính chọn lọc theo nhãn chứ không phải mức độ RA co các miền lại gần nhau: RA đầy đủ làm giảm dịch chuyển hiệp phương sai có điều kiện theo lớp trên BCI IV-2b, nhưng hầu như không cải thiện biên giữa lớp đúng và lớp sai. Trên BCI IV-2a, hiệu ứng vẫn tồn tại khi rút xuống ba kênh nhưng yếu đi đáng kể khi tác vụ bốn lớp được rút về trái/phải. Vì vậy, RA có vẻ đặc biệt hữu ích cho các mẫu hiệp phương sai lệch bên và đường giữa không đồng nhất của tác vụ này; kết quả không hàm ý rằng tăng số lớp nói chung sẽ cải thiện RA.
+Lợi ích của từng thành phần thích ứng phụ thuộc vào bộ dữ liệu: rõ rệt trên BCI IV-2a nhưng nhỏ và không có ý nghĩa trên BCI IV-2b và Zhou2016, nơi cần các thí nghiệm lặp với nhiều hạt giống để xác nhận khác biệt.
 
 Các lượt quét xen kẽ khai thác trọn vẹn các lần thử ngoại tuyến và không nhân quả, nên ứng dụng trực tuyến sẽ cần xử lý chỉ theo chiều xuôi.
 

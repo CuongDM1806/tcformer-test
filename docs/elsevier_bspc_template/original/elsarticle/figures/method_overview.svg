@@ -1,0 +1,503 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="2223" viewBox="0 0 1500 2223">
+<rect x="0" y="0" width="1500" height="2223" fill="#FFFFFF"/>
+<g id="panel_a">
+<rect x="16.0" y="16.0" width="684.0" height="1661.0" rx="26" fill="#F1F5FB" stroke="#1A1A1A" stroke-width="3.2" stroke-dasharray="7 5"/>
+<text x="42.0" y="62.0" font-family="Arial" font-size="34" font-weight="bold" fill="#1F2933">(a) SSM backbone</text>
+</g>
+<g id="panel_b">
+<rect x="716.0" y="16.0" width="768.0" height="1187.0" rx="26" fill="#F6F2FB" stroke="#1A1A1A" stroke-width="3.2" stroke-dasharray="7 5"/>
+<text x="742.0" y="62.0" font-family="Arial" font-size="34" font-weight="bold" fill="#1F2933">(b) Adaptation head</text>
+</g>
+<g id="stage1_objective">
+<rect x="716.0" y="1493.0" width="768.0" height="160.0" rx="26" fill="#FBF0EF" stroke="#1A1A1A" stroke-width="3.2" stroke-dasharray="7 5"/>
+<text x="742.0" y="1535.0" font-family="Arial" font-size="28" font-weight="bold" fill="#C0392B">Stage-1 objective</text>
+<text x="814.0" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#1F2933">L</text>
+<text x="838.2" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">=</text>
+<text x="860.8" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#1F2933">L</text>
+<text x="877.8" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">CE</text>
+<text x="909.5" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">+ λ</text>
+<text x="946.5" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">IM</text>
+<text x="966.2" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#1F2933">L</text>
+<text x="983.2" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">IM</text>
+<text x="1010.2" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">+ λ</text>
+<text x="1047.2" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">adv</text>
+<text x="1077.5" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#1F2933">L</text>
+<text x="1094.5" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">adv</text>
+<text x="1132.0" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">+ λ</text>
+<text x="1169.0" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">MMD</text>
+<text x="1211.2" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#1F2933">L</text>
+<text x="1228.2" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">MMD</text>
+<text x="1277.8" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">+ λ</text>
+<text x="1314.8" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">t</text>
+<text x="1320.8" y="1589.0" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#1F2933">L</text>
+<text x="1337.8" y="1596.3" font-family="Arial" font-size="17.7" font-weight="bold" fill="#1F2933">tMMD</text>
+<text x="913.9" y="1629.0" font-family="Arial" font-size="21" font-weight="bold" fill="#6B7684">λ</text>
+<text x="925.6" y="1634.9" font-family="Arial" font-size="14.3" font-weight="bold" fill="#6B7684">IM</text>
+<text x="947.1" y="1629.0" font-family="Arial" font-size="21" font-weight="bold" fill="#6B7684">= 0.1,  λ</text>
+<text x="1023.4" y="1634.9" font-family="Arial" font-size="14.3" font-weight="bold" fill="#6B7684">adv</text>
+<text x="1053.9" y="1629.0" font-family="Arial" font-size="21" font-weight="bold" fill="#6B7684">= 1,  λ</text>
+<text x="1112.6" y="1634.9" font-family="Arial" font-size="14.3" font-weight="bold" fill="#6B7684">MMD</text>
+<text x="1152.1" y="1629.0" font-family="Arial" font-size="21" font-weight="bold" fill="#6B7684">= 0.5,  λ</text>
+<text x="1228.4" y="1634.9" font-family="Arial" font-size="14.3" font-weight="bold" fill="#6B7684">t</text>
+<text x="1238.9" y="1629.0" font-family="Arial" font-size="21" font-weight="bold" fill="#6B7684">= 0.1</text>
+</g>
+<g id="input_eeg">
+<rect x="268.0" y="100.0" width="300.0" height="54.0" rx="12" fill="#C0E6E2" stroke="#1F8A8A" stroke-width="2.6"/>
+<text x="323.2" y="136.0" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Aligned EEG  X̃</text>
+</g>
+<text x="580.0" y="134.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">C × T</text>
+<path d="M 418.0 156.0 L 418.0 176.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 275.0 176.0 L 561.0 176.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 275.0 176.0 L 275.0 192.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 275.0 207.0 L 266.8 192.0 L 283.2 192.0 Z" fill="#4E5967"/>
+<g id="conv_1x20">
+<rect x="208.0" y="210.0" width="134.0" height="62.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="214.8" y="237.0" font-family="Arial" font-size="24" font-weight="bold" fill="#1F2933">Conv 1×20</text>
+<text x="260.5" y="261.0" font-family="Arial" font-size="20" font-weight="bold" fill="#6B7684">BN</text>
+</g>
+<path d="M 418.0 176.0 L 418.0 192.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 207.0 L 409.8 192.0 L 426.2 192.0 Z" fill="#4E5967"/>
+<g id="conv_1x32">
+<rect x="351.0" y="210.0" width="134.0" height="62.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="357.8" y="237.0" font-family="Arial" font-size="24" font-weight="bold" fill="#1F2933">Conv 1×32</text>
+<text x="403.5" y="261.0" font-family="Arial" font-size="20" font-weight="bold" fill="#6B7684">BN</text>
+</g>
+<path d="M 561.0 176.0 L 561.0 192.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 561.0 207.0 L 552.8 192.0 L 569.2 192.0 Z" fill="#4E5967"/>
+<g id="conv_1x64">
+<rect x="494.0" y="210.0" width="134.0" height="62.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="500.8" y="237.0" font-family="Arial" font-size="24" font-weight="bold" fill="#1F2933">Conv 1×64</text>
+<text x="546.5" y="261.0" font-family="Arial" font-size="20" font-weight="bold" fill="#6B7684">BN</text>
+</g>
+<path d="M 275.0 274.0 L 275.0 294.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 274.0 L 418.0 294.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 561.0 274.0 L 561.0 294.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 275.0 294.0 L 561.0 294.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 294.0 L 418.0 304.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 319.0 L 409.8 304.0 L 426.2 304.0 Z" fill="#4E5967"/>
+<circle cx="418.0" cy="338.0" r="17" fill="#FFFFFF" stroke="#1F2933" stroke-width="2.6"/>
+<path d="M 413.5 328.6 L 413.5 347.4" fill="none" stroke="#1F2933" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 422.5 328.6 L 422.5 347.4" fill="none" stroke="#1F2933" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="mod_multiscale">
+<path d="M 186.0 210 L 186.0 355" fill="none" stroke="#2F62A0" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="56.8" y="268.5" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">Multi-scale</text>
+<text x="77.2" y="295.5" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">temporal</text>
+<path d="M 418.0 358.0 L 418.0 375.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 390.0 L 409.8 375.0 L 426.2 375.0 Z" fill="#4E5967"/>
+<text x="434.0" y="381.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">96 × C × T</text>
+<g id="spatial_dwconv">
+<rect x="208.0" y="393.0" width="420.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="287.1" y="422.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Depthwise conv  C×1</text>
+</g>
+<g id="spatial_bn">
+<rect x="208.0" y="438.0" width="420.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="361.6" y="467.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">BN · ELU</text>
+</g>
+<g id="spatial_pool">
+<rect x="208.0" y="483.0" width="420.0" height="40.0" rx="9" fill="#C0E4DD" stroke="#2E8A80" stroke-width="2.6"/>
+<text x="335.8" y="512.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">AvgPool  1×8</text>
+</g>
+<g id="spatial_reduce">
+<rect x="208.0" y="528.0" width="420.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="300.1" y="557.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Grouped conv  1×1</text>
+</g>
+<g id="mod_spatial_dwconv">
+<path d="M 186.0 393 L 186.0 568" fill="none" stroke="#2F62A0" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="98.0" y="475.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">Spatial</text>
+<text x="89.8" y="502.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">filtering</text>
+<path d="M 418.0 571.0 L 418.0 588.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 603.0 L 409.8 588.0 L 426.2 588.0 Z" fill="#4E5967"/>
+<text x="434.0" y="594.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">48 × T/8</text>
+<g id="gt_conv">
+<rect x="208.0" y="606.0" width="420.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="292.9" y="635.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Grouped conv  1×16</text>
+</g>
+<g id="gt_bn">
+<rect x="208.0" y="651.0" width="420.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="361.6" y="680.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">BN · ELU</text>
+</g>
+<g id="gt_attn">
+<rect x="208.0" y="696.0" width="420.0" height="40.0" rx="9" fill="#F6D6AC" stroke="#B86E1F" stroke-width="2.6"/>
+<text x="320.0" y="725.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Group attention</text>
+</g>
+<g id="gt_pool">
+<rect x="208.0" y="741.0" width="420.0" height="40.0" rx="9" fill="#C0E4DD" stroke="#2E8A80" stroke-width="2.6"/>
+<text x="335.8" y="770.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">AvgPool  1×7</text>
+</g>
+<g id="mod_gt_conv">
+<path d="M 186.0 606 L 186.0 781" fill="none" stroke="#2F62A0" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="78.2" y="688.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">Grouped</text>
+<text x="77.2" y="715.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">temporal</text>
+<circle cx="418.0" cy="793.0" r="5" fill="#4E5967"/>
+<path d="M 418.0 784.0 L 418.0 823.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 838.0 L 409.8 823.0 L 426.2 823.0 Z" fill="#4E5967"/>
+<text x="434.0" y="827.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">48 × T/56</text>
+<g id="mix">
+<rect x="208.0" y="841.0" width="420.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="282.1" y="870.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">1×1 conv · SiLU  (mix)</text>
+</g>
+<path d="M 418.0 883.0 L 418.0 899.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 899.0 L 418.0 917.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 932.0 L 409.8 917.0 L 426.2 917.0 Z" fill="#4E5967"/>
+<g id="ssm_ln">
+<rect x="245.0" y="935.0" width="346.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="349.4" y="964.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">LayerNorm</text>
+</g>
+<g id="ssm_in">
+<rect x="245.0" y="980.0" width="346.0" height="40.0" rx="9" fill="#CBD1F3" stroke="#3346AD" stroke-width="2.6"/>
+<text x="378.9" y="1009.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Linear</text>
+</g>
+<g id="ssm_conv">
+<rect x="245.0" y="1025.0" width="346.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="289.2" y="1054.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Depthwise conv  k=3</text>
+</g>
+<g id="ssm_scan">
+<rect x="245.0" y="1070.0" width="346.0" height="40.0" rx="9" fill="#CBD1F3" stroke="#3346AD" stroke-width="2.6"/>
+<text x="328.1" y="1099.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Selective scan</text>
+</g>
+<g id="ssm_gate">
+<rect x="245.0" y="1115.0" width="346.0" height="40.0" rx="9" fill="#CBD1F3" stroke="#3346AD" stroke-width="2.6"/>
+<text x="344.5" y="1144.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">⊙ SiLU gate</text>
+</g>
+<g id="ssm_out">
+<rect x="245.0" y="1160.0" width="346.0" height="40.0" rx="9" fill="#CBD1F3" stroke="#3346AD" stroke-width="2.6"/>
+<text x="378.9" y="1189.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Linear</text>
+</g>
+<path d="M 418.0 1203.0 L 418.0 1223.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 1238.0 L 409.8 1223.0 L 426.2 1223.0 Z" fill="#4E5967"/>
+<path d="M 418.0 899.0 L 229.0 899.0 L 229.0 1256.0 L 385.0 1256.0" fill="none" stroke="#3346AD" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 400.0 1256.0 L 385.0 1264.2 L 385.0 1247.8 Z" fill="#3346AD"/>
+<circle cx="418.0" cy="899.0" r="5" fill="#3346AD"/>
+<circle cx="418.0" cy="1256.0" r="15" fill="#FFFFFF" stroke="#3346AD" stroke-width="2.6"/>
+<path d="M 409.8 1256.0 L 426.2 1256.0" fill="none" stroke="#3346AD" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 1247.8 L 418.0 1264.2" fill="none" stroke="#3346AD" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="rep_top">
+<path d="M 621.0 899 L 621.0 1053.5" fill="none" stroke="#3346AD" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<g id="rep_bottom">
+<path d="M 621.0 1101.5 L 621.0 1271" fill="none" stroke="#3346AD" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="604.0" y="1086.5" font-family="Arial" font-size="26" font-weight="bold" fill="#3346AD">×N</text>
+<path d="M 418.0 1273.0 L 418.0 1285.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 1300.0 L 409.8 1285.0 L 426.2 1285.0 Z" fill="#4E5967"/>
+<g id="reduce">
+<rect x="208.0" y="1303.0" width="420.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="261.8" y="1332.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">1×1 conv · SiLU  (reduce)</text>
+</g>
+<g id="mod_sequence">
+<path d="M 186.0 841 L 186.0 1343" fill="none" stroke="#3346AD" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="74.8" y="1073.0" font-family="Arial" font-size="22" font-weight="bold" fill="#3346AD">Selective</text>
+<text x="122.2" y="1100.0" font-family="Arial" font-size="22" font-weight="bold" fill="#3346AD">SSM</text>
+<text x="84.2" y="1127.0" font-family="Arial" font-size="22" font-weight="bold" fill="#3346AD">encoder</text>
+<path d="M 418.0 1346.0 L 418.0 1365.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 1380.0 L 409.8 1365.0 L 426.2 1365.0 Z" fill="#4E5967"/>
+<text x="434.0" y="1377.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">16 × T/56</text>
+<path d="M 418.0 793.0 L 652.0 793.0 L 652.0 1399.0 L 452.0 1399.0" fill="none" stroke="#4E5967" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 437.0 1399.0 L 452.0 1390.8 L 452.0 1407.2 Z" fill="#4E5967"/>
+<circle cx="418.0" cy="1399.0" r="17" fill="#FFFFFF" stroke="#1F2933" stroke-width="2.6"/>
+<path d="M 413.5 1389.7 L 413.5 1408.3" fill="none" stroke="#1F2933" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 422.5 1389.7 L 422.5 1408.3" fill="none" stroke="#1F2933" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 1419.0 L 418.0 1436.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 1451.0 L 409.8 1436.0 L 426.2 1436.0 Z" fill="#4E5967"/>
+<text x="434.0" y="1442.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">64 × T/56</text>
+<g id="tcn_block1">
+<rect x="208.0" y="1454.0" width="420.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="255.1" y="1483.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Residual causal conv  d=1</text>
+</g>
+<g id="tcn_block2">
+<rect x="208.0" y="1499.0" width="420.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="255.1" y="1528.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Residual causal conv  d=2</text>
+</g>
+<g id="mod_head">
+<path d="M 186.0 1454 L 186.0 1539" fill="none" stroke="#2F62A0" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="71.0" y="1491.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">Temporal</text>
+<text x="118.5" y="1518.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2F62A0">head</text>
+<path d="M 418.0 1541.0 L 418.0 1573.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="418.0" cy="1573.0" r="5" fill="#4E5967"/>
+<path d="M 418.0 1573.0 L 539.0 1573.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 554.0 1573.0 L 539.0 1581.2 L 539.0 1564.8 Z" fill="#C0392B"/>
+<g id="loss_tmmd">
+<rect x="556.0" y="1552.0" width="124.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4" stroke-dasharray="7 5"/>
+<text x="585.4" y="1582.9" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#C0392B">L</text>
+<text x="602.4" y="1590.2" font-family="Arial" font-size="17.7" font-weight="bold" fill="#C0392B">tMMD</text>
+</g>
+<path d="M 418.0 1573.0 L 418.0 1602.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 418.0 1617.0 L 409.8 1602.0 L 426.2 1602.0 Z" fill="#4E5967"/>
+<text x="413.0" y="1653.0" font-family="Arial" font-size="30" font-weight="bold" font-style="italic" fill="#1F2933">f</text>
+<text x="440.0" y="1651.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">64-dim feature</text>
+<g id="head_input">
+<rect x="968.0" y="100.0" width="300.0" height="54.0" rx="12" fill="#E0E4EA" stroke="#4E5967" stroke-width="2.6"/>
+<text x="1088.8" y="136.0" font-family="Arial" font-size="28" font-weight="bold" font-style="italic" fill="#1F2933">f</text>
+<text x="1098.0" y="143.8" font-family="Arial" font-size="19.0" font-weight="bold" font-style="italic" fill="#1F2933">s</text>
+<text x="1116.2" y="136.0" font-family="Arial" font-size="28" font-weight="bold" font-style="italic" fill="#1F2933">, f</text>
+<text x="1141.0" y="143.8" font-family="Arial" font-size="19.0" font-weight="bold" font-style="italic" fill="#1F2933">t</text>
+</g>
+<text x="1280.0" y="124.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">64 = 4 groups</text>
+<text x="1280.0" y="148.0" font-family="Arial" font-size="20" font-weight="normal" fill="#8A94A3">× 16 channels</text>
+<path d="M 1118.0 157.0 L 1118.0 189.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1118.0 204.0 L 1109.8 189.0 L 1126.2 189.0 Z" fill="#4E5967"/>
+<g id="dial_moments">
+<rect x="926.0" y="207.0" width="384.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="936.9" y="235.8" font-family="Arial" font-size="24.5" font-weight="bold" fill="#1F2933">Batch moments: source, target</text>
+</g>
+<g id="dial_mix">
+<rect x="926.0" y="252.0" width="384.0" height="40.0" rx="9" fill="#E4CFF3" stroke="#8338A8" stroke-width="2.6"/>
+<text x="939.8" y="280.6" font-family="Arial" font-size="24.0" font-weight="bold" fill="#1F2933">Mix: α · target + (1 − α) · source</text>
+</g>
+<g id="dial_std">
+<rect x="926.0" y="297.0" width="384.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="970.2" y="326.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Standardize per domain</text>
+</g>
+<g id="dial_affine">
+<rect x="926.0" y="342.0" width="384.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="1002.8" y="371.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Shared affine  w, b</text>
+</g>
+<g id="mod_autodial">
+<path d="M 908.0 207 L 908.0 382" fill="none" stroke="#8338A8" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="793.2" y="289.0" font-family="Arial" font-size="22" font-weight="bold" fill="#8338A8">AutoDIAL</text>
+<text x="752.2" y="316.0" font-family="Arial" font-size="22" font-weight="bold" fill="#8338A8">normalization</text>
+<path d="M 1118.0 384.0 L 1118.0 412.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1118.0 412.0 L 1118.0 430.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1118.0 445.0 L 1109.8 430.0 L 1126.2 430.0 Z" fill="#4E5967"/>
+<g id="al_ln1">
+<rect x="956.0" y="448.0" width="324.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="1049.4" y="477.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">LayerNorm</text>
+</g>
+<g id="al_fc1">
+<rect x="956.0" y="493.0" width="324.0" height="40.0" rx="9" fill="#E4CFF3" stroke="#8338A8" stroke-width="2.6"/>
+<text x="1015.1" y="522.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Linear  64 → 128</text>
+</g>
+<g id="al_act">
+<rect x="956.0" y="538.0" width="324.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="1019.5" y="567.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">GELU · Dropout</text>
+</g>
+<g id="al_fc2">
+<rect x="956.0" y="583.0" width="324.0" height="40.0" rx="9" fill="#E4CFF3" stroke="#8338A8" stroke-width="2.6"/>
+<text x="1015.1" y="612.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Linear  128 → 64</text>
+</g>
+<g id="al_ln2">
+<rect x="956.0" y="628.0" width="324.0" height="40.0" rx="9" fill="#DADFE6" stroke="#5F6B7A" stroke-width="2.6"/>
+<text x="1049.4" y="657.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">LayerNorm</text>
+</g>
+<g id="al_scale">
+<rect x="956.0" y="673.0" width="324.0" height="40.0" rx="9" fill="#E4CFF3" stroke="#8338A8" stroke-width="2.6"/>
+<text x="1000.9" y="702.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">× s  (learned scale)</text>
+</g>
+<path d="M 1118.0 716.0 L 1118.0 736.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1118.0 751.0 L 1109.8 736.0 L 1126.2 736.0 Z" fill="#4E5967"/>
+<path d="M 1118.0 412.0 L 940.0 412.0 L 940.0 769.0 L 1085.0 769.0" fill="none" stroke="#8338A8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1100.0 769.0 L 1085.0 777.2 L 1085.0 760.8 Z" fill="#8338A8"/>
+<circle cx="1118.0" cy="412.0" r="5" fill="#8338A8"/>
+<circle cx="1118.0" cy="769.0" r="15" fill="#FFFFFF" stroke="#8338A8" stroke-width="2.6"/>
+<path d="M 1109.8 769.0 L 1126.2 769.0" fill="none" stroke="#8338A8" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1118.0 760.8 L 1118.0 777.2" fill="none" stroke="#8338A8" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="mod_aligner">
+<path d="M 908.0 412 L 908.0 784" fill="none" stroke="#8338A8" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="8 7" stroke-linecap="round"/>
+</g>
+<text x="803.2" y="585.0" font-family="Arial" font-size="22" font-weight="bold" fill="#8338A8">Residual</text>
+<text x="823.0" y="612.0" font-family="Arial" font-size="22" font-weight="bold" fill="#8338A8">aligner</text>
+<path d="M 1118.0 786.0 L 1118.0 823.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 878.0 823.0 L 1358.0 823.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="1118.0" cy="823.0" r="5" fill="#4E5967"/>
+<text x="1132.0" y="811.0" font-family="Arial" font-size="24" font-weight="bold" font-style="italic" fill="#1F2933">f′</text>
+<text x="1145.8" y="817.7" font-family="Arial" font-size="16.3" font-weight="bold" font-style="italic" fill="#1F2933">s</text>
+<text x="1154.8" y="811.0" font-family="Arial" font-size="24" font-weight="bold" font-style="italic" fill="#1F2933">, f′</text>
+<text x="1182.0" y="817.7" font-family="Arial" font-size="16.3" font-weight="bold" font-style="italic" fill="#1F2933">t</text>
+<path d="M 1118.0 823.0 L 1118.0 875.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1118.0 890.0 L 1109.8 875.0 L 1126.2 875.0 Z" fill="#4E5967"/>
+<text x="974.0" y="881.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2F3B4C">Classifier</text>
+<g id="cls_conv">
+<rect x="974.0" y="893.0" width="288.0" height="40.0" rx="9" fill="#C9DAF1" stroke="#2F62A0" stroke-width="2.6"/>
+<text x="985.0" y="920.9" font-family="Arial" font-size="22.0" font-weight="bold" fill="#1F2933">Grouped 1×1 conv (4 × K)</text>
+</g>
+<g id="cls_sum">
+<rect x="974.0" y="938.0" width="288.0" height="40.0" rx="9" fill="#E6E9EE" stroke="#2F3B4C" stroke-width="2.6"/>
+<text x="988.3" y="967.4" font-family="Arial" font-size="26" font-weight="bold" fill="#1F2933">Weighted group sum</text>
+</g>
+<path d="M 1118.0 981.0 L 1118.0 999.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1118.0 1014.0 L 1109.8 999.0 L 1126.2 999.0 Z" fill="#4E5967"/>
+<text x="1109.6" y="1042.0" font-family="Arial" font-size="30" font-weight="bold" fill="#1F2933">ŷ</text>
+<path d="M 1358.0 823.0 L 1358.0 830.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1358.0 845.0 L 1349.8 830.0 L 1366.2 830.0 Z" fill="#4E5967"/>
+<g id="grl">
+<rect x="1310.0" y="846.0" width="96.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4"/>
+<text x="1332.6" y="876.1" font-family="Arial" font-size="24" font-weight="bold" fill="#C0392B">GRL</text>
+</g>
+<path d="M 1358.0 888.0 L 1358.0 897.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1287.2" y="926.0" font-family="Arial" font-size="22" font-weight="bold" fill="#C0392B">Discriminator</text>
+<path d="M 1358.0 933.0 L 1358.0 935.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1358.0 950.0 L 1349.8 935.0 L 1366.2 935.0 Z" fill="#C0392B"/>
+<g id="disc_0">
+<rect x="1270.0" y="953.0" width="176.0" height="40.0" rx="9" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.6"/>
+<text x="1280.4" y="980.9" font-family="Arial" font-size="22" font-weight="bold" fill="#1F2933">Linear 64→128</text>
+</g>
+<g id="disc_1">
+<rect x="1270.0" y="998.0" width="176.0" height="40.0" rx="9" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.6"/>
+<text x="1280.4" y="1025.9" font-family="Arial" font-size="22" font-weight="bold" fill="#1F2933">Linear 128→64</text>
+</g>
+<g id="disc_2">
+<rect x="1270.0" y="1043.0" width="176.0" height="40.0" rx="9" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.6"/>
+<text x="1292.6" y="1070.9" font-family="Arial" font-size="22" font-weight="bold" fill="#1F2933">Linear 64→1</text>
+</g>
+<g id="loss_mmd">
+<rect x="814.0" y="1132.0" width="128.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4" stroke-dasharray="7 5"/>
+<text x="848.4" y="1162.9" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#C0392B">L</text>
+<text x="865.4" y="1170.2" font-family="Arial" font-size="17.7" font-weight="bold" fill="#C0392B">MMD</text>
+</g>
+<g id="loss_ce">
+<rect x="982.0" y="1132.0" width="112.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4" stroke-dasharray="7 5"/>
+<text x="1017.2" y="1162.9" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#C0392B">L</text>
+<text x="1034.2" y="1170.2" font-family="Arial" font-size="17.7" font-weight="bold" fill="#C0392B">CE</text>
+</g>
+<g id="loss_im">
+<rect x="1142.0" y="1132.0" width="112.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4" stroke-dasharray="7 5"/>
+<text x="1179.6" y="1162.9" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#C0392B">L</text>
+<text x="1196.6" y="1170.2" font-family="Arial" font-size="17.7" font-weight="bold" fill="#C0392B">IM</text>
+</g>
+<g id="loss_adv">
+<rect x="1298.0" y="1132.0" width="120.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4" stroke-dasharray="7 5"/>
+<text x="1334.4" y="1162.9" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#C0392B">L</text>
+<text x="1351.4" y="1170.2" font-family="Arial" font-size="17.7" font-weight="bold" fill="#C0392B">adv</text>
+</g>
+<path d="M 878.0 823.0 L 878.0 1115.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 878.0 1130.0 L 869.8 1115.0 L 886.2 1115.0 Z" fill="#C0392B"/>
+<path d="M 1118.0 1054.0 L 1118.0 1068.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1038.0 1068.0 L 1198.0 1068.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1038.0 1068.0 L 1038.0 1115.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1038.0 1130.0 L 1029.8 1115.0 L 1046.2 1115.0 Z" fill="#C0392B"/>
+<path d="M 1198.0 1068.0 L 1198.0 1115.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1198.0 1130.0 L 1189.8 1115.0 L 1206.2 1115.0 Z" fill="#C0392B"/>
+<path d="M 1358.0 1086.0 L 1358.0 1115.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1358.0 1130.0 L 1349.8 1115.0 L 1366.2 1115.0 Z" fill="#C0392B"/>
+<path d="M 878.0 1176.0 L 878.0 1475.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 878.0 1490.0 L 869.8 1475.0 L 886.2 1475.0 Z" fill="#C0392B"/>
+<path d="M 1038.0 1176.0 L 1038.0 1475.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1038.0 1490.0 L 1029.8 1475.0 L 1046.2 1475.0 Z" fill="#C0392B"/>
+<path d="M 1198.0 1176.0 L 1198.0 1475.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1198.0 1490.0 L 1189.8 1475.0 L 1206.2 1475.0 Z" fill="#C0392B"/>
+<path d="M 1358.0 1176.0 L 1358.0 1475.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1358.0 1490.0 L 1349.8 1475.0 L 1366.2 1475.0 Z" fill="#C0392B"/>
+<path d="M 682.0 1573.0 L 698.0 1573.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 713.0 1573.0 L 698.0 1581.2 L 698.0 1564.8 Z" fill="#C0392B"/>
+<g id="panel_c">
+<rect x="16.0" y="1701.0" width="1468.0" height="506.0" rx="26" fill="#F0F7F2" stroke="#1A1A1A" stroke-width="3.2" stroke-dasharray="7 5"/>
+<text x="42.0" y="1747.0" font-family="Arial" font-size="34" font-weight="bold" fill="#1F2933">Two-stage adaptation</text>
+</g>
+<rect x="40.0" y="1785.0" width="1420.0" height="156.0" rx="18" fill="#C0392B" fill-opacity="0.05" stroke="#C0392B" stroke-width="2.2" stroke-dasharray="7 5"/>
+<rect x="64.0" y="1768.0" width="206.0" height="34.0" rx="17" fill="#FFFFFF" stroke="#C0392B" stroke-width="2.2"/>
+<text x="78.0" y="1793.0" font-family="Arial" font-size="22" font-weight="bold" fill="#C0392B">Stage 1 · training</text>
+<rect x="40.0" y="2011.0" width="1420.0" height="172.0" rx="18" fill="#2E8B57" fill-opacity="0.05" stroke="#2E8B57" stroke-width="2.2" stroke-dasharray="7 5"/>
+<rect x="64.0" y="1994.0" width="200.0" height="34.0" rx="17" fill="#FFFFFF" stroke="#2E8B57" stroke-width="2.2"/>
+<text x="78.0" y="2019.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2E8B57">Stage 2 · IM-TTA</text>
+<g id="stage1_input_src">
+<rect x="70.0" y="1835.0" width="136.0" height="42.0" rx="12" fill="#CFE0F5" stroke="#2F6DB5" stroke-width="2.6"/>
+<text x="107.6" y="1865.0" font-family="Arial" font-size="24" font-weight="bold" fill="#1F2933">X</text>
+<text x="123.6" y="1871.7" font-family="Arial" font-size="16.3" font-weight="bold" fill="#1F2933">s</text>
+<text x="132.6" y="1865.0" font-family="Arial" font-size="24" font-weight="bold" fill="#1F2933">, y</text>
+<text x="159.4" y="1871.7" font-family="Arial" font-size="16.3" font-weight="bold" fill="#1F2933">s</text>
+</g>
+<path d="M 208.0 1856.0 L 232.0 1856.0" fill="none" stroke="#2F6DB5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 247.0 1856.0 L 232.0 1864.2 L 232.0 1847.8 Z" fill="#2F6DB5"/>
+<g id="stage1_input_tgt">
+<rect x="70.0" y="1885.0" width="136.0" height="42.0" rx="12" fill="#FADDBA" stroke="#D9822B" stroke-width="2.6"/>
+<text x="127.2" y="1915.0" font-family="Arial" font-size="24" font-weight="bold" fill="#1F2933">X</text>
+<text x="143.2" y="1921.7" font-family="Arial" font-size="16.3" font-weight="bold" fill="#1F2933">t</text>
+</g>
+<path d="M 208.0 1906.0 L 232.0 1906.0" fill="none" stroke="#D9822B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 247.0 1906.0 L 232.0 1914.2 L 232.0 1897.8 Z" fill="#D9822B"/>
+<g id="stage1_ra">
+<rect x="250.0" y="1843.0" width="250.0" height="76.0" rx="13" fill="#C0E6E2" stroke="#1F8A8A" stroke-width="2.6"/>
+<text x="259.9" y="1890.0" font-family="Arial" font-size="21.5" font-weight="bold" fill="#1F2933">Riemannian alignment</text>
+</g>
+<g id="stage1_backbone">
+<rect x="558.0" y="1843.0" width="250.0" height="76.0" rx="13" fill="#E0E4EA" stroke="#4E5967" stroke-width="2.6"/>
+<text x="604.4" y="1875.0" font-family="Arial" font-size="25" font-weight="bold" fill="#1F2933">Backbone (a)</text>
+<text x="595.5" y="1903.0" font-family="Arial" font-size="20" font-weight="bold" fill="#6B7684">all weights trained</text>
+</g>
+<g id="stage1_head">
+<rect x="866.0" y="1843.0" width="290.0" height="76.0" rx="13" fill="#E4CFF3" stroke="#8338A8" stroke-width="2.6"/>
+<text x="893.6" y="1875.0" font-family="Arial" font-size="25" font-weight="bold" fill="#1F2933">Adaptation head (b)</text>
+<text x="930.2" y="1903.0" font-family="Arial" font-size="20" font-weight="bold" fill="#6B7684">all weights and α</text>
+</g>
+<path d="M 503.0 1881.0 L 540.0 1881.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 555.0 1881.0 L 540.0 1889.2 L 540.0 1872.8 Z" fill="#4E5967"/>
+<path d="M 811.0 1881.0 L 848.0 1881.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 863.0 1881.0 L 848.0 1889.2 L 848.0 1872.8 Z" fill="#4E5967"/>
+<path d="M 1159.0 1881.0 L 1183.0 1881.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1198.0 1881.0 L 1183.0 1889.2 L 1183.0 1872.8 Z" fill="#4E5967"/>
+<text x="1211.6" y="1892.0" font-family="Arial" font-size="30" font-weight="bold" fill="#1F2933">ŷ</text>
+<path d="M 1248.0 1881.0 L 1272.0 1881.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1287.0 1881.0 L 1272.0 1889.2 L 1272.0 1872.8 Z" fill="#C0392B"/>
+<g id="stage1_loss">
+<rect x="1290.0" y="1860.0" width="140.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4" stroke-dasharray="7 5"/>
+<text x="1332.8" y="1890.9" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#C0392B">L</text>
+<text x="1349.8" y="1898.2" font-family="Arial" font-size="17.7" font-weight="bold" fill="#C0392B">total</text>
+</g>
+<path d="M 1360.0 1860.0 L 1360.0 1815.0 L 683.0 1815.0 L 683.0 1825.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 683.0 1840.0 L 674.8 1825.0 L 691.2 1825.0 Z" fill="#C0392B"/>
+<path d="M 1011.0 1815.0 L 1011.0 1825.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1011.0 1840.0 L 1002.8 1825.0 L 1019.2 1825.0 Z" fill="#C0392B"/>
+<text x="1275.8" y="1805.0" font-family="Arial" font-size="22" font-weight="bold" fill="#C0392B">update</text>
+<g id="stage2_input_tgt">
+<rect x="70.0" y="2050.0" width="136.0" height="42.0" rx="12" fill="#FADDBA" stroke="#D9822B" stroke-width="2.6"/>
+<text x="127.2" y="2080.0" font-family="Arial" font-size="24" font-weight="bold" fill="#1F2933">X</text>
+<text x="143.2" y="2086.7" font-family="Arial" font-size="16.3" font-weight="bold" fill="#1F2933">t</text>
+</g>
+<path d="M 208.0 2071.0 L 232.0 2071.0" fill="none" stroke="#D9822B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 247.0 2071.0 L 232.0 2079.2 L 232.0 2062.8 Z" fill="#D9822B"/>
+<g id="stage2_ra">
+<rect x="250.0" y="2033.0" width="250.0" height="76.0" rx="13" fill="#C0E6E2" stroke="#1F8A8A" stroke-width="2.6"/>
+<text x="259.9" y="2080.0" font-family="Arial" font-size="21.5" font-weight="bold" fill="#1F2933">Riemannian alignment</text>
+</g>
+<g id="stage2_backbone">
+<rect x="558.0" y="2033.0" width="250.0" height="76.0" rx="13" fill="#E4F5EB" stroke="#2E8B57" stroke-width="2.6"/>
+<text x="604.4" y="2065.0" font-family="Arial" font-size="25" font-weight="bold" fill="#1F2933">Backbone (a)</text>
+<text x="583.2" y="2093.0" font-family="Arial" font-size="20" font-weight="bold" fill="#2E8B57">only BN γ, β updated</text>
+</g>
+<g id="stage2_head">
+<rect x="866.0" y="2033.0" width="290.0" height="76.0" rx="13" fill="#E4F5EB" stroke="#2E8B57" stroke-width="2.6"/>
+<text x="893.6" y="2065.0" font-family="Arial" font-size="25" font-weight="bold" fill="#1F2933">Adaptation head (b)</text>
+<text x="875.8" y="2093.0" font-family="Arial" font-size="20" font-weight="bold" fill="#2E8B57">AutoDIAL stats re-estimated</text>
+</g>
+<path d="M 503.0 2071.0 L 540.0 2071.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 555.0 2071.0 L 540.0 2079.2 L 540.0 2062.8 Z" fill="#4E5967"/>
+<path d="M 811.0 2071.0 L 848.0 2071.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 863.0 2071.0 L 848.0 2079.2 L 848.0 2062.8 Z" fill="#4E5967"/>
+<path d="M 1159.0 2071.0 L 1183.0 2071.0" fill="none" stroke="#4E5967" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1198.0 2071.0 L 1183.0 2079.2 L 1183.0 2062.8 Z" fill="#4E5967"/>
+<text x="1208.2" y="2082.0" font-family="Arial" font-size="30" font-weight="bold" fill="#1F2933">ŷ</text>
+<text x="1225.0" y="2090.4" font-family="Arial" font-size="20.4" font-weight="bold" fill="#1F2933">t</text>
+<path d="M 1248.0 2071.0 L 1286.0 2071.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1301.0 2071.0 L 1286.0 2079.2 L 1286.0 2062.8 Z" fill="#C0392B"/>
+<g id="stage2_loss">
+<rect x="1304.0" y="2050.0" width="112.0" height="42.0" rx="21.0" fill="#F8D2CE" stroke="#C0392B" stroke-width="2.4" stroke-dasharray="7 5"/>
+<text x="1341.6" y="2080.9" font-family="Arial" font-size="26" font-weight="bold" font-style="italic" fill="#C0392B">L</text>
+<text x="1358.6" y="2088.2" font-family="Arial" font-size="17.7" font-weight="bold" fill="#C0392B">IM</text>
+</g>
+<path d="M 1360.0 2092.0 L 1360.0 2139.0 L 683.0 2139.0 L 683.0 2127.0" fill="none" stroke="#2E8B57" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 683.0 2112.0 L 691.2 2127.0 L 674.8 2127.0 Z" fill="#2E8B57"/>
+<text x="1259.5" y="2167.0" font-family="Arial" font-size="22" font-weight="bold" fill="#2E8B57">×5 steps</text>
+<path d="M 683.0 1922.0 L 683.0 2015.0" fill="none" stroke="#8A94A3" stroke-width="2.2" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 683.0 2030.0 L 674.8 2015.0 L 691.2 2015.0 Z" fill="#8A94A3"/>
+<path d="M 1011.0 1922.0 L 1011.0 2015.0" fill="none" stroke="#8A94A3" stroke-width="2.2" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1011.0 2030.0 L 1002.8 2015.0 L 1019.2 2015.0 Z" fill="#8A94A3"/>
+<text x="1025.0" y="1984.0" font-family="Arial" font-size="22" font-weight="bold" fill="#8A94A3">weights</text>
+<path d="M 700.0 1739.0 L 735.0 1739.0" fill="none" stroke="#2F6DB5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 750.0 1739.0 L 735.0 1747.2 L 735.0 1730.8 Z" fill="#2F6DB5"/>
+<text x="762.0" y="1747.0" font-family="Arial" font-size="22" font-weight="bold" fill="#1F2933">source</text>
+<path d="M 872.0 1739.0 L 907.0 1739.0" fill="none" stroke="#D9822B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 922.0 1739.0 L 907.0 1747.2 L 907.0 1730.8 Z" fill="#D9822B"/>
+<text x="934.0" y="1747.0" font-family="Arial" font-size="22" font-weight="bold" fill="#1F2933">target</text>
+<path d="M 1044.0 1739.0 L 1079.0 1739.0" fill="none" stroke="#C0392B" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1094.0 1739.0 L 1079.0 1747.2 L 1079.0 1730.8 Z" fill="#C0392B"/>
+<text x="1106.0" y="1747.0" font-family="Arial" font-size="22" font-weight="bold" fill="#1F2933">loss</text>
+<path d="M 1216.0 1739.0 L 1251.0 1739.0" fill="none" stroke="#2E8B57" stroke-width="2.6" stroke-dasharray="10 8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 1266.0 1739.0 L 1251.0 1747.2 L 1251.0 1730.8 Z" fill="#2E8B57"/>
+<text x="1278.0" y="1747.0" font-family="Arial" font-size="22" font-weight="bold" fill="#1F2933">TTA update</text>
+</svg>
