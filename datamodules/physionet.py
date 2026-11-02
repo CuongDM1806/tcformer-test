@@ -10,6 +10,17 @@ from .base import BaseDataModule
 from utils.load_physionet import load_physionet
 
 
+def _split_target_by_class(y, adaptation_fraction):
+    """Give each class's earlier trials to adaptation and later ones to testing."""
+    if not 0.0 < adaptation_fraction < 1.0:
+        raise ValueError("target_adaptation_fraction must be between 0 and 1.")
+    adaptation = np.concatenate([
+        indices[: int(len(indices) * adaptation_fraction)]
+        for indices in (np.flatnonzero(y == label) for label in np.unique(y))
+    ])
+    return np.sort(adaptation), np.setdiff1d(np.arange(len(y)), adaptation)
+
+
 class PhysioNetMILOSO(BaseDataModule):
     """PhysioNet EEGMMIDB motor-imagery LOSO benchmark (subjects 1..109).
 
@@ -203,9 +214,20 @@ class PhysioNetMILOSO(BaseDataModule):
         X_target, y_target = subject_arrays[self.subject_id]
         X_target = X_target.copy()
         y_target = y_target.copy()
+        X_test, y_test = X_target, y_target
+        # Optional check protocol: keep part of the target away from Stage 1 so
+        # IM-TTA and scoring see trials the model has not adapted to. By default
+        # the complete target subject serves both roles.
+        adaptation_fraction = self.preprocessing_dict.get("target_adaptation_fraction")
+        if adaptation_fraction is not None:
+            adaptation_indices, test_indices = _split_target_by_class(
+                y_target, float(adaptation_fraction)
+            )
+            X_test, y_test = X_target[test_indices], y_target[test_indices]
+            X_target = X_target[adaptation_indices]
         if self.preprocessing_dict.get("riemannian_alignment", False):
             # The reference uses target EEG only; target labels are not needed.
-            X_target = BaseDataModule._riemannian_align_many(X_target)[0]
+            X_target, X_test = BaseDataModule._riemannian_align_many(X_target, X_test)
 
         X_train = np.concatenate([item[0] for item in train_arrays], axis=0)
         y_train = np.concatenate([item[1] for item in train_arrays], axis=0)
@@ -213,14 +235,14 @@ class PhysioNetMILOSO(BaseDataModule):
         y_val = np.concatenate([item[1] for item in val_arrays], axis=0)
 
         if self.preprocessing_dict.get("z_scale", False):
-            X_train, X_val, X_target = BaseDataModule._z_scale_many(
-                X_train, X_val, X_target
+            X_train, X_val, X_target, X_test = BaseDataModule._z_scale_many(
+                X_train, X_val, X_target, X_test
             )
 
         self.train_dataset = BaseDataModule._make_tensor_dataset(X_train, y_train)
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
-        self.test_dataset = BaseDataModule._make_tensor_dataset(X_target, y_target)
+        self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
         self.all_target_dataset = None
         self._setup_complete = True
         self.dataset = None
@@ -228,7 +250,7 @@ class PhysioNetMILOSO(BaseDataModule):
         print(
             f"PhysioNet LOSO target S{self.subject_id:03d} | "
             f"source_subjects={len(source_ids)} | train={len(y_train)} | "
-            f"val={len(y_val)} | target_unlabeled/test={len(y_target)}",
+            f"val={len(y_val)} | target_unlabeled={len(X_target)} | test={len(y_test)}",
             flush=True,
         )
 

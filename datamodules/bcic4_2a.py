@@ -215,7 +215,13 @@ class BCICIV2aLOSO(BCICIV2a):
 
         self.train_dataset = BaseDataModule._make_tensor_dataset(X, y)
         self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
-        self.target_dataset = BaseDataModule._make_unlabeled_dataset(X_target)
+        # Optional check protocol: let Stage 1 also adapt to the evaluation
+        # session, as PhysioNet does. The RA reference stays on session T so that
+        # only the Stage 1 target changes.
+        stage1_target = X_target
+        if self.preprocessing_dict.get("stage1_target_includes_test", False):
+            stage1_target = np.concatenate((X_target, X_test), axis=0)
+        self.target_dataset = BaseDataModule._make_unlabeled_dataset(stage1_target)
         self.test_dataset = BaseDataModule._make_tensor_dataset(X_test, y_test)
         self.all_target_dataset = BaseDataModule._make_tensor_dataset(
             np.concatenate((X_target, X_test), axis=0),
