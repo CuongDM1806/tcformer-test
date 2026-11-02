@@ -232,6 +232,23 @@ class PhysioNetMILOSO(BaseDataModule):
             flush=True,
         )
 
+    def test_dataloader(self) -> DataLoader:
+        """Serve the whole target subject as one batch.
+
+        Trials are stored run by run (left/right hand, then both hands/feet).
+        IM-TTA makes BatchNorm use batch statistics, so smaller unshuffled
+        batches would each hold mostly two classes and skew those statistics.
+        """
+        num_workers = self.preprocessing_dict.get("test_num_workers", 0)
+        return DataLoader(
+            self.test_dataset,
+            batch_size=len(self.test_dataset),
+            num_workers=num_workers,
+            pin_memory=True,
+            persistent_workers=num_workers > 0,
+            **({"prefetch_factor": 2} if num_workers > 0 else {}),
+        )
+
     def val_dataloader(self) -> DataLoader:
         """Validate only on held-out labeled source trials.
 

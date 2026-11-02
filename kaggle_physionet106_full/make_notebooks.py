@@ -23,7 +23,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 
 # Every variant uses 54 trials per step and 2 accumulated steps (effective
-# batch 108), so the optimizer steps and the IM-TTA batches are identical.
+# batch 108), so the optimizer steps are identical. IM-TTA and testing use the
+# whole target subject as one batch (see PhysioNetMILOSO.test_dataloader).
 NO_DA_MODEL = {'feature_alignment': 'none', 'target_im_weight': 0.0, 'adversarial_weight': 0.0,
                'mmd_weight': 0.0, 'temporal_mmd_weight': 0.0}
 VARIANTS = {
@@ -34,6 +35,9 @@ VARIANTS = {
     'no_da': dict(folder='kaggle_physionet106_no_da', label='no DA: RA + IM-TTA',
                   ra=True, da=False, model=NO_DA_MODEL, estimate_h=3.0),
 }
+
+CHECK = dict(folder='kaggle_physionet106_full_batch_check', subjects=[90, 95, 96, 97],
+             run_tag='physionet_4cls_full_batch_check')
 
 TEMPLATE = r'''# PhysioNet MI SSM-DAN LOSO, variant __VARIANT__ (__LABEL__) | Kaggle job __JOB__/__TOTAL__ | targets __TARGETS__
 # Settings: Accelerator = GPU T4 x2, Internet = On. Run with "Save Version -> Save & Run All".
@@ -207,8 +211,7 @@ def worker(gpu, jobs):
         with zipfile.ZipFile(f'{archive}.part', 'w', zipfile.ZIP_DEFLATED) as zf:
             for result_dir in (REPO_PATH / 'results').glob(f'*_GPU{gpu}_*'):
                 for path in result_dir.rglob('*'):
-                    # Checkpoints are large and not needed for the results.
-                    if path.is_file() and path.suffix != '.ckpt':
+                    if path.is_file():
                         zf.write(path, path.relative_to(REPO_PATH))
         os.replace(f'{archive}.part', archive)
         fold_hours.append((time.monotonic() - fold_start) / 3600)
@@ -317,6 +320,26 @@ def main():
             path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
                             encoding='utf-8')
         print(f'{variant}: {len(RANGES)} notebooks, {folds} folds, {SUBJECTS_PER_JOB} subjects per job')
+
+    # Short full-model run to check IM-TTA with one whole-target test batch.
+    folder = REPO / CHECK['folder']
+    folder.mkdir(exist_ok=True)
+    spec = VARIANTS['full']
+    code = (TEMPLATE
+            .replace('__VARIANT__', 'full')
+            .replace('__LABEL__', spec['label'])
+            .replace('__ESTIMATE__', str(spec['estimate_h']))
+            .replace('__RA__', str(spec['ra']))
+            .replace('__DA__', str(spec['da']))
+            .replace('__MODEL__', repr(spec['model']))
+            .replace('__JOB__', '1')
+            .replace('__TOTAL__', '1')
+            .replace('__TARGETS__', ', '.join(f'S{s}' for s in CHECK['subjects']))
+            .replace('__RUN_TAG__', CHECK['run_tag'])
+            .replace('__TARGET_LIST__', repr(CHECK['subjects'])))
+    (folder / f"{CHECK['run_tag']}.ipynb").write_text(
+        json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+    print(f"check: {CHECK['run_tag']}, targets {CHECK['subjects']}")
 
 
 if __name__ == '__main__':
