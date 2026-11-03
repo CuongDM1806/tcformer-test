@@ -73,6 +73,9 @@ MNE_DATA.mkdir(parents=True, exist_ok=True)
 cached = sorted(Path('/kaggle/input').rglob('openbmi_S*.npz'))
 missing = sorted(set(range(1, 55)) - {int(path.stem[-2:]) for path in cached})
 if missing:
+    print('Contents of /kaggle/input (depth 3):', flush=True)
+    for path in sorted(Path('/kaggle/input').glob('*/*/*'))[:40] or sorted(Path('/kaggle/input').glob('**/*'))[:40]:
+        print('  ', path, flush=True)
     raise FileNotFoundError(f'OpenBMI cache incomplete, missing subjects {missing}: '
                             'attach the Dataset openbmi-dataset-cuong via "Add Input".')
 print(f'Using {len(cached)} OpenBMI cache files from {cached[0].parent}', flush=True)
