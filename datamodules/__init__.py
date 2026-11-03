@@ -5,3 +5,4 @@ from .hgd import HighGamma, HighGammaLOSO
 from .physionet import PhysioNetMILOSO
 from .reh_mi import REH_MI
 from .zhou2016 import Zhou2016LOSO
+from .openbmi import OpenBMIMILOSO

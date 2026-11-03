@@ -383,7 +383,7 @@ def parse_arguments():
     )        
     parser.add_argument("--dataset", type=str, default="bcic2a", 
         help="Name of the dataset to use."
-                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, reh_mi, bcic3"
+                        "Options: bcic2a, bcic2b, hgd, physionet, zhou2016, openbmi, reh_mi, bcic3"
     )
     parser.add_argument("--loso", action="store_true", default=False, 
         help="Enable subject-independent (LOSO) mode"
@@ -418,6 +418,10 @@ def run():
         elif args.dataset == "zhou2016":
             config["max_epochs"] = config.get(
                 "max_epochs_loso_zhou2016", config["max_epochs_loso"]
+            )
+        elif args.dataset == "openbmi":
+            config["max_epochs"] = config.get(
+                "max_epochs_loso_openbmi", config["max_epochs_loso"]
             )
         else:
             config["max_epochs"] = config["max_epochs_loso"]
