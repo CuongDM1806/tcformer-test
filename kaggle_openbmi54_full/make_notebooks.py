@@ -15,7 +15,8 @@ TEMPLATE = r'''# OpenBMI (Lee2019_MI) SSM-DAN LOSO, full model (RA + AutoDIAL + 
 # Settings: Accelerator = GPU T4 x2, Internet = On. Run with "Save Version -> Save & Run All".
 # Two folds train at the same time, one per GPU; each fold has its own log file.
 # Every fold trains on the other 53 subjects and reports the full model and the same weights without IM-TTA (summary.csv).
-# Data: attach the private Kaggle Dataset openbmi-dataset-cuong via "Add Input" (54 preprocessed openbmi_S*.npz files).
+# Data: Kaggle Dataset openbmi-dataset-cuong (54 preprocessed openbmi_S*.npz files). Attach it via "Add Input"
+# (private: the owner account, or an account it is shared with); if it is public it is downloaded instead.
 # Resume: if folds are left over, add this notebook's previous Output via
 # "Add Input -> Your Work -> Notebook Output" and run again; finished folds are skipped.
 import codecs, os, queue, select, shutil, subprocess, sys, threading, time, zipfile
@@ -36,6 +37,8 @@ FIRST_FOLD_ESTIMATE_H = 1.5  # used until a fold has finished in this run
 REPO_PATH = Path('/tmp/repo')  # keep the clone and venv out of the saved output
 MNE_DATA = Path('/tmp/mne_data')
 OPENBMI_CACHE = Path('/tmp/openbmi_cache')  # writable cache dir; the attached Dataset is read from /kaggle/input
+DATASET_REF = 'nguyncuongv186/openbmi-dataset-cuong'
+DOWNLOADED = Path('/tmp/openbmi_dataset')  # used only when the Dataset is not attached
 OUTPUT = Path(f'/kaggle/working/{RUN_TAG}')
 OUTPUT.mkdir(parents=True, exist_ok=True)
 
@@ -66,18 +69,34 @@ environment = os.environ.copy()
 environment.update({'PYTHONUNBUFFERED': '1', 'PYTORCH_CUDA_ALLOC_CONF': 'expandable_segments:True',
                     'MPLBACKEND': 'Agg', 'MNE_DATA': str(MNE_DATA),
                     'MNE_DATASETS_LEE2019_MI_PATH': str(MNE_DATA),
-                    'OPENBMI_CACHE_DIR': str(OPENBMI_CACHE), 'OPENBMI_CACHE_INPUT': '/kaggle/input'})
+                    'OPENBMI_CACHE_DIR': str(OPENBMI_CACHE), 'OPENBMI_CACHE_INPUT': f'/kaggle/input{os.pathsep}{DOWNLOADED}'})
 MNE_DATA.mkdir(parents=True, exist_ok=True)
 
-# The preprocessed OpenBMI cache must be attached; downloading the raw 61 GB is not done here.
-cached = sorted(Path('/kaggle/input').rglob('openbmi_S*.npz'))
-missing = sorted(set(range(1, 55)) - {int(path.stem[-2:]) for path in cached})
+# Read the preprocessed OpenBMI cache; the raw 61 GB is never downloaded here.
+def find_cache():
+    cached = [path for root in (Path('/kaggle/input'), DOWNLOADED) if root.is_dir()
+              for path in sorted(root.rglob('openbmi_S*.npz'))]
+    return cached, sorted(set(range(1, 55)) - {int(path.stem[-2:]) for path in cached})
+
+
+cached, missing = find_cache()
+if missing:
+    # Not attached: the public download API works only if the Dataset is public.
+    archive = Path('/tmp/openbmi_dataset.zip')
+    fetched = subprocess.run(['curl', '-fL', '--retry', '3', '-o', str(archive),
+                              f'https://www.kaggle.com/api/v1/datasets/download/{DATASET_REF}'])
+    if fetched.returncode == 0:
+        run(['unzip', '-o', '-q', archive, '-d', DOWNLOADED])
+        archive.unlink()
+        cached, missing = find_cache()
+    else:
+        print(f'{DATASET_REF} is not attached and could not be downloaded (private?).', flush=True)
 if missing:
     print('Contents of /kaggle/input (depth 3):', flush=True)
     for path in sorted(Path('/kaggle/input').glob('*/*/*'))[:40] or sorted(Path('/kaggle/input').glob('**/*'))[:40]:
         print('  ', path, flush=True)
     raise FileNotFoundError(f'OpenBMI cache incomplete, missing subjects {missing}: '
-                            'attach the Dataset openbmi-dataset-cuong via "Add Input".')
+                            'attach the Dataset openbmi-dataset-cuong via "Add Input" (share it with this account if it is private).')
 print(f'Using {len(cached)} OpenBMI cache files from {cached[0].parent}', flush=True)
 
 # ---- Two folds in parallel, one per GPU; each fold is archived as soon as it ends ----
