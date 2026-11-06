@@ -1,20 +1,46 @@
-"""Generate the Kaggle notebooks for the full SSM-DAN OpenBMI (Lee2019_MI) LOSO run.
+"""Generate the Kaggle notebooks for the SSM-DAN OpenBMI (Lee2019_MI) LOSO runs.
 
-Three jobs cover the 54 targets (S1-S18, S19-S37, S38-S54). Each trains two folds at a
-time on Kaggle T4 x2, on the other 53 subjects, and scores every fold with IM-TTA
-(test_*) and with the same weights without it (no_tta_*).
+Three variants share one code branch and differ only in config overrides
+(same definitions as kaggle_physionet106_full/make_notebooks.py):
+  full   RA + Stage-1 DA (AutoDIAL, target InfoMax, adversarial, MMD) + IM-TTA
+         3 jobs: S1-S18, S19-S37, S38-S54 (kaggle_openbmi54_full)
+  no_ra  the full model without Riemannian alignment
+         5 jobs of 12 targets: S1-S12, ..., S49-S54 (kaggle_openbmi54_no_ra)
+  no_da  RA + IM-TTA, every Stage-1 DA component removed (the paper's w/o DA)
+         5 jobs of 12 targets (kaggle_openbmi54_no_da)
+Each job trains two folds at a time on Kaggle T4 x2, on the other 53 subjects, and scores
+every fold with IM-TTA (test_*) and with the same weights without it (no_tta_*).
 Run:  python kaggle_openbmi54_full/make_notebooks.py
 """
 import json
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-JOBS = [(1, 18), (19, 37), (38, 54)]
+REPO = HERE.parent
 
-TEMPLATE = r'''# OpenBMI (Lee2019_MI) SSM-DAN LOSO, full model (RA + AutoDIAL + IM-TTA) | Kaggle job __JOB__/__TOTAL__ | targets __TARGETS__
+
+def chunks(first, last, size):
+    return [(start, min(start + size - 1, last)) for start in range(first, last + 1, size)]
+
+
+NO_DA_MODEL = {'feature_alignment': 'none', 'target_im_weight': 0.0, 'adversarial_weight': 0.0,
+               'mmd_weight': 0.0, 'temporal_mmd_weight': 0.0}
+VARIANTS = {
+    'full': dict(title='full model (RA + AutoDIAL + IM-TTA)', name='full model',
+                 label='RA + AutoDIAL + IM-TTA', jobs=[(1, 18), (19, 37), (38, 54)],
+                 ra=True, da=True, model={}),
+    'no_ra': dict(title='no RA (AutoDIAL + IM-TTA)', name='no-RA variant',
+                  label='no RA: AutoDIAL + IM-TTA', jobs=chunks(1, 54, 12),
+                  ra=False, da=True, model={}),
+    'no_da': dict(title='no DA (RA + IM-TTA)', name='no-DA variant',
+                  label='no DA: RA + IM-TTA', jobs=chunks(1, 54, 12),
+                  ra=True, da=False, model=NO_DA_MODEL),
+}
+
+TEMPLATE = r'''# OpenBMI (Lee2019_MI) SSM-DAN LOSO, __TITLE__ | Kaggle job __JOB__/__TOTAL__ | targets __TARGETS__
 # Settings: Accelerator = GPU T4 x2, Internet = On. Run with "Save Version -> Save & Run All".
 # Two folds train at the same time, one per GPU; each fold has its own log file.
-# Every fold trains on the other 53 subjects and reports the full model and the same weights without IM-TTA (summary.csv).
+# Every fold trains on the other 53 subjects and reports the __NAME__ and the same weights without IM-TTA (summary.csv).
 # Data: Kaggle Dataset openbmi-dataset-cuong (54 preprocessed openbmi_S*.npz files). Attach it via "Add Input"
 # (private: the owner account, or an account it is shared with); if it is public it is downloaded instead.
 # Resume: if folds are left over, add this notebook's previous Output via
@@ -33,7 +59,7 @@ GPUS = [0, 1]              # one fold per GPU at a time
 EPOCHS = 125               # max_epochs_loso_openbmi in the config; batch size 48 as configured
 TIME_BUDGET_H = 11.5       # stop starting new folds so the version ends before Kaggle's 12 h limit
 FIRST_FOLD_ESTIMATE_H = 1.5  # used until a fold has finished in this run
-
+__SETTINGS__
 REPO_PATH = Path('/tmp/repo')  # keep the clone and venv out of the saved output
 MNE_DATA = Path('/tmp/mne_data')
 OPENBMI_CACHE = Path('/tmp/openbmi_cache')  # writable cache dir; the attached Dataset is read from /kaggle/input
@@ -159,7 +185,7 @@ def worker(gpu, jobs):
             "import yaml; from pathlib import Path; "
             "c=yaml.safe_load(Path('configs/hada_tcformer.yaml').read_text()); "
             f"c['subject_ids']=[{subject}]; c['max_epochs_loso_openbmi']={EPOCHS}; "
-            "c['evaluate_without_im_tta']=True; "
+            __OVERRIDE__"c['evaluate_without_im_tta']=True; "
             "c['log_every_n_epochs']=5; c['enable_progress_bar']=False; "
             "c['model_kwargs']['log_every_n_batches']=0; "
             f"Path('configs/{config_name}.yaml').write_text(yaml.safe_dump(c, sort_keys=False))"
@@ -170,7 +196,7 @@ def worker(gpu, jobs):
             shutil.rmtree(old, ignore_errors=True)
         with print_lock:
             print(f'===== {prefix} {RUN_TAG} | seed {seed} | epochs {EPOCHS} | '
-                  'RA + AutoDIAL + IM-TTA =====', flush=True)
+                  '__LABEL__ =====', flush=True)
         code = stream([PYTHON, '-u', 'train_pipeline.py', '--model', config_name,
                        '--dataset', DATASET, '--loso', '--gpu_id', gpu, '--seed', seed],
                       OUTPUT / f'{fold}.log', prefix)
@@ -220,7 +246,7 @@ for thread in threads:
 for thread in threads:
     thread.join()
 
-# ---- Summary of this job: full model and the same weights without IM-TTA ----
+# ---- Summary of this job: __NAME__ and the same weights without IM-TTA ----
 import json
 rows = []
 for archive in sorted(OUTPUT.glob('seed*_S*_results.zip')):
@@ -265,20 +291,45 @@ def notebook(code):
     }
 
 
+def settings(spec):
+    """Config overrides of an ablation; the full model keeps the configured defaults."""
+    if spec['ra'] and spec['da'] and not spec['model']:
+        return '', ''
+    block = (f"# Ablation: {spec['label']}.\n"
+             f"DOMAIN_ADAPTATION = {spec['da']}\n"
+             f"PREPROCESSING = {{'riemannian_alignment': {spec['ra']}}}\n"
+             f"MODEL_OVERRIDES = {spec['model']!r}\n")
+    override = ("f\"c['domain_adaptation']={DOMAIN_ADAPTATION}; \"\n"
+                "            f\"c['model_kwargs'].update({MODEL_OVERRIDES!r}); \"\n"
+                "            f\"c['preprocessing'][{DATASET!r}].update({PREPROCESSING!r}); \"\n"
+                "            ")
+    return block, override
+
+
 def main():
-    for old in HERE.glob('job*.ipynb'):
-        old.unlink()
-    for index, (first, last) in enumerate(JOBS, start=1):
-        code = (TEMPLATE
-                .replace('__JOB__', str(index))
-                .replace('__TOTAL__', str(len(JOBS)))
-                .replace('__TARGETS__', f'S{first}-S{last}')
-                .replace('__RUN_TAG__', f'openbmi_full_s{first:03d}-s{last:03d}')
-                .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
-        path = HERE / f'job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
-        path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
-                        encoding='utf-8')
-        print(f'wrote {path.name}')
+    for variant, spec in VARIANTS.items():
+        folder = REPO / f'kaggle_openbmi54_{variant}'
+        folder.mkdir(exist_ok=True)
+        for old in folder.glob('job*.ipynb'):
+            old.unlink()
+        block, override = settings(spec)
+        jobs = spec['jobs']
+        for index, (first, last) in enumerate(jobs, start=1):
+            code = (TEMPLATE
+                    .replace('__TITLE__', spec['title'])
+                    .replace('__NAME__', spec['name'])
+                    .replace('__LABEL__', spec['label'])
+                    .replace('__SETTINGS__', block)
+                    .replace('__OVERRIDE__', override)
+                    .replace('__JOB__', str(index))
+                    .replace('__TOTAL__', str(len(jobs)))
+                    .replace('__TARGETS__', f'S{first}-S{last}')
+                    .replace('__RUN_TAG__', f'openbmi_{variant}_s{first:03d}-s{last:03d}')
+                    .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
+            path = folder / f'job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
+            path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
+                            encoding='utf-8')
+            print(f'wrote {path.relative_to(REPO)}')
 
 
 if __name__ == '__main__':
