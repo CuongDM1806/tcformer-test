@@ -7,7 +7,7 @@ Three variants share one code branch and differ only in config overrides
   no_ra  the full model without Riemannian alignment
          5 jobs of 12 targets: S1-S12, ..., S49-S54 (kaggle_openbmi54_no_ra)
   no_da  RA + IM-TTA, every Stage-1 DA component removed (the paper's w/o DA)
-         5 jobs of 12 targets (kaggle_openbmi54_no_da)
+         4 jobs of 13-14 targets: S1-S13, S14-S27, S28-S41, S42-S54 (kaggle_openbmi54_no_da)
 Each job trains two folds at a time on Kaggle T4 x2, on the other 53 subjects, and scores
 every fold with IM-TTA (test_*) and with the same weights without it (no_tta_*).
 Run:  python kaggle_openbmi54_full/make_notebooks.py
@@ -33,7 +33,7 @@ VARIANTS = {
                   label='no RA: AutoDIAL + IM-TTA', jobs=chunks(1, 54, 12),
                   ra=False, da=True, model={}),
     'no_da': dict(title='no DA (RA + IM-TTA)', name='no-DA variant',
-                  label='no DA: RA + IM-TTA', jobs=chunks(1, 54, 12),
+                  label='no DA: RA + IM-TTA', jobs=[(1, 13), (14, 27), (28, 41), (42, 54)],
                   ra=True, da=False, model=NO_DA_MODEL),
 }
 
