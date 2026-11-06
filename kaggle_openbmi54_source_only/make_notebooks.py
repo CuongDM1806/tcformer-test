@@ -4,7 +4,7 @@ Same backbone, data protocol, epochs and batch size as kaggle_openbmi54_full, wi
 target-side component switched off: no Riemannian alignment, no domain adaptation
 (no target batches, AutoDIAL, InfoMax, adversarial or MMD losses) and no IM-TTA.
 The target subject is only seen at test time (session 2), with source BatchNorm statistics.
-Four jobs cover the 54 targets (S1-S18, then 12 targets per job: S19-S30, S31-S42, S43-S54),
+Three jobs cover the 54 targets, split as in kaggle_openbmi54_full (S1-S18, S19-S37, S38-S54),
 two folds at a time on T4 x2.
 Run:  python kaggle_openbmi54_source_only/make_notebooks.py
 """
@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-JOBS = [(1, 18), (19, 30), (31, 42), (43, 54)]
+JOBS = [(1, 18), (19, 37), (38, 54)]
 
 TEMPLATE = r'''# OpenBMI (Lee2019_MI) SSM-DAN LOSO, source-only (no RA, no DA, no IM-TTA) | Kaggle job __JOB__/__TOTAL__ | targets __TARGETS__
 # Settings: Accelerator = GPU T4 x2, Internet = On. Run with "Save Version -> Save & Run All".
