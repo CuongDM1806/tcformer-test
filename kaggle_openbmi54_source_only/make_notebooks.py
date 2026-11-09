@@ -272,7 +272,7 @@ def notebook(code):
 
 
 def main():
-    for old in HERE.glob('job*.ipynb'):
+    for old in [*HERE.glob('job*.ipynb'), *HERE.glob('openbmi54_*.ipynb')]:
         old.unlink()
     for index, (first, last) in enumerate(JOBS, start=1):
         code = (TEMPLATE
@@ -281,7 +281,7 @@ def main():
                 .replace('__TARGETS__', f'S{first}-S{last}')
                 .replace('__RUN_TAG__', f'openbmi_source_only_s{first:03d}-s{last:03d}')
                 .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
-        path = HERE / f'job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
+        path = HERE / f'openbmi54_source_only_job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
         path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
                         encoding='utf-8')
         print(f'wrote {path.name}')

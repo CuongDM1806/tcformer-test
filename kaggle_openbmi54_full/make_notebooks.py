@@ -310,7 +310,7 @@ def main():
     for variant, spec in VARIANTS.items():
         folder = REPO / f'kaggle_openbmi54_{variant}'
         folder.mkdir(exist_ok=True)
-        for old in folder.glob('job*.ipynb'):
+        for old in [*folder.glob('job*.ipynb'), *folder.glob('openbmi54_*.ipynb')]:
             old.unlink()
         block, override = settings(spec)
         jobs = spec['jobs']
@@ -326,7 +326,7 @@ def main():
                     .replace('__TARGETS__', f'S{first}-S{last}')
                     .replace('__RUN_TAG__', f'openbmi_{variant}_s{first:03d}-s{last:03d}')
                     .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
-            path = folder / f'job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
+            path = folder / f'openbmi54_{variant}_job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
             path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
                             encoding='utf-8')
             print(f'wrote {path.relative_to(REPO)}')
