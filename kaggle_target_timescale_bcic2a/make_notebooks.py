@@ -2,10 +2,8 @@
 
 Each selective-SSM block gets a per-channel offset of its step-size pre-activation that is
 applied only to target-subject trials (target_timescale in configs/hada_tcformer.yaml).
-Two notebooks, nine LOSO folds each, everything else as in the paper's SSM-DAN run:
-  pilot   offsets stay at zero in Stage 1, so training equals SSM-DAN; only test-time
-          adaptation differs. Reproduces SSM-DAN and checks TTA on the offsets alone.
-  stage1  offsets are learned in Stage 1 from the target-side losses (no labels).
+One notebook, nine LOSO folds, everything else as in the paper's SSM-DAN run: the offsets
+are learned in Stage 1 from the target-side losses (no labels) and then adapted by IM-TTA.
 Every fold scores the same weights with four test-time variants: none (no IM-TTA),
 batchnorm (SSM-DAN's IM-TTA), timescale (offsets only) and both. The learned time
 scales are then compared with each subject's mu/beta rhythms (analysis/timescale_physiology.py).
@@ -17,8 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 VARIANTS = {
-    'pilot': dict(stage1=False, label='offsets fixed at zero in Stage 1 (= SSM-DAN training), TTA variants'),
-    'stage1': dict(stage1=True, label='offsets learned in Stage 1, TTA variants'),
+    'stage1': dict(stage1=True, label='offsets learned in Stage 1, then IM-TTA'),
 }
 
 TEMPLATE = r'''# SSM-DAN target time-scale adaptation | BCI IV-2a LOSO, 9 targets | variant __VARIANT__: __LABEL__
