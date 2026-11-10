@@ -13,6 +13,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 JOBS = [(1, 18), (19, 37), (38, 54)]
+# Extra single-target runs, each in its own notebook with its own RUN_TAG (so it never mixes
+# with the outputs of the three range jobs). One fold: GPU T4 x1 is enough; on T4 x2 the second
+# worker finds no fold and stops.
+SINGLE_TARGETS = [37]
 
 TEMPLATE = r'''# OpenBMI (Lee2019_MI) SSM-DAN LOSO, source-only (no RA, no DA, no IM-TTA) | Kaggle job __JOB__/__TOTAL__ | targets __TARGETS__
 # Settings: Accelerator = GPU T4 x2, Internet = On. Run with "Save Version -> Save & Run All".
@@ -282,6 +286,17 @@ def main():
                 .replace('__RUN_TAG__', f'openbmi_source_only_s{first:03d}-s{last:03d}')
                 .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
         path = HERE / f'openbmi54_source_only_job{index:02d}_s{first:03d}_s{last:03d}.ipynb'
+        path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
+                        encoding='utf-8')
+        print(f'wrote {path.name}')
+    for subject in SINGLE_TARGETS:
+        code = (TEMPLATE
+                .replace('__JOB__', f'S{subject} only')
+                .replace('__TOTAL__', 'extra')
+                .replace('__TARGETS__', f'S{subject}')
+                .replace('__RUN_TAG__', f'openbmi_source_only_s{subject:03d}')
+                .replace('__TARGET_LIST__', f'[{subject}]'))
+        path = HERE / f'openbmi54_source_only_s{subject:03d}.ipynb'
         path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
                         encoding='utf-8')
         print(f'wrote {path.name}')
