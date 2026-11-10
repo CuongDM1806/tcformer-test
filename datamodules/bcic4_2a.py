@@ -175,7 +175,24 @@ class BCICIV2aLOSO(BCICIV2a):
         X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
         X_target, y_target = BaseDataModule._dataset_to_arrays(target_dataset)
 
-        if self.preprocessing_dict.get("riemannian_alignment", False):
+        if (self.preprocessing_dict.get("riemannian_alignment", False)
+                and BaseDataModule._ra_per_session(self.preprocessing_dict)):
+            # Per-session RA: sessions T and E of every subject are whitened by
+            # their own label-free references (target session E included).
+            print(
+                f"Applying per-session RA for LOSO target {self.subject_id} "
+                "(reference = each session of each subject)",
+                flush=True,
+            )
+            train_arrays = [
+                (BaseDataModule._riemannian_align_many(X)[0], y) for X, y in train_arrays
+            ]
+            val_arrays = [
+                (BaseDataModule._riemannian_align_many(X)[0], y) for X, y in val_arrays
+            ]
+            (X_target,) = BaseDataModule._riemannian_align_many(X_target)
+            (X_test,) = BaseDataModule._riemannian_align_many(X_test)
+        elif self.preprocessing_dict.get("riemannian_alignment", False):
             # Fit one reference per subject using only that subject's training
             # session. Source validation and held-out target test trials never
             # contribute to their corresponding whitening matrices.

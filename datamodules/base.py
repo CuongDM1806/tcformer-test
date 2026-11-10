@@ -206,6 +206,20 @@ class BaseDataModule(pl.LightningDataModule):
         return BaseDataModule._spd_power(reference, -0.5)
 
     @staticmethod
+    def _ra_per_session(preprocessing_dict) -> bool:
+        """RA reference mode.
+
+        "calibration" (default): each subject's reference is fitted on its
+        earlier sessions and applied unchanged to its later sessions.
+        "per_session": every recording session is whitened by its own
+        label-free reference, including the target's evaluation session.
+        """
+        mode = preprocessing_dict.get("ra_reference", "calibration")
+        if mode not in ("calibration", "per_session"):
+            raise ValueError("ra_reference must be 'calibration' or 'per_session'.")
+        return mode == "per_session"
+
+    @staticmethod
     def _riemannian_align_many(X_reference, *other_arrays):
         """Fit RA on reference trials and apply the same whitening to all splits."""
         whitener = BaseDataModule._riemannian_whitener(X_reference)

@@ -50,7 +50,7 @@ class OpenBMIMILOSO(BaseDataModule):
 
     def _signature(self):
         keys = ("sfreq", "low_cut", "high_cut", "start", "trial_duration",
-                "common_average_reference", "riemannian_alignment")
+                "common_average_reference", "riemannian_alignment", "ra_reference")
         return (tuple(self.dataset_subject_ids),
                 *(self.preprocessing_dict.get(key) for key in keys))
 
@@ -62,8 +62,13 @@ class OpenBMIMILOSO(BaseDataModule):
         for subject_id in self.dataset_subject_ids:
             (X_1, y_1), (X_2, y_2) = load_openbmi_subject(subject_id, self.preprocessing_dict)
             if self.preprocessing_dict.get("riemannian_alignment", True):
-                # Reference fitted on session 1 only (labels unused).
-                X_1, X_2 = BaseDataModule._riemannian_align_many(X_1, X_2)
+                if BaseDataModule._ra_per_session(self.preprocessing_dict):
+                    # Each session is whitened by its own label-free reference.
+                    (X_1,) = BaseDataModule._riemannian_align_many(X_1)
+                    (X_2,) = BaseDataModule._riemannian_align_many(X_2)
+                else:
+                    # Reference fitted on session 1 only (labels unused).
+                    X_1, X_2 = BaseDataModule._riemannian_align_many(X_1, X_2)
             arrays[subject_id] = ((X_1, y_1), (X_2, y_2))
         type(self)._arrays_cache = arrays
         type(self)._cache_signature = signature
