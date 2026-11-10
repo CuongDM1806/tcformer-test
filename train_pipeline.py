@@ -154,6 +154,13 @@ def train_and_test(config):
             if datamodule.all_target_dataset is not None
             else None
         )
+        # Unlabeled earlier-session target trials, kept for the amortized
+        # time-scale check "context = session T" below (EEG only, no labels).
+        target_unlabeled_x = (
+            datamodule.target_dataset.tensors[0]
+            if getattr(model, "amortized_timescale", False) and datamodule.target_dataset is not None
+            else None
+        )
         datamodule.dataset = None
         datamodule.train_dataset = None
         datamodule.val_dataset = None
@@ -211,6 +218,49 @@ def train_and_test(config):
                 )
                 del reference
                 gc.collect()
+
+        # Amortized time-scale adaptation: accuracy when only K unlabeled
+        # evaluation trials are known (random draws), with all of them, and with
+        # the earlier session T as context. No gradient step, no IM-TTA; the
+        # labels are used only for scoring.
+        context_results = None
+        sweep = config.get("context_sweep")
+        if getattr(model, "amortized_timescale", False) and sweep:
+            device = next(model.parameters()).device
+            test_x, test_y = (t.to(device) for t in datamodule.test_dataset.tensors)
+            reference = model_cls(**config["model_kwargs"], max_epochs=config["max_epochs"])
+            reference.load_state_dict(model.state_dict())
+            reference.to(device)
+            reference.trainer = trainer
+            generator = torch.Generator().manual_seed(int(config["seed"]))
+            context_results = {}
+            for size in sweep.get("sizes", []):
+                if size >= len(test_x):
+                    continue
+                draws = [
+                    reference.score_with_context(
+                        test_x[torch.randperm(len(test_x), generator=generator)[:size].to(device)],
+                        test_x, test_y,
+                    )
+                    for _ in range(int(sweep.get("draws", 10)))
+                ]
+                accs = np.array([d["acc"] for d in draws])
+                context_results[f"test_k{size}"] = {
+                    "acc": float(accs.mean()), "acc_std": float(accs.std()),
+                    "kappa": float(np.mean([d["kappa"] for d in draws])), "draws": len(draws),
+                }
+            context_results["test_all"] = reference.score_with_context(test_x, test_x, test_y)
+            if target_unlabeled_x is not None:
+                context_results["session_T"] = reference.score_with_context(
+                    target_unlabeled_x.to(device), test_x, test_y
+                )
+            print(
+                f"\nTARGET SUBJECT {subject_id} AMORTIZED CONTEXT (no IM-TTA) | "
+                + " | ".join(f"{k}={v['acc'] * 100:.2f}%" for k, v in context_results.items()),
+                flush=True,
+            )
+            del reference, test_x, test_y
+            gc.collect()
 
         # Optional source-free IM-TTA. The method consumes only target EEG;
         # labels carried by the test loader are deliberately ignored.
@@ -316,7 +366,9 @@ def train_and_test(config):
             })
         if extra_results:
             subject_record["tta_variants"] = extra_results
-        if getattr(model, "target_timescale", False):
+        if context_results is not None:
+            subject_record["amortized_context"] = context_results
+        if getattr(model, "target_timescale", False) or getattr(model, "amortized_timescale", False):
             subject_record["im_tta_parameters"] = model.im_tta_parameters
             subject_record["timescale"] = model.last_timescale_summary
         with open(subject_dir / f"subject_{subject_id}.json", "w") as f:

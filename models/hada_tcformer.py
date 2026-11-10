@@ -215,6 +215,69 @@ class MultiKernelMMDLoss(nn.Module):
         return source_term + target_term - 2.0 * k_st.mean()
 
 
+def _cohen_kappa(predictions: Tensor, labels: Tensor, n_classes: int) -> float:
+    confusion = torch.zeros(n_classes, n_classes, dtype=torch.float64)
+    for p, t in zip(predictions.cpu(), labels.cpu()):
+        confusion[t, p] += 1
+    total = confusion.sum()
+    observed = confusion.diag().sum() / total
+    expected = (confusion.sum(0) * confusion.sum(1)).sum() / total ** 2
+    return float((observed - expected) / (1 - expected)) if expected < 1 else 0.0
+
+
+def _loader_inputs(loader, device) -> Tensor:
+    """All EEG trials of a loader as one tensor (labels, if any, are dropped)."""
+    return torch.cat([
+        (batch[0] if isinstance(batch, (tuple, list)) else batch) for batch in loader
+    ]).to(device)
+
+
+class TimescaleContextEncoder(nn.Module):
+    """Predict a subject's step-size offsets from a set of its unlabeled trials.
+
+    Each trial is summarized by log band-power-like features (learned temporal
+    filters, then spatial filters, then log of the mean square over time); the
+    summaries are averaged over the context set, so the result does not depend
+    on trial order or on how many trials are given. An MLP maps the average to
+    one offset per selective-SSM block and channel. Its last layer starts at
+    zero, so the network begins exactly as the model without offsets.
+    """
+
+    def __init__(self, n_channels: int, n_blocks: int, d_model: int,
+                 filters: int = 8, kernel: int = 63, depth: int = 2, hidden: int = 64):
+        super().__init__()
+        self.n_blocks, self.d_model = n_blocks, d_model
+        self.temporal = nn.Conv2d(1, filters, (1, kernel), padding=(0, kernel // 2), bias=False)
+        self.spatial = nn.Conv2d(filters, filters * depth, (n_channels, 1), groups=filters, bias=False)
+        self.descriptor_dim = filters * depth
+        self.head = nn.Sequential(
+            nn.Linear(self.descriptor_dim, hidden), nn.GELU(),
+            nn.Linear(hidden, n_blocks * d_model),
+        )
+        nn.init.zeros_(self.head[-1].weight)
+        nn.init.zeros_(self.head[-1].bias)
+
+    def describe(self, x: Tensor) -> Tensor:
+        """Per-trial summary [n_trials, descriptor_dim] of EEG [n_trials, C, T]."""
+        z = self.spatial(self.temporal(x.unsqueeze(1)))  # [n, F*D, 1, T]
+        return z.square().mean(dim=(-1, -2)).clamp_min(1e-6).log()
+
+    def offsets_from_descriptors(self, descriptors: Tensor, groups: Tensor = None) -> Tensor:
+        """Average descriptors per group (all trials if groups is None) -> [G, n_blocks, d]."""
+        if groups is None:
+            pooled = descriptors.mean(dim=0, keepdim=True)
+        else:
+            count = int(groups.max()) + 1
+            sums = descriptors.new_zeros(count, descriptors.shape[1]).index_add_(0, groups, descriptors)
+            sizes = torch.bincount(groups, minlength=count).clamp_min(1).unsqueeze(1)
+            pooled = sums / sizes
+        return self.head(pooled).view(-1, self.n_blocks, self.d_model)
+
+    def forward(self, context: Tensor) -> Tensor:
+        """Offsets [n_blocks, d] for one subject from its context set [K, C, T]."""
+        return self.offsets_from_descriptors(self.describe(context))[0]
+
+
 class HADATCFormer(ClassificationModule):
     """HADANet-style UDA applied to the TCFormer representation."""
 
@@ -260,6 +323,13 @@ class HADATCFormer(ClassificationModule):
         target_timescale_stage1: bool = True,
         im_tta_parameters: str = "batchnorm",
         im_tta_timescale_lr: float = 0.02,
+        amortized_timescale: bool = False,
+        context_filters: int = 8,
+        context_kernel: int = 63,
+        context_hidden: int = 64,
+        context_train_min: int = 8,
+        context_train_max: int = 48,
+        amortized_offset_l2: float = 1e-3,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -311,6 +381,33 @@ class HADATCFormer(ClassificationModule):
                 offset.requires_grad_(False)
         if self.target_timescale and self.model.timescale_mixers() == []:
             raise ValueError("target_timescale needs selective-SSM blocks.")
+        # Amortized time-scale adaptation: a context encoder predicts every
+        # subject's step-size offsets from a set of that subject's unlabeled
+        # trials, in one forward pass. It is trained episodically on the
+        # labeled source subjects (subject-pure batches, context = other
+        # unlabeled trials of the same subject) and applied to the target.
+        self.amortized_timescale = bool(amortized_timescale)
+        self.context_encoder = None
+        if self.amortized_timescale:
+            n_blocks = len(self.model.selective_mixers())
+            if n_blocks == 0:
+                raise ValueError("amortized_timescale needs selective-SSM blocks.")
+            if not 1 <= context_train_min <= context_train_max:
+                raise ValueError("Need 1 <= context_train_min <= context_train_max.")
+            if amortized_offset_l2 < 0.0:
+                raise ValueError("amortized_offset_l2 must be non-negative.")
+            self.context_encoder = TimescaleContextEncoder(
+                n_channels, n_blocks, self.model.d_model,
+                filters=context_filters, kernel=context_kernel, hidden=context_hidden,
+            )
+        self.context_train_min = int(context_train_min)
+        self.context_train_max = int(context_train_max)
+        self.amortized_offset_l2 = float(amortized_offset_l2)
+        # Offsets predicted for the target from its context set (set by
+        # adapt_to_target); per-source-subject offsets used for validation.
+        self._target_context_offsets = None
+        self._validation_offsets = {}
+        self._context_bank = None
         if feature_alignment not in ("none", "autodial"):
             raise ValueError("feature_alignment must be 'none' or 'autodial'.")
         if target_im_weight < 0.0:
@@ -388,12 +485,148 @@ class HADATCFormer(ClassificationModule):
         finally:
             self.model.set_timescale_target_start(None)
 
+    @contextmanager
+    def _row_offsets(self, offsets):
+        """Per-trial predicted offsets [n_blocks, batch, d] inside the block."""
+        if offsets is None:
+            yield
+            return
+        self.model.set_row_offsets(offsets)
+        try:
+            yield
+        finally:
+            self.model.set_row_offsets(None)
+
+    def predict_offsets(self, context: Tensor) -> Tensor:
+        """Offsets [n_blocks, d] predicted from unlabeled trials [K, C, T]."""
+        return self.context_encoder(context)
+
+    @torch.no_grad()
+    def set_target_context(self, context: Tensor) -> None:
+        """Predict and keep the target offsets from unlabeled target trials [K, C, T]."""
+        self.eval()
+        self._target_context_offsets = self.predict_offsets(context).detach()
+        self.print(
+            f"Amortized time scale | context trials={context.shape[0]} | "
+            f"offset rms per block={[round(float(o.square().mean().sqrt()), 4) for o in self._target_context_offsets]}"
+        )
+
+    @torch.no_grad()
+    def score_with_context(self, context: Tensor, x: Tensor, y: Tensor) -> dict:
+        """Accuracy on (x, y) when only `context` (unlabeled trials) is known.
+
+        No gradient step: the offsets are predicted from the context and the
+        AutoDIAL target statistics are estimated from the same context trials.
+        Model state is restored afterwards.
+        """
+        self.eval()
+        saved_offsets = self._target_context_offsets
+        saved_stats = None
+        if self.domain_norm is not None:
+            saved_stats = (self.domain_norm.target_mean.clone(), self.domain_norm.target_var.clone())
+        try:
+            self._target_context_offsets = self.predict_offsets(context)
+            if self.domain_norm is not None and context.shape[0] >= 2:
+                features = self._extract_target_features(context).double()
+                self.domain_norm.set_target_statistics(
+                    features.mean(dim=0).float(), features.var(dim=0, unbiased=True).float()
+                )
+            logits = torch.cat([self(x[i:i + 256], domain="target") for i in range(0, x.shape[0], 256)])
+            predictions = logits.argmax(dim=1)
+            accuracy_value = (predictions == y).float().mean().item()
+            kappa = _cohen_kappa(predictions, y, self.hparams.n_classes)
+        finally:
+            self._target_context_offsets = saved_offsets
+            if saved_stats is not None:
+                self.domain_norm.set_target_statistics(*saved_stats)
+        return {"acc": accuracy_value, "kappa": kappa}
+
+    def _target_offsets_for(self, x: Tensor):
+        """Row offsets for target trials x: the cached target prediction, or x itself as context."""
+        if not self.amortized_timescale:
+            return None
+        offsets = self._target_context_offsets
+        if offsets is None:
+            offsets = self.predict_offsets(x)
+        return offsets.unsqueeze(1).expand(-1, x.shape[0], -1)
+
+    def _extract_target_features(self, x: Tensor) -> Tensor:
+        with self._row_offsets(self._target_offsets_for(x)), self._timescale_target(0):
+            return self.model.extract_features(x)
+
     def forward(self, x: Tensor, domain: str | None = None) -> Tensor:
         domain = domain or self._inference_domain
-        with self._timescale_target(0 if domain == "target" else None):
+        if domain == "target":
+            features = self._extract_target_features(x)
+        else:
             features = self.model.extract_features(x)
         features = self._normalize(features, domain)
         return self.model.classify_features(self.aligner(features))
+
+    # ---- Amortized time-scale adaptation: source context bank and validation ----
+    def on_fit_start(self):
+        if not self.amortized_timescale:
+            return
+        datamodule = self.trainer.datamodule
+        x, _, subjects = datamodule.train_dataset.tensors
+        # Unlabeled context trials of each source subject (its training session).
+        self._context_bank = {
+            int(subject): x[subjects == subject].to(self.device)
+            for subject in torch.unique(subjects)
+        }
+
+    def on_fit_end(self):
+        self._context_bank = None
+
+    @torch.no_grad()
+    def on_validation_epoch_start(self):
+        if not self.amortized_timescale:
+            return
+        # Each source subject is scored with the offsets predicted from all of
+        # its own (unlabeled) validation trials, as the target is at test time.
+        x, _, subjects = self.trainer.datamodule.val_dataset.tensors
+        self._validation_offsets = {}
+        for subject in torch.unique(subjects):
+            context = x[subjects == subject].to(self.device)
+            self._validation_offsets[int(subject)] = self.predict_offsets(context)
+
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+        if not self.amortized_timescale:
+            return super().validation_step(batch, batch_idx, dataloader_idx)
+        x, y, subjects = batch
+        offsets = torch.stack([self._validation_offsets[int(s)] for s in subjects], dim=1)
+        with self._row_offsets(offsets):
+            features = self.model.extract_features(x)
+        logits = self.model.classify_features(self.aligner(self._normalize(features, "source")))
+        loss = F.cross_entropy(logits, y)
+        acc = accuracy(logits, y, task="multiclass", num_classes=self.hparams.n_classes)
+        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True, add_dataloader_idx=False)
+        self.log("val_acc", acc, prog_bar=True, on_step=False, on_epoch=True, add_dataloader_idx=False)
+        return {"val_loss": loss, "val_acc": acc}
+
+    def _episode_offsets(self, subjects: Tensor, target_x: Tensor):
+        """Offsets for one training step: each source subject from K random trials
+        of its context bank, the target from its own unlabeled batch."""
+        k = int(torch.randint(self.context_train_min, self.context_train_max + 1, ()).item())
+        unique = torch.unique(subjects)
+        contexts, groups = [], []
+        for group, subject in enumerate(unique.tolist()):
+            bank = self._context_bank[subject]
+            if bank.device != target_x.device:
+                bank = self._context_bank[subject] = bank.to(target_x.device)
+            index = torch.randperm(bank.shape[0], device=bank.device)[: min(k, bank.shape[0])]
+            contexts.append(bank[index])
+            groups.append(torch.full((len(index),), group, device=bank.device, dtype=torch.long))
+        descriptors = self.context_encoder.describe(torch.cat(contexts))
+        source_offsets = self.context_encoder.offsets_from_descriptors(descriptors, torch.cat(groups))
+        target_offsets = self.predict_offsets(target_x)
+        lookup = torch.searchsorted(unique, subjects)
+        rows = torch.cat((
+            source_offsets[lookup],                                         # [n_src, blocks, d]
+            target_offsets.unsqueeze(0).expand(target_x.shape[0], -1, -1),  # [n_tgt, blocks, d]
+        ))
+        penalty = torch.cat((source_offsets, target_offsets.unsqueeze(0))).square().mean()
+        return rows.transpose(0, 1), penalty, k
 
     def configure_optimizers(self):
         if not self.target_timescale:
@@ -524,12 +757,16 @@ class HADATCFormer(ClassificationModule):
         labels may be present in the loader but are never read.
         """
         self._inference_domain = "target"
+        if self.amortized_timescale:
+            # Context = every unlabeled trial of the evaluation session (the same
+            # access IM-TTA has); one forward pass, no gradient.
+            self.set_target_context(_loader_inputs(target_loader, next(self.parameters()).device))
         stats = self._run_im_tta(target_loader) if self.im_tta_steps > 0 else None
         if self.domain_norm is not None:
             if self.recalibrate_target_statistics:
                 self._recalibrate_target_statistics(target_loader)
             self.print(f"AutoDIAL alpha per feature group: {self.autodial_alpha()}")
-        if self.target_timescale:
+        if self.target_timescale or self.amortized_timescale:
             self.last_timescale_summary = self.timescale_summary(target_loader)
             self.print(
                 "Target time scale | tau_target/tau_source per block: "
@@ -551,15 +788,15 @@ class HADATCFormer(ClassificationModule):
         Channels are combined by the geometric mean. No label is read.
         """
         self.eval()
-        mixers = self.model.timescale_mixers()
+        mixers = (self.model.selective_mixers() if self.amortized_timescale
+                  else self.model.timescale_mixers())
         for mixer in mixers:
             mixer.record_steps, mixer.step_sums = True, None
         device = next(self.parameters()).device
         try:
-            with self._timescale_target(0):
-                for batch in target_loader:
-                    target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
-                    self.model.extract_features(target_x.to(device, non_blocking=True))
+            for batch in target_loader:
+                target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
+                self._extract_target_features(target_x.to(device, non_blocking=True))
         finally:
             for mixer in mixers:
                 mixer.record_steps = False
@@ -570,7 +807,11 @@ class HADATCFormer(ClassificationModule):
             log_ratio = (base_sum / count).clamp_min(1e-12).log() - (
                 moved_sum / count
             ).clamp_min(1e-12).log()
-            offset = mixer.target_step_offset.detach().double()
+            offset = torch.zeros(self.model.d_model, dtype=torch.float64, device=device)
+            if mixer.target_step_offset is not None:
+                offset = offset + mixer.target_step_offset.detach().double()
+            if self._target_context_offsets is not None:
+                offset = offset + self._target_context_offsets[index].detach().double()
             blocks.append({
                 "block": index,
                 "offset_mean": round(float(offset.mean()), 6),
@@ -590,10 +831,9 @@ class HADATCFormer(ClassificationModule):
         feature_sum, square_sum, count = None, None, 0
         for batch in target_loader:
             target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
-            with self._timescale_target(0):
-                features = self.model.extract_features(
-                    target_x.to(device, non_blocking=True)
-                ).double()
+            features = self._extract_target_features(
+                target_x.to(device, non_blocking=True)
+            ).double()
             if feature_sum is None:
                 feature_sum = features.sum(dim=0)
                 square_sum = features.square().sum(dim=0)
@@ -784,9 +1024,18 @@ class HADATCFormer(ClassificationModule):
                 "with 'source' and 'target'."
             )
 
-        source_x, source_y = batch["source"]
+        source_subjects = None
+        if self.amortized_timescale:
+            source_x, source_y, source_subjects = batch["source"]
+        else:
+            source_x, source_y = batch["source"]
         target_x = batch["target"]
         source_count = source_x.size(0)
+        row_offsets, offset_penalty, context_size = None, None, None
+        if self.amortized_timescale:
+            row_offsets, offset_penalty, context_size = self._episode_offsets(
+                source_subjects, target_x
+            )
 
         # A shared forward pass also gives BatchNorm both domains without ever
         # reading target labels.
@@ -794,7 +1043,7 @@ class HADATCFormer(ClassificationModule):
         # the target step-size offset; it is trained by the target-side losses
         # (InfoMax, adversarial, MMD), never by source labels.
         stage1_start = source_count if self.target_timescale_stage1 else None
-        with self._timescale_target(stage1_start):
+        with self._timescale_target(stage1_start), self._row_offsets(row_offsets):
             temporal_features = self.model.extract_temporal_features(
                 torch.cat((source_x, target_x), dim=0)
             )
@@ -873,6 +1122,8 @@ class HADATCFormer(ClassificationModule):
                 + self.temporal_mmd_weight * temporal_mmd_loss
             )
         )
+        if offset_penalty is not None:
+            loss = loss + self.amortized_offset_l2 * offset_penalty
 
         acc = accuracy(
             source_logits, source_y, task="multiclass", num_classes=self.hparams.n_classes
@@ -912,6 +1163,9 @@ class HADATCFormer(ClassificationModule):
             batch_size=batch_size,
         )
         self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
+        if offset_penalty is not None:
+            self.log("train_offset_rms", offset_penalty.detach().sqrt(), on_step=False, on_epoch=True, batch_size=batch_size)
+            self.log("train_context_size", float(context_size), on_step=False, on_epoch=True, batch_size=batch_size)
         if self.domain_norm is not None:
             self.log("train_target_im_loss", target_im_loss, on_step=False, on_epoch=True, batch_size=batch_size)
             for group, value in enumerate(self.domain_norm.alpha(detach=True)):

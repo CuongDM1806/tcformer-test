@@ -213,8 +213,22 @@ class BCICIV2aLOSO(BCICIV2a):
                 X, X_val, X_target, X_test
             )
 
-        self.train_dataset = BaseDataModule._make_tensor_dataset(X, y)
-        self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
+        if self.preprocessing_dict.get("episodic_subjects_per_batch"):
+            # Amortized time-scale adaptation needs each trial's subject: the
+            # training split for subject-pure episodes, the validation split so
+            # each source subject is scored with the time scale predicted from
+            # its own (unlabeled) validation trials, as the target is at test.
+            self.train_subject_ids = np.concatenate([
+                np.full(len(arr[1]), subject) for subject, arr in zip(train_subjects, train_arrays)
+            ])
+            val_subject_ids = np.concatenate([
+                np.full(len(arr[1]), subject) for subject, arr in zip(train_subjects, val_arrays)
+            ])
+            self.train_dataset = BaseDataModule._make_subject_dataset(X, y, self.train_subject_ids)
+            self.val_dataset = BaseDataModule._make_subject_dataset(X_val, y_val, val_subject_ids)
+        else:
+            self.train_dataset = BaseDataModule._make_tensor_dataset(X, y)
+            self.val_dataset = BaseDataModule._make_tensor_dataset(X_val, y_val)
         # Optional check protocol: let Stage 1 also adapt to the evaluation
         # session, as PhysioNet does. The RA reference stays on session T so that
         # only the Stage 1 target changes.

@@ -17,6 +17,10 @@ evaluate_without_im_tta: false
 # Further test-time variants scored from the same weights, e.g.
 # [none, batchnorm, timescale, both] (see im_tta_parameters below).
 extra_tta_modes: []
+# Amortized time scale only: accuracy when only K unlabeled evaluation trials
+# are known (random draws of each size), with all of them and with session T,
+# e.g. {sizes: [5, 10, 20, 50], draws: 10}. null = skip.
+context_sweep: null
 
 z_scale: true
 interaug: true
@@ -207,6 +211,19 @@ model_kwargs:
   # Five Adam steps of 0.02 move an offset by at most 0.1, i.e. about 10%
   # of a typical step size; fixed a priori, not tuned on evaluation data.
   im_tta_timescale_lr: 0.02
+  # Amortized time-scale adaptation (off by default). A small context encoder
+  # predicts every subject's step-size offsets from a set of its unlabeled
+  # trials (one forward pass). Training is episodic and needs subject-pure
+  # source batches: set preprocessing.<dataset>.episodic_subjects_per_batch.
+  # The context size is drawn per step in [context_train_min, context_train_max];
+  # amortized_offset_l2 keeps the predicted offsets small.
+  amortized_timescale: false
+  context_filters: 8
+  context_kernel: 63
+  context_hidden: 64
+  context_train_min: 8
+  context_train_max: 48
+  amortized_offset_l2: 0.001
   log_every_n_batches: 5
 
   lr: 0.0009

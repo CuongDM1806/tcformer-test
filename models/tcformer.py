@@ -534,6 +534,9 @@ class _SelectiveSSMMixer(nn.Module):
         )
         # Rows [target_start:] of the batch are target trials; None = no offset.
         self.target_start = None
+        # Optional per-trial offsets [batch, d_model], e.g. predicted for each
+        # trial's subject by a context encoder; None = no per-trial offset.
+        self.row_offsets = None
         # Optional diagnostics: per-channel sums of the step size without and
         # with the offset over the target rows (see record_steps()).
         self.record_steps = False
@@ -553,8 +556,9 @@ class _SelectiveSSMMixer(nn.Module):
             self.x_proj(values), [self.d_model, self.d_state, self.d_state], dim=-1
         )
         delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
-        if self.target_step_offset is not None and self.target_start is not None:
-            delta = self._offset_target_steps(delta_raw, delta)
+        shift = self._step_shift(delta_raw)
+        if shift is not None:
+            delta = self._shifted_steps(delta_raw, delta, shift)
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
         if self.scan_mode == "hoisted":
             y = _hoisted_selective_scan(values, delta, A, B, C, self.D)
@@ -567,13 +571,28 @@ class _SelectiveSSMMixer(nn.Module):
         y = y * torch.nn.functional.silu(gate)
         return self.out_proj(y)
 
-    def _offset_target_steps(self, delta_raw: Tensor, delta: Tensor) -> Tensor:
-        start = self.target_start
-        offset = self.target_step_offset.to(dtype=delta_raw.dtype)
-        shifted = torch.nn.functional.softplus(delta_raw[start:] + offset).clamp(max=1.0)
+    def _step_shift(self, delta_raw: Tensor):
+        """Per-row shift of the step-size pre-activation, [batch, 1, d] or None."""
+        use_target = self.target_step_offset is not None and self.target_start is not None
+        if self.row_offsets is None and not use_target:
+            return None
+        shift = delta_raw.new_zeros(delta_raw.shape[0], delta_raw.shape[-1])
+        if self.row_offsets is not None:
+            if self.row_offsets.shape != shift.shape:
+                raise ValueError("row_offsets must have shape [batch, d_model].")
+            shift = shift + self.row_offsets.to(dtype=delta_raw.dtype)
+        if use_target:
+            # Rows before target_start get a zero shift, i.e. their exact step size.
+            rows = torch.arange(shift.shape[0], device=shift.device) >= self.target_start
+            shift = shift + rows.unsqueeze(1).to(shift.dtype) * self.target_step_offset.to(shift.dtype)
+        return shift.unsqueeze(1)
+
+    def _shifted_steps(self, delta_raw: Tensor, delta: Tensor, shift: Tensor) -> Tensor:
+        shifted = torch.nn.functional.softplus(delta_raw + shift).clamp(max=1.0)
         if self.record_steps:
+            # Diagnostics over every row of the pass (the summary feeds target trials only).
             with torch.no_grad():
-                base = delta[start:].detach().double().sum(dim=(0, 1))
+                base = delta.detach().double().sum(dim=(0, 1))
                 moved = shifted.detach().double().sum(dim=(0, 1))
                 count = shifted.shape[0] * shifted.shape[1]
                 if self.step_sums is None:
@@ -582,9 +601,7 @@ class _SelectiveSSMMixer(nn.Module):
                     self.step_sums[0] += base
                     self.step_sums[1] += moved
                     self.step_sums[2] += count
-        if start == 0:
-            return shifted
-        return torch.cat((delta[:start], shifted), dim=0)
+        return shifted
 
     def _shifted_causal_conv(self, values: Tensor) -> Tensor:
         """Causal depthwise conv on [b, L, d] as a sum of shifted products.
@@ -795,6 +812,22 @@ class TCFormerModule(nn.Module):
         """Apply the target offset to batch rows [start:]; None disables it."""
         for mixer in self.timescale_mixers():
             mixer.target_start = start
+
+    def selective_mixers(self) -> list:
+        """Every selective-SSM mixer, in block order."""
+        return [block.mixer for block in self.transformer if isinstance(block, _SelectiveSSMBlock)]
+
+    def set_row_offsets(self, offsets) -> None:
+        """Per-trial step-size offsets: [n_blocks, batch, d_model] or None."""
+        mixers = self.selective_mixers()
+        if offsets is None:
+            for mixer in mixers:
+                mixer.row_offsets = None
+            return
+        if len(offsets) != len(mixers):
+            raise ValueError("Need one offset tensor per selective-SSM block.")
+        for mixer, offset in zip(mixers, offsets):
+            mixer.row_offsets = offset
 
     def extract_features(self, x):
         temporal_features = self.extract_temporal_features(x)

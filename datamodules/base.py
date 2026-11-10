@@ -35,6 +35,76 @@ def make_collate_fn(preproc):
     return InterAugCollate(preproc)
 
 
+class SubjectInterAugCollate:
+    """Collate (x, y, subject) items; S&R augmentation stays within one subject.
+
+    Segments are recombined only among same-class trials of the same subject,
+    so every augmented trial still belongs to exactly one subject and can use
+    that subject's predicted time scale.
+    """
+
+    def __init__(self, preproc):
+        self.preproc = preproc
+
+    def __call__(self, batch):
+        xs, ys, ss = zip(*batch)
+        x, y = torch.stack(xs), torch.as_tensor(ys, dtype=torch.long)
+        s = torch.as_tensor(ss, dtype=torch.long)
+        if not self.preproc.get("interaug", False):
+            return x, y, s
+        augment = interaug_vectorized if self.preproc.get("interaug_impl", "loop") == "vectorized" else interaug
+        parts = []
+        for subject in torch.unique(s):
+            members = s == subject
+            x_aug, y_aug = augment([x[members], y[members]])
+            parts.append((x_aug, y_aug, torch.full_like(y_aug, int(subject))))
+        x = torch.cat([p[0] for p in parts])
+        y = torch.cat([p[1] for p in parts])
+        s = torch.cat([p[2] for p in parts])
+        order = torch.randperm(len(x))
+        return x[order], y[order], s[order]
+
+
+class SubjectBatchSampler(torch.utils.data.Sampler):
+    """Episodic batches: `subjects_per_batch` subjects x `trials_per_subject` trials.
+
+    Every trial is used at most once per epoch; the random numbers come from
+    torch, so the order follows the global seed.
+    """
+
+    def __init__(self, subject_ids, subjects_per_batch: int, trials_per_subject: int):
+        self.subject_ids = np.asarray(subject_ids)
+        self.subjects_per_batch = int(subjects_per_batch)
+        self.trials_per_subject = int(trials_per_subject)
+        self.by_subject = {
+            int(subject): np.flatnonzero(self.subject_ids == subject)
+            for subject in np.unique(self.subject_ids)
+        }
+        if len(self.by_subject) < self.subjects_per_batch:
+            raise ValueError("Fewer source subjects than subjects_per_batch.")
+
+    def __len__(self):
+        chunks = sum(len(i) // self.trials_per_subject for i in self.by_subject.values())
+        return chunks // self.subjects_per_batch
+
+    def __iter__(self):
+        queues = {
+            subject: list(indices[torch.randperm(len(indices)).numpy()])
+            for subject, indices in self.by_subject.items()
+        }
+        for _ in range(len(self)):
+            available = [s for s, q in queues.items() if len(q) >= self.trials_per_subject]
+            if len(available) < self.subjects_per_batch:
+                return
+            # Prefer subjects with more trials left so the epoch ends balanced.
+            available.sort(key=lambda s: (-len(queues[s]), float(torch.rand(()))))
+            chosen = available[: self.subjects_per_batch]
+            batch = []
+            for subject in chosen:
+                batch.extend(int(queues[subject].pop()) for _ in range(self.trials_per_subject))
+            yield batch
+
+
 class BaseDataModule(pl.LightningDataModule):
     dataset = None
     train_dataset = None
@@ -54,6 +124,23 @@ class BaseDataModule(pl.LightningDataModule):
         raise NotImplementedError
 
     def _source_train_dataloader(self) -> DataLoader:
+        episodic = self.preprocessing_dict.get("episodic_subjects_per_batch")
+        if episodic:
+            # Amortized time-scale adaptation: subject-pure episodes.
+            batch_size = self.preprocessing_dict["batch_size"]
+            if batch_size % int(episodic) != 0:
+                raise ValueError("batch_size must be divisible by episodic_subjects_per_batch.")
+            return DataLoader(
+                self.train_dataset,
+                batch_sampler=SubjectBatchSampler(
+                    self.train_subject_ids, int(episodic), batch_size // int(episodic)
+                ),
+                num_workers=self.preprocessing_dict.get("num_workers", os.cpu_count() // 2),
+                pin_memory=True,
+                persistent_workers=True,
+                prefetch_factor=4,
+                collate_fn=SubjectInterAugCollate(self.preprocessing_dict),
+            )
         return DataLoader(self.train_dataset,
                           batch_size=self.preprocessing_dict["batch_size"],
                           shuffle=True,
@@ -223,6 +310,14 @@ class BaseDataModule(pl.LightningDataModule):
     def _make_tensor_dataset(X, y):
         return TensorDataset(torch.Tensor(X), torch.Tensor(y).type(torch.LongTensor))
         # return TensorDataset(torch.tensor(X), torch.tensor(y).long())
+
+    @staticmethod
+    def _make_subject_dataset(X, y, subject_ids):
+        """(x, y, subject id) triples for the episodic source split."""
+        return TensorDataset(
+            torch.Tensor(X), torch.Tensor(y).type(torch.LongTensor),
+            torch.as_tensor(np.asarray(subject_ids), dtype=torch.long),
+        )
 
     @staticmethod
     def _make_unlabeled_dataset(X):

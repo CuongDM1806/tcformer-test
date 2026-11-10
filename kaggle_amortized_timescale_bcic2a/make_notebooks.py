@@ -1,13 +1,17 @@
-"""Generate the Kaggle notebooks for target time-scale adaptation on BCI IV-2a.
+"""Generate the Kaggle notebook for amortized time-scale adaptation on BCI IV-2a.
 
-Each selective-SSM block gets a per-channel offset of its step-size pre-activation that is
-applied only to target-subject trials (target_timescale in configs/hada_tcformer.yaml).
-One notebook, nine LOSO folds, everything else as in the paper's SSM-DAN run: the offsets
-are learned in Stage 1 from the target-side losses (no labels) and then adapted by IM-TTA.
-Every fold scores the same weights with four test-time variants: none (no IM-TTA),
-batchnorm (SSM-DAN's IM-TTA), timescale (offsets only) and both. The learned time
-scales are then compared with each subject's mu/beta rhythms (analysis/timescale_physiology.py).
-Run:  python kaggle_target_timescale_bcic2a/make_notebooks.py
+A small context encoder predicts every subject's step-size offsets of the selective-SSM
+blocks from a set of that subject's unlabeled trials, in one forward pass
+(amortized_timescale in configs/hada_tcformer.yaml). Training is episodic: each source
+batch holds 4 subjects x 12 trials (S&R augmentation within a subject), and each subject's
+offsets come from 8-48 other unlabeled trials of the same subject; the target's offsets
+come from its unlabeled Stage-1 batch. Everything else is the paper's SSM-DAN run.
+Every fold reports
+  - four test-time variants of the same weights: none / batchnorm (SSM-DAN IM-TTA) /
+    timescale / both (the gradient offsets on top of the predicted ones), and
+  - accuracy with only K unlabeled evaluation trials as context (no gradient, no IM-TTA),
+    K = 5, 10, 20, 50, 100 (10 random draws each), all trials, and session T as context.
+Run:  python kaggle_amortized_timescale_bcic2a/make_notebooks.py
 """
 import json
 from pathlib import Path
@@ -15,32 +19,34 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 VARIANTS = {
-    'stage1': dict(stage1=True, label='offsets learned in Stage 1, then IM-TTA'),
+    'amortized': dict(stage1=False, label='context encoder predicts the time scale of each subject'),
 }
 
-TEMPLATE = r'''# SSM-DAN target time-scale adaptation | BCI IV-2a LOSO, 9 targets | variant __VARIANT__: __LABEL__
+TEMPLATE = r'''# SSM-DAN amortized time-scale adaptation | BCI IV-2a LOSO, 9 targets | __LABEL__
 # Settings: Accelerator = GPU T4 x2, Internet = On. Run with "Save Version -> Save & Run All". About 5-6 h.
 # Two folds train at the same time, one per GPU; each fold has its own log file.
-# Every fold scores the same weights with TTA = none / batchnorm (SSM-DAN) / timescale / both (summary.csv),
-# then the learned time scales are compared with each subject's mu/beta rhythms (timescale_physiology.csv).
+# Every fold scores the same weights with TTA = none / batchnorm (SSM-DAN) / timescale / both, and with only
+# K unlabeled evaluation trials as context (summary.csv); time scales vs. mu/beta rhythms: timescale_physiology.csv.
 # Resume: if folds are left over, add this notebook's previous Output via
 # "Add Input -> Your Work -> Notebook Output" and run again; finished folds are skipped.
 import codecs, json, os, queue, select, shutil, subprocess, sys, threading, time, zipfile
 from pathlib import Path
 
 NOTEBOOK_START = time.monotonic()
-BRANCH = 'feature/ssm-dan-target-timescale'
+BRANCH = 'feature/ssm-dan-amortized-timescale'
 REPO_URL = 'https://github.com/CuongDM1806/tcformer-test.git'
-RUN_TAG = 'bcic2a_timescale___VARIANT__'
+RUN_TAG = 'bcic2a_amortized_timescale'
 DATASET = 'bcic2a'
 TARGET_SUBJECTS = list(range(1, 10))
 SEEDS = [0]
 GPUS = [0, 1]              # one fold per GPU at a time
-MODEL_OVERRIDES = {'target_timescale': True, 'target_timescale_stage1': __STAGE1__,
-                   'im_tta_parameters': 'batchnorm'}
+MODEL_OVERRIDES = {'amortized_timescale': True, 'target_timescale': True,
+                   'target_timescale_stage1': __STAGE1__, 'im_tta_parameters': 'batchnorm'}
+PREPROCESSING = {'episodic_subjects_per_batch': 4}   # 48 source trials = 4 subjects x 12
 EXTRA_TTA_MODES = ['none', 'timescale', 'both']
+CONTEXT_SWEEP = {'sizes': [5, 10, 20, 50, 100], 'draws': 10}
 TIME_BUDGET_H = 11.5       # stop starting new folds so the version ends before Kaggle's 12 h limit
-FIRST_FOLD_ESTIMATE_H = 1.2  # used until a fold has finished in this run
+FIRST_FOLD_ESTIMATE_H = 1.4  # used until a fold has finished in this run
 
 REPO_PATH = Path('/tmp/repo')  # keep the clone and venv out of the saved output
 MNE_DATA = Path('/tmp/mne_data')
@@ -62,7 +68,7 @@ if (REPO_PATH / '.git').is_dir():
 else:
     run(['git', 'clone', '--branch', BRANCH, '--single-branch', REPO_URL, REPO_PATH])
 run(['git', 'log', '-1', '--oneline'], cwd=REPO_PATH)
-assert 'target_step_offset' in (REPO_PATH / 'models/tcformer.py').read_text()
+assert 'class TimescaleContextEncoder' in (REPO_PATH / 'models/hada_tcformer.py').read_text()
 UV = shutil.which('uv') or 'uv'
 run([UV, 'venv', '--clear', '--python', '3.10', '.venv'], cwd=REPO_PATH)
 PYTHON = REPO_PATH / '.venv/bin/python'
@@ -149,7 +155,9 @@ def worker(gpu, jobs):
             "import yaml; from pathlib import Path; "
             "c=yaml.safe_load(Path('configs/hada_tcformer.yaml').read_text()); "
             f"c['subject_ids']=[{subject}]; c['extra_tta_modes']={EXTRA_TTA_MODES!r}; "
+            f"c['context_sweep']={CONTEXT_SWEEP!r}; "
             f"c['model_kwargs'].update({MODEL_OVERRIDES!r}); "
+            f"c['preprocessing'][{DATASET!r}].update({PREPROCESSING!r}); "
             "c['log_every_n_epochs']=10; c['enable_progress_bar']=False; "
             "c['model_kwargs']['log_every_n_batches']=0; "
             f"Path('configs/{config_name}.yaml').write_text(yaml.safe_dump(c, sort_keys=False))"
@@ -217,6 +225,7 @@ for archive in sorted(OUTPUT.glob('seed*_S*_results.zip')):
             if '/subjects/subject_' in name and name.endswith('.json'):
                 rows.append(json.loads(zf.read(name)))
 MODES = ['none', 'batchnorm', 'timescale', 'both']
+CONTEXTS = [f"test_k{k}" for k in CONTEXT_SWEEP['sizes']] + ['test_all', 'session_T']
 
 
 def scores(record):
@@ -228,7 +237,7 @@ def scores(record):
 
 with open(OUTPUT / 'summary.csv', 'w') as f:
     f.write('run,subject_id,' + ','.join(f'{m}_acc,{m}_kappa,{m}_tau_ratio' for m in MODES)
-            + ',best_val_acc,train_time_min\n')
+            + ',' + ','.join(f'ctx_{c}_acc' for c in CONTEXTS) + ',best_val_acc,train_time_min\n')
     for record in sorted(rows, key=lambda r: r['subject_id']):
         s = scores(record)
         cells = []
@@ -237,6 +246,8 @@ with open(OUTPUT / 'summary.csv', 'w') as f:
             tau = ts['tau_ratio'] if ts else None
             cells += ['' if acc is None else f'{acc:.4f}', '' if kappa is None else f'{kappa:.4f}',
                       '' if tau is None else f'{tau:.4f}']
+        context = record.get('amortized_context', {})
+        cells += [f"{context[c]['acc']:.4f}" if c in context else '' for c in CONTEXTS]
         f.write(f"{RUN_TAG},{record['subject_id']}," + ','.join(cells)
                 + f",{record['best_val_acc']:.4f},{record['train_time_min']:.1f}\n")
 print(open(OUTPUT / 'summary.csv').read())
@@ -246,6 +257,11 @@ if rows:
         accs = [scores(r)[mode][0] for r in rows if mode in scores(r)]
         if accs:
             print(f'  TTA={mode:9s} {100 * sum(accs) / len(accs):6.2f}  (n={len(accs)})')
+    print('Only K unlabeled evaluation trials as context (no gradient, no IM-TTA):')
+    for c in CONTEXTS:
+        accs = [r['amortized_context'][c]['acc'] for r in rows if c in r.get('amortized_context', {})]
+        if accs:
+            print(f'  {c:10s} {100 * sum(accs) / len(accs):6.2f}  (n={len(accs)})')
 
 # Learned time scales vs. each subject's mu/beta rhythms (exploratory; no labels used).
 if rows:
@@ -286,7 +302,7 @@ def main():
                 .replace('__VARIANT__', variant)
                 .replace('__LABEL__', spec['label'])
                 .replace('__STAGE1__', str(spec['stage1'])))
-        path = HERE / f'bcic2a_timescale_{variant}.ipynb'
+        path = HERE / 'bcic2a_amortized_timescale.ipynb'
         path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
                         encoding='utf-8')
         print(f'wrote {path.name}')
