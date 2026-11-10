@@ -18,8 +18,17 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
+# Two notebooks with the same folds, seed and episodes; they can run at the same time.
+#   amortized_timescale   every SSM-DAN loss kept (AutoDIAL, target InfoMax, GRL adversarial, MMD, temporal MMD)
+#   amortized_no_grl_mmd  GRL adversarial, MMD and temporal MMD switched off: can the predicted time
+#                         scales replace explicit feature alignment? AutoDIAL and target InfoMax stay.
 VARIANTS = {
-    'amortized': dict(stage1=False, label='context encoder predicts the time scale of each subject'),
+    'amortized_timescale': dict(stage1=False, extra={},
+                      label='context encoder predicts the time scale of each subject'),
+    'amortized_no_grl_mmd': dict(stage1=False,
+                                 extra={'adversarial_weight': 0.0, 'mmd_weight': 0.0,
+                                        'temporal_mmd_weight': 0.0},
+                                 label='predicted time scales without GRL and MMD'),
 }
 
 TEMPLATE = r'''# SSM-DAN amortized time-scale adaptation | BCI IV-2a LOSO, 9 targets | __LABEL__
@@ -35,13 +44,14 @@ from pathlib import Path
 NOTEBOOK_START = time.monotonic()
 BRANCH = 'feature/ssm-dan-amortized-timescale'
 REPO_URL = 'https://github.com/CuongDM1806/tcformer-test.git'
-RUN_TAG = 'bcic2a_amortized_timescale'
+RUN_TAG = 'bcic2a___VARIANT__'
 DATASET = 'bcic2a'
 TARGET_SUBJECTS = list(range(1, 10))
 SEEDS = [0]
 GPUS = [0, 1]              # one fold per GPU at a time
 MODEL_OVERRIDES = {'amortized_timescale': True, 'target_timescale': True,
-                   'target_timescale_stage1': __STAGE1__, 'im_tta_parameters': 'batchnorm'}
+                   'target_timescale_stage1': __STAGE1__, 'im_tta_parameters': 'batchnorm',
+                   **__EXTRA__}
 PREPROCESSING = {'episodic_subjects_per_batch': 4}   # 48 source trials = 4 subjects x 12
 EXTRA_TTA_MODES = ['none', 'timescale', 'both']
 CONTEXT_SWEEP = {'sizes': [5, 10, 20, 50, 100], 'draws': 10}
@@ -301,8 +311,9 @@ def main():
         code = (TEMPLATE
                 .replace('__VARIANT__', variant)
                 .replace('__LABEL__', spec['label'])
-                .replace('__STAGE1__', str(spec['stage1'])))
-        path = HERE / 'bcic2a_amortized_timescale.ipynb'
+                .replace('__STAGE1__', str(spec['stage1']))
+                .replace('__EXTRA__', repr(spec['extra'])))
+        path = HERE / f'bcic2a_{variant}.ipynb'
         path.write_text(json.dumps(notebook(code), indent=1, ensure_ascii=False) + '\n',
                         encoding='utf-8')
         print(f'wrote {path.name}')
