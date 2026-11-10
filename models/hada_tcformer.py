@@ -6,6 +6,7 @@ samples only and are used by the adversarial and MK-MMD alignment objectives.
 
 import math
 import time
+from contextlib import contextmanager
 
 import torch
 from torch import Tensor, nn
@@ -15,6 +16,7 @@ from torchmetrics.functional import accuracy
 from .classification_module import ClassificationModule
 from .tcformer import TCFormerModule
 from utils.latency import measure_latency
+from utils.lr_scheduler import linear_warmup_cosine_decay
 
 
 class _GradientReversal(torch.autograd.Function):
@@ -254,6 +256,10 @@ class HADATCFormer(ClassificationModule):
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
         im_tta_diversity_weight: float = 1.0,
+        target_timescale: bool = False,
+        target_timescale_stage1: bool = True,
+        im_tta_parameters: str = "batchnorm",
+        im_tta_timescale_lr: float = 0.02,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -279,8 +285,32 @@ class HADATCFormer(ClassificationModule):
             mamba_d_state=mamba_d_state,
             mamba_d_conv=mamba_d_conv,
             mamba_scan_mode=mamba_scan_mode,
+            mamba_target_timescale=target_timescale,
         )
         super().__init__(model, n_classes, **kwargs)
+        # Target time-scale adaptation: each selective-SSM block gets a
+        # per-channel offset of its step-size pre-activation that is applied
+        # only to target-subject trials (see _SelectiveSSMMixer). It can be
+        # learned in Stage 1 (target-side losses only, no labels) and/or
+        # updated by IM-TTA instead of, or together with, BatchNorm.
+        self.target_timescale = bool(target_timescale)
+        self.target_timescale_stage1 = bool(target_timescale_stage1)
+        if im_tta_parameters not in ("batchnorm", "timescale", "both"):
+            raise ValueError("im_tta_parameters must be 'batchnorm', 'timescale' or 'both'.")
+        if im_tta_parameters != "batchnorm" and not self.target_timescale:
+            raise ValueError("im_tta_parameters needs target_timescale: true.")
+        if im_tta_timescale_lr <= 0.0:
+            raise ValueError("im_tta_timescale_lr must be positive.")
+        self.im_tta_parameters = im_tta_parameters
+        self.im_tta_timescale_lr = float(im_tta_timescale_lr)
+        self.last_timescale_summary = None
+        if self.target_timescale and not self.target_timescale_stage1:
+            # Kept at zero during Stage 1: the model trains exactly like the
+            # model without offsets, which can then be adapted at test time.
+            for offset in self._timescale_offsets():
+                offset.requires_grad_(False)
+        if self.target_timescale and self.model.timescale_mixers() == []:
+            raise ValueError("target_timescale needs selective-SSM blocks.")
         if feature_alignment not in ("none", "autodial"):
             raise ValueError("feature_alignment must be 'none' or 'autodial'.")
         if target_im_weight < 0.0:
@@ -343,10 +373,58 @@ class HADATCFormer(ClassificationModule):
             return features
         return self.domain_norm(features, domain)
 
+    def _timescale_offsets(self) -> list:
+        return [mixer.target_step_offset for mixer in self.model.timescale_mixers()]
+
+    @contextmanager
+    def _timescale_target(self, start):
+        """Apply the target time-scale offset to batch rows [start:] inside the block."""
+        if not self.target_timescale or start is None:
+            yield
+            return
+        self.model.set_timescale_target_start(start)
+        try:
+            yield
+        finally:
+            self.model.set_timescale_target_start(None)
+
     def forward(self, x: Tensor, domain: str | None = None) -> Tensor:
-        features = self.model.extract_features(x)
-        features = self._normalize(features, domain or self._inference_domain)
+        domain = domain or self._inference_domain
+        with self._timescale_target(0 if domain == "target" else None):
+            features = self.model.extract_features(x)
+        features = self._normalize(features, domain)
         return self.model.classify_features(self.aligner(features))
+
+    def configure_optimizers(self):
+        if not self.target_timescale:
+            return super().configure_optimizers()
+        # Same optimizer and schedule as the parent, but the time-scale offsets
+        # are exempt from weight decay, which would pull them back to zero.
+        offset_ids = {id(offset) for offset in self._timescale_offsets()}
+        decayed = [p for p in self.parameters() if id(p) not in offset_ids]
+        groups = [
+            {"params": decayed},
+            {"params": self._timescale_offsets(), "weight_decay": 0.0},
+        ]
+        betas = self.hparams.get("beta_1", 0.9), self.hparams.get("beta_2", 0.999)
+        if self.hparams.optimizer == "adam":
+            optimizer = torch.optim.Adam(groups, lr=self.hparams.lr, betas=betas,
+                                         weight_decay=self.hparams.weight_decay)
+        elif self.hparams.optimizer == "adamW":
+            optimizer = torch.optim.AdamW(groups, lr=self.hparams.lr, betas=betas,
+                                          weight_decay=self.hparams.weight_decay)
+        elif self.hparams.optimizer == "sgd":
+            optimizer = torch.optim.SGD(groups, lr=self.hparams.lr,
+                                        weight_decay=self.hparams.weight_decay)
+        else:
+            raise NotImplementedError
+        if self.hparams.scheduler:
+            scheduler = torch.optim.lr_scheduler.LambdaLR(
+                optimizer,
+                linear_warmup_cosine_decay(self.hparams.warmup_epochs, self.hparams.max_epochs),
+            )
+            return [optimizer], [scheduler]
+        return [optimizer]
 
     def on_validation_start(self):
         self._inference_domain = "source"
@@ -451,8 +529,57 @@ class HADATCFormer(ClassificationModule):
             if self.recalibrate_target_statistics:
                 self._recalibrate_target_statistics(target_loader)
             self.print(f"AutoDIAL alpha per feature group: {self.autodial_alpha()}")
+        if self.target_timescale:
+            self.last_timescale_summary = self.timescale_summary(target_loader)
+            self.print(
+                "Target time scale | tau_target/tau_source per block: "
+                f"{[b['tau_ratio'] for b in self.last_timescale_summary['blocks']]} | "
+                f"mean={self.last_timescale_summary['tau_ratio']:.4f}"
+            )
         self.eval()
         return stats
+
+    @torch.no_grad()
+    def timescale_summary(self, target_loader) -> dict:
+        """Per-block effect of the learned target time-scale offsets.
+
+        For every selective-SSM block, the step sizes of the target trials are
+        averaged per channel with and without the offset (same inputs). The
+        memory time constant of a channel scales as 1 / step, so
+        tau_target / tau_source = mean step without / mean step with offset;
+        values > 1 mean the block keeps a longer memory for this subject.
+        Channels are combined by the geometric mean. No label is read.
+        """
+        self.eval()
+        mixers = self.model.timescale_mixers()
+        for mixer in mixers:
+            mixer.record_steps, mixer.step_sums = True, None
+        device = next(self.parameters()).device
+        try:
+            with self._timescale_target(0):
+                for batch in target_loader:
+                    target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
+                    self.model.extract_features(target_x.to(device, non_blocking=True))
+        finally:
+            for mixer in mixers:
+                mixer.record_steps = False
+        blocks = []
+        for index, mixer in enumerate(mixers):
+            base_sum, moved_sum, count = mixer.step_sums
+            mixer.step_sums = None
+            log_ratio = (base_sum / count).clamp_min(1e-12).log() - (
+                moved_sum / count
+            ).clamp_min(1e-12).log()
+            offset = mixer.target_step_offset.detach().double()
+            blocks.append({
+                "block": index,
+                "offset_mean": round(float(offset.mean()), 6),
+                "offset_abs_mean": round(float(offset.abs().mean()), 6),
+                "tau_ratio": round(float(log_ratio.mean().exp()), 6),
+                "tau_ratio_per_channel": [round(float(v), 6) for v in log_ratio.exp()],
+            })
+        mean_log = sum(math.log(b["tau_ratio"]) for b in blocks) / len(blocks)
+        return {"tau_ratio": round(math.exp(mean_log), 6), "blocks": blocks}
 
     @torch.no_grad()
     def _recalibrate_target_statistics(self, target_loader) -> None:
@@ -463,9 +590,10 @@ class HADATCFormer(ClassificationModule):
         feature_sum, square_sum, count = None, None, 0
         for batch in target_loader:
             target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
-            features = self.model.extract_features(
-                target_x.to(device, non_blocking=True)
-            ).double()
+            with self._timescale_target(0):
+                features = self.model.extract_features(
+                    target_x.to(device, non_blocking=True)
+                ).double()
             if feature_sum is None:
                 feature_sum = features.sum(dim=0)
                 square_sum = features.square().sum(dim=0)
@@ -492,6 +620,10 @@ class HADATCFormer(ClassificationModule):
         for parameter in self.parameters():
             parameter.requires_grad_(False)
 
+        # BatchNorm always switches to target batch statistics, whichever
+        # parameters are adapted, so the variants differ only in what is updated.
+        update_batchnorm = self.im_tta_parameters in ("batchnorm", "both")
+        update_timescale = self.im_tta_parameters in ("timescale", "both")
         batch_norm_modules = []
         adaptation_parameters = []
         for module in self.model.modules():
@@ -503,20 +635,34 @@ class HADATCFormer(ClassificationModule):
             module.track_running_stats = False
             module.running_mean = None
             module.running_var = None
-            module.weight.requires_grad_(True)
-            module.bias.requires_grad_(True)
             batch_norm_modules.append(module)
-            adaptation_parameters.extend((module.weight, module.bias))
+            if update_batchnorm:
+                module.weight.requires_grad_(True)
+                module.bias.requires_grad_(True)
+                adaptation_parameters.extend((module.weight, module.bias))
 
-        if not adaptation_parameters:
+        if not batch_norm_modules:
             raise RuntimeError(
                 "IM-TTA requires at least one affine BatchNorm layer in TCFormer."
             )
+        parameter_groups = []
+        if adaptation_parameters:
+            parameter_groups.append({"params": adaptation_parameters, "lr": self.im_tta_lr})
+        timescale_parameters = self._timescale_offsets() if update_timescale else []
+        for offset in timescale_parameters:
+            offset.requires_grad_(True)
+        if timescale_parameters:
+            parameter_groups.append(
+                {"params": timescale_parameters, "lr": self.im_tta_timescale_lr}
+            )
 
-        optimizer = torch.optim.Adam(adaptation_parameters, lr=self.im_tta_lr)
-        parameter_count = sum(parameter.numel() for parameter in adaptation_parameters)
+        optimizer = torch.optim.Adam(parameter_groups)
+        parameter_count = sum(
+            parameter.numel() for group in parameter_groups for parameter in group["params"]
+        )
         self.print(
-            f"IM-TTA start | steps={self.im_tta_steps} | lr={self.im_tta_lr:g} | "
+            f"IM-TTA start | parameters={self.im_tta_parameters} | steps={self.im_tta_steps} | "
+            f"lr_bn={self.im_tta_lr:g} | lr_timescale={self.im_tta_timescale_lr:g} | "
             f"BN_layers={len(batch_norm_modules)} | trainable_params={parameter_count}"
         )
 
@@ -644,9 +790,14 @@ class HADATCFormer(ClassificationModule):
 
         # A shared forward pass also gives BatchNorm both domains without ever
         # reading target labels.
-        temporal_features = self.model.extract_temporal_features(
-            torch.cat((source_x, target_x), dim=0)
-        )
+        # With target time-scale adaptation the target rows of this pass use
+        # the target step-size offset; it is trained by the target-side losses
+        # (InfoMax, adversarial, MMD), never by source labels.
+        stage1_start = source_count if self.target_timescale_stage1 else None
+        with self._timescale_target(stage1_start):
+            temporal_features = self.model.extract_temporal_features(
+                torch.cat((source_x, target_x), dim=0)
+            )
         pooled_features = self.model.tcn_head.pool_temporal_features(temporal_features)
 
         # Auxiliary alignment before temporal compression. It sees information

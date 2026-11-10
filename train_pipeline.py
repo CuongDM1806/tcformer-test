@@ -164,32 +164,53 @@ def train_and_test(config):
         # The "without IM-TTA" ablation comes from the same trained weights: a
         # copy gets every label-free step except IM-TTA (AutoDIAL target
         # statistics are still re-estimated), so one run yields both rows.
+        # Further test-time variants of the same weights (extra_tta_modes):
+        # "none" skips IM-TTA; "batchnorm", "timescale" and "both" choose what
+        # IM-TTA updates. The configured variant is scored below as usual.
         no_tta_result = None
+        extra_results = {}
+        extra_modes = list(config.get("extra_tta_modes", []))
+        if config.get("evaluate_without_im_tta", False) and "none" not in extra_modes:
+            extra_modes.insert(0, "none")
         if (
-            config.get("evaluate_without_im_tta", False)
+            extra_modes
             and hasattr(model, "adapt_to_target")
             and getattr(model, "im_tta_steps", 0) > 0
         ):
-            # A fresh instance with the same weights and buffers (incl. the
-            # AutoDIAL statistics) avoids deep-copying the attached trainer.
-            reference = model_cls(
-                **config["model_kwargs"], max_epochs=config["max_epochs"]
-            )
-            reference.load_state_dict(model.state_dict())
-            reference.to(next(model.parameters()).device)
-            # adapt_to_target logs through self.print, which needs a trainer.
-            reference.trainer = trainer
-            reference.im_tta_steps = 0
-            reference.adapt_to_target(test_loader)
-            no_tta_result = trainer.test(reference, dataloaders=test_loader)[0]
-            print(
-                f"\nTARGET SUBJECT {subject_id} WITHOUT IM-TTA | "
-                f"acc={no_tta_result['test_acc'] * 100:.2f}% | "
-                f"kappa={no_tta_result['test_kappa']:.4f}\n",
-                flush=True,
-            )
-            del reference
-            gc.collect()
+            for mode in extra_modes:
+                # A fresh instance with the same weights and buffers (incl. the
+                # AutoDIAL statistics) avoids deep-copying the attached trainer.
+                reference = model_cls(
+                    **config["model_kwargs"], max_epochs=config["max_epochs"]
+                )
+                reference.load_state_dict(model.state_dict())
+                reference.to(next(model.parameters()).device)
+                # adapt_to_target logs through self.print, which needs a trainer.
+                reference.trainer = trainer
+                if mode == "none":
+                    reference.im_tta_steps = 0
+                else:
+                    reference.im_tta_parameters = mode
+                reference.adapt_to_target(test_loader)
+                result = trainer.test(reference, dataloaders=test_loader)[0]
+                extra_results[mode] = {
+                    "acc": float(result["test_acc"]),
+                    "loss": float(result["test_loss"]),
+                    "kappa": float(result["test_kappa"]),
+                }
+                timescale = getattr(reference, "last_timescale_summary", None)
+                if timescale is not None:
+                    extra_results[mode]["timescale"] = timescale
+                if mode == "none":
+                    no_tta_result = result
+                print(
+                    f"\nTARGET SUBJECT {subject_id} TTA={mode} | "
+                    f"acc={result['test_acc'] * 100:.2f}% | "
+                    f"kappa={result['test_kappa']:.4f}\n",
+                    flush=True,
+                )
+                del reference
+                gc.collect()
 
         # Optional source-free IM-TTA. The method consumes only target EEG;
         # labels carried by the test loader are deliberately ignored.
@@ -293,6 +314,11 @@ def train_and_test(config):
                 "no_tta_loss": float(no_tta_result["test_loss"]),
                 "no_tta_kappa": float(no_tta_result["test_kappa"]),
             })
+        if extra_results:
+            subject_record["tta_variants"] = extra_results
+        if getattr(model, "target_timescale", False):
+            subject_record["im_tta_parameters"] = model.im_tta_parameters
+            subject_record["timescale"] = model.last_timescale_summary
         with open(subject_dir / f"subject_{subject_id}.json", "w") as f:
             json.dump(subject_record, f, indent=2)
 

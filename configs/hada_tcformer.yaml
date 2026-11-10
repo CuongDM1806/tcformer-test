@@ -14,6 +14,9 @@ domain_adaptation: true
 # statistics still re-estimated), giving the "without test-time adaptation"
 # ablation from the same run.
 evaluate_without_im_tta: false
+# Further test-time variants scored from the same weights, e.g.
+# [none, batchnorm, timescale, both] (see im_tta_parameters below).
+extra_tta_modes: []
 
 z_scale: true
 interaug: true
@@ -192,6 +195,18 @@ model_kwargs:
   im_tta_steps: 5
   im_tta_lr: 0.0001
   im_tta_diversity_weight: 1.0
+  # Target time-scale adaptation (off by default = the model above). Each
+  # selective-SSM block gets a per-channel offset of its step-size
+  # pre-activation, applied only to target trials and initialized at zero.
+  # target_timescale_stage1 learns it in Stage 1 from the target-side losses;
+  # im_tta_parameters chooses what IM-TTA updates: batchnorm (as above),
+  # timescale (only the offsets) or both. The offsets have no weight decay.
+  target_timescale: false
+  target_timescale_stage1: true
+  im_tta_parameters: batchnorm
+  # Five Adam steps of 0.02 move an offset by at most 0.1, i.e. about 10%
+  # of a typical step size; fixed a priori, not tuned on evaluation data.
+  im_tta_timescale_lr: 0.02
   log_every_n_batches: 5
 
   lr: 0.0009

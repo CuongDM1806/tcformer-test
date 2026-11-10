@@ -497,6 +497,7 @@ class _SelectiveSSMMixer(nn.Module):
         d_state: int = 8,
         d_conv: int = 3,
         scan_mode: str = "sequential",
+        target_timescale: bool = False,
     ):
         super().__init__()
         if d_state < 1 or d_conv < 1:
@@ -524,6 +525,19 @@ class _SelectiveSSMMixer(nn.Module):
         )
         self.D = nn.Parameter(torch.ones(d_model))
         self.out_proj = nn.Linear(d_model, d_model, bias=False)
+        # Target time-scale offset: one shift of the step-size pre-activation
+        # per channel, applied only to target-subject rows. It starts at zero,
+        # so the block is unchanged until the offset is learned. A larger step
+        # forgets the past faster (shorter memory), a smaller one keeps it longer.
+        self.target_step_offset = (
+            nn.Parameter(torch.zeros(d_model)) if target_timescale else None
+        )
+        # Rows [target_start:] of the batch are target trials; None = no offset.
+        self.target_start = None
+        # Optional diagnostics: per-channel sums of the step size without and
+        # with the offset over the target rows (see record_steps()).
+        self.record_steps = False
+        self.step_sums = None
 
     def forward(self, x: Tensor) -> Tensor:
         batch, length, _ = x.shape
@@ -539,6 +553,8 @@ class _SelectiveSSMMixer(nn.Module):
             self.x_proj(values), [self.d_model, self.d_state, self.d_state], dim=-1
         )
         delta = torch.nn.functional.softplus(delta_raw).clamp(max=1.0)
+        if self.target_step_offset is not None and self.target_start is not None:
+            delta = self._offset_target_steps(delta_raw, delta)
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
         if self.scan_mode == "hoisted":
             y = _hoisted_selective_scan(values, delta, A, B, C, self.D)
@@ -550,6 +566,25 @@ class _SelectiveSSMMixer(nn.Module):
             y = self._sequential_scan(values, delta, A, B, C)
         y = y * torch.nn.functional.silu(gate)
         return self.out_proj(y)
+
+    def _offset_target_steps(self, delta_raw: Tensor, delta: Tensor) -> Tensor:
+        start = self.target_start
+        offset = self.target_step_offset.to(dtype=delta_raw.dtype)
+        shifted = torch.nn.functional.softplus(delta_raw[start:] + offset).clamp(max=1.0)
+        if self.record_steps:
+            with torch.no_grad():
+                base = delta[start:].detach().double().sum(dim=(0, 1))
+                moved = shifted.detach().double().sum(dim=(0, 1))
+                count = shifted.shape[0] * shifted.shape[1]
+                if self.step_sums is None:
+                    self.step_sums = [base, moved, count]
+                else:
+                    self.step_sums[0] += base
+                    self.step_sums[1] += moved
+                    self.step_sums[2] += count
+        if start == 0:
+            return shifted
+        return torch.cat((delta[:start], shifted), dim=0)
 
     def _shifted_causal_conv(self, values: Tensor) -> Tensor:
         """Causal depthwise conv on [b, L, d] as a sum of shifted products.
@@ -599,11 +634,14 @@ class _SelectiveSSMBlock(nn.Module):
         drop_path_rate: float = 0.0,
         reverse: bool = False,
         scan_mode: str = "sequential",
+        target_timescale: bool = False,
     ):
         super().__init__()
         self.reverse = reverse
         self.norm = nn.LayerNorm(d_model)
-        self.mixer = _SelectiveSSMMixer(d_model, d_state, d_conv, scan_mode)
+        self.mixer = _SelectiveSSMMixer(
+            d_model, d_state, d_conv, scan_mode, target_timescale=target_timescale
+        )
         self.dropout = nn.Dropout(dropout)
         self.drop_path = DropPath(drop_path_rate)
 
@@ -652,6 +690,7 @@ class TCFormerModule(nn.Module):
             mamba_d_state: int = 8,
             mamba_d_conv: int = 3,
             mamba_scan_mode: str = "sequential",
+            mamba_target_timescale: bool = False,
         ):
         super().__init__()
         self.n_classes = n_classes
@@ -707,6 +746,7 @@ class TCFormerModule(nn.Module):
                     dropout=trans_dropout,
                     drop_path_rate=drop_rates[i].item(),
                     reverse=block_type == "mamba_backward",
+                    target_timescale=mamba_target_timescale,
                 )
             self.transformer.append(block)
 
@@ -742,6 +782,19 @@ class TCFormerModule(nn.Module):
 
         features = torch.cat((conv_features, tran_features), dim=1) 
         return self.tcn_head.extract_temporal_features(features)
+
+    def timescale_mixers(self) -> list:
+        """Selective-SSM mixers that carry a target time-scale offset."""
+        return [
+            block.mixer for block in self.transformer
+            if isinstance(block, _SelectiveSSMBlock)
+            and block.mixer.target_step_offset is not None
+        ]
+
+    def set_timescale_target_start(self, start) -> None:
+        """Apply the target offset to batch rows [start:]; None disables it."""
+        for mixer in self.timescale_mixers():
+            mixer.target_start = start
 
     def extract_features(self, x):
         temporal_features = self.extract_temporal_features(x)
