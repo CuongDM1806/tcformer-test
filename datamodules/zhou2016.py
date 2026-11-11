@@ -86,6 +86,16 @@ class Zhou2016LOSO(BaseDataModule):
             if subject_id != self.subject_id
         ]
 
+        use_ra = self.preprocessing_dict.get("riemannian_alignment", False)
+        per_session_ra = use_ra and BaseDataModule._ra_per_session(self.preprocessing_dict)
+        calibration_ra = use_ra and not per_session_ra
+        if per_session_ra:
+            print(
+                f"Applying per-session RA for Zhou2016 LOSO target "
+                f"{self.subject_id} (reference = each session of each subject)",
+                flush=True,
+            )
+
         source_train_arrays = []
         source_val_arrays = []
         for source_id in source_ids:
@@ -95,6 +105,12 @@ class Zhou2016LOSO(BaseDataModule):
             session_1 = BaseDataModule._dataset_to_arrays(sessions[0])
             session_2 = BaseDataModule._dataset_to_arrays(sessions[1])
             session_3 = BaseDataModule._dataset_to_arrays(sessions[2])
+            if per_session_ra:
+                # Each session is whitened by its own label-free reference.
+                session_1, session_2, session_3 = (
+                    (BaseDataModule._riemannian_align_many(X_s)[0], y_s)
+                    for X_s, y_s in (session_1, session_2, session_3)
+                )
             X_source_train = np.concatenate(
                 [session_1[0], session_2[0]], axis=0
             )
@@ -103,7 +119,7 @@ class Zhou2016LOSO(BaseDataModule):
             )
             X_source_val, y_source_val = session_3
 
-            if self.preprocessing_dict.get("riemannian_alignment", False):
+            if calibration_ra:
                 X_source_train, X_source_val = (
                     BaseDataModule._riemannian_align_many(
                         X_source_train, X_source_val
@@ -118,6 +134,11 @@ class Zhou2016LOSO(BaseDataModule):
         target_session_arrays = [
             BaseDataModule._dataset_to_arrays(session) for session in target_sessions
         ]
+        if per_session_ra:
+            target_session_arrays = [
+                (BaseDataModule._riemannian_align_many(X_s)[0], y_s)
+                for X_s, y_s in target_session_arrays
+            ]
         X_target = np.concatenate(
             [target_session_arrays[0][0], target_session_arrays[1][0]], axis=0
         )
@@ -125,7 +146,7 @@ class Zhou2016LOSO(BaseDataModule):
             [target_session_arrays[0][1], target_session_arrays[1][1]], axis=0
         )
         X_test, y_test = target_session_arrays[2]
-        if self.preprocessing_dict.get("riemannian_alignment", False):
+        if calibration_ra:
             # Fit only on the earlier target-adaptation sessions, then apply
             # the frozen transform to the held-out evaluation session.
             X_target, X_test = BaseDataModule._riemannian_align_many(

@@ -111,7 +111,28 @@ class BCICIV2bLOSO(BCICIV2b):
         y_test = np.concatenate([arr[1] for arr in test_arrays], axis=0)
         X_target = np.concatenate([arr[0] for arr in target_arrays], axis=0)
 
-        if self.preprocessing_dict.get("riemannian_alignment", False):
+        if (self.preprocessing_dict.get("riemannian_alignment", False)
+                and BaseDataModule._ra_per_session(self.preprocessing_dict)):
+            # Per-session RA: each of the five sessions of every subject is
+            # whitened by its own label-free reference (target sessions 4--5
+            # included).
+            print(
+                f"Applying per-session RA for BCIC IV-2b LOSO target "
+                f"{self.subject_id} (reference = each session of each subject)",
+                flush=True,
+            )
+
+            def align_sessions(arrays):
+                return [(BaseDataModule._riemannian_align_many(X_s)[0], y_s)
+                        for X_s, y_s in arrays]
+
+            train_arrays = align_sessions(train_arrays)
+            val_arrays = align_sessions(val_arrays)
+            test_arrays = align_sessions(test_arrays)
+            target_arrays = align_sessions(target_arrays)
+            X_test = np.concatenate([arr[0] for arr in test_arrays], axis=0)
+            X_target = np.concatenate([arr[0] for arr in target_arrays], axis=0)
+        elif self.preprocessing_dict.get("riemannian_alignment", False):
             # Fit one independent reference per source subject using only
             # sessions 1--3, then apply it unchanged to sessions 4--5.
             # The held-out subject follows the same clean protocol: its
