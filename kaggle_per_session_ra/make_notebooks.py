@@ -18,6 +18,8 @@ notebook differs from its baseline only in the RA reference:
   ssm_dan_per_session_ra_openbmi_s001_s012.ipynb, _s013_s026, _s027_s040, _s041_s054
       OpenBMI, all 54 targets in four jobs, two GPUs each. Built from the
       OpenBMI-54 full-model template; baseline = kaggle_openbmi54_full.
+  ssm_dan_per_session_ra_openbmi_leftover.ipynb
+      The 7 OpenBMI targets the 14-target jobs left unfinished at the time budget.
 
 Run:  python kaggle_per_session_ra/make_notebooks.py
 """
@@ -54,7 +56,13 @@ def write(path, code):
     print(f'wrote {path.relative_to(REPO)}')
 
 
-def openbmi_notebook(first=1, last=12):
+def openbmi_notebook(first=1, last=12, subjects=None, tag=None):
+    """One two-GPU OpenBMI job: targets first..last, or an explicit `subjects` list named `tag`."""
+    if subjects is None:
+        targets, label = f'list(range({first}, {last} + 1))', f'S{first}-S{last}'
+        tag = tag or f's{first:03d}-s{last:03d}'
+    else:
+        targets, label = repr(list(subjects)), ', '.join(f'S{s}' for s in subjects)
     block = ("# Per-session RA: every session is whitened by its own label-free reference\n"
              "# (target session 2 included). Everything else is the full model.\n"
              "PREPROCESSING = {'ra_reference': 'per_session'}\n")
@@ -68,13 +76,13 @@ def openbmi_notebook(first=1, last=12):
             .replace('__OVERRIDE__', override)
             .replace('__JOB__', '1')
             .replace('__TOTAL__', '1')
-            .replace('__TARGETS__', f'S{first}-S{last}')
-            .replace('__RUN_TAG__', f'openbmi_full_per_session_ra_s{first:03d}-s{last:03d}')
-            .replace('__TARGET_LIST__', f'list(range({first}, {last} + 1))'))
+            .replace('__TARGETS__', label)
+            .replace('__RUN_TAG__', f'openbmi_full_per_session_ra_{tag}')
+            .replace('__TARGET_LIST__', targets))
     code = replace_once(code, OLD_OPENBMI_BRANCH, f"BRANCH = '{BRANCH}'")
     code = replace_once(code, "run(['git', 'log', '-1', '--oneline'], cwd=REPO_PATH)\n",
                         "run(['git', 'log', '-1', '--oneline'], cwd=REPO_PATH)\n" + VERIFY)
-    write(HERE / f'ssm_dan_per_session_ra_openbmi_s{first:03d}_s{last:03d}.ipynb', code)
+    write(HERE / f"ssm_dan_per_session_ra_openbmi_{tag.replace('-', '_')}.ipynb", code)
 
 
 SUMMARY = '''
@@ -159,6 +167,8 @@ def single_gpu_notebook(dataset):
 
 
 OPENBMI_JOBS = [(1, 12), (13, 26), (27, 40), (41, 54)]
+# Folds the 14-target jobs deferred at Kaggle's time budget (~1.85 h/fold, 7 rounds > 11.5 h).
+OPENBMI_LEFTOVER = [25, 26, 38, 39, 40, 53, 54]
 
 
 if __name__ == '__main__':
@@ -166,3 +176,4 @@ if __name__ == '__main__':
         single_gpu_notebook(dataset)
     for first, last in OPENBMI_JOBS:
         openbmi_notebook(first, last)
+    openbmi_notebook(subjects=OPENBMI_LEFTOVER, tag='leftover')
