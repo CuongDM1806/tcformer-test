@@ -6,6 +6,7 @@ samples only and are used by the adversarial and MK-MMD alignment objectives.
 
 import math
 import time
+from contextlib import contextmanager
 
 import torch
 from torch import Tensor, nn
@@ -31,6 +32,33 @@ class _GradientReversal(torch.autograd.Function):
 class GradientReversal(nn.Module):
     def forward(self, x: Tensor, alpha: float = 1.0) -> Tensor:
         return _GradientReversal.apply(x, alpha)
+
+
+def random_session_shift(x: Tensor, log_energy: float, spatial: float) -> Tensor:
+    """Simulated recording-session shift ``x' = A x``, one random A per trial.
+
+    ``A = g * expm(s * S)``: ``g = exp(u / 2)`` with ``u ~ U(-log_energy,
+    log_energy)`` rescales the trial energy by ``exp(u)``; ``S`` is a random
+    traceless symmetric matrix with unit Frobenius norm and ``s ~ U(0,
+    spatial)``, so A is symmetric positive definite and re-weights spatial
+    directions. After RA the trial covariances of a session average to I, so
+    A A^T is the reference a frozen RA would miss when the next session drifts
+    (BCI IV-2a: 1.08-1.39x energy; OpenBMI: median 1.55x, up to >2x).
+    """
+    if x.ndim != 3:
+        raise ValueError("random_session_shift expects trials [batch, channels, time].")
+    batch, channels, _ = x.shape
+    work = x.float()
+    log_gain = (torch.rand(batch, device=x.device) * 2.0 - 1.0) * log_energy
+    noise = torch.randn(batch, channels, channels, device=x.device)
+    sym = 0.5 * (noise + noise.transpose(1, 2))
+    trace = torch.diagonal(sym, dim1=1, dim2=2).mean(dim=1)
+    sym = sym - trace[:, None, None] * torch.eye(channels, device=x.device)
+    sym = sym / torch.linalg.matrix_norm(sym).clamp_min(1e-6)[:, None, None]
+    strength = torch.rand(batch, device=x.device) * spatial
+    mixing = torch.linalg.matrix_exp(strength[:, None, None] * sym)
+    mixing = mixing * torch.exp(0.5 * log_gain)[:, None, None]
+    return torch.bmm(mixing, work).to(x.dtype)
 
 
 class ResidualFeatureAligner(nn.Module):
@@ -254,6 +282,9 @@ class HADATCFormer(ClassificationModule):
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
         im_tta_diversity_weight: float = 1.0,
+        shift_consistency_weight: float = 0.0,
+        shift_log_energy: float = 0.47,
+        shift_spatial: float = 0.4,
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -325,6 +356,16 @@ class HADATCFormer(ClassificationModule):
         self.im_tta_steps = int(im_tta_steps)
         self.im_tta_lr = float(im_tta_lr)
         self.im_tta_diversity_weight = float(im_tta_diversity_weight)
+        if shift_consistency_weight < 0.0 or shift_log_energy < 0.0 or shift_spatial < 0.0:
+            raise ValueError(
+                "shift_consistency_weight, shift_log_energy and shift_spatial must be non-negative."
+            )
+        # Session-shift consistency (0 = off): predictions on a trial and on a
+        # randomly re-mixed/re-scaled copy must agree, so the network tolerates
+        # the residual shift a frozen RA reference leaves in a later session.
+        self.shift_consistency_weight = float(shift_consistency_weight)
+        self.shift_log_energy = float(shift_log_energy)
+        self.shift_spatial = float(shift_spatial)
         if log_every_n_batches < 0:
             raise ValueError("log_every_n_batches must be non-negative.")
         self.log_every_n_batches = int(log_every_n_batches)
@@ -426,6 +467,51 @@ class HADATCFormer(ClassificationModule):
         light_gate = source_features.new_tensor(self.light_adaptation_factor)
         gate = torch.where(use_light_adaptation, light_gate, normal_gate)
         return gate, self._target_gap_ema.clone(), self._target_confidence_ema.clone()
+
+    @contextmanager
+    def _frozen_batchnorm_statistics(self):
+        """BatchNorm still normalizes with batch statistics, but its running
+        statistics (used at validation/test) are not moved by shifted copies."""
+        modules = [
+            m for m in self.model.modules()
+            if isinstance(m, nn.modules.batchnorm._BatchNorm) and m.track_running_stats
+        ]
+        momenta = [m.momentum for m in modules]
+        for m in modules:
+            m.momentum = 0.0
+        try:
+            yield
+        finally:
+            for m, momentum in zip(modules, momenta):
+                m.momentum = momentum
+
+    def _shift_consistency(
+        self, source_x: Tensor, target_x: Tensor, teacher_logits: Tensor
+    ) -> Tensor:
+        """KL(teacher || student) between each trial and a session-shifted copy.
+
+        The teacher is the ordinary pass of the same step (no gradient); the
+        student sees the same source and target trials, each re-mixed by its own
+        random A, through the same BatchNorm/AutoDIAL training path. No labels
+        are used, so source and target trials are treated alike.
+        """
+        source_count = source_x.size(0)
+        shifted = random_session_shift(
+            torch.cat((source_x, target_x), dim=0), self.shift_log_energy, self.shift_spatial
+        )
+        with self._frozen_batchnorm_statistics():
+            pooled = self.model.extract_features(shifted)
+        if self.domain_norm is not None:
+            source_pooled, target_pooled = self.domain_norm.forward_pair(
+                pooled[:source_count], pooled[source_count:],
+                detach_alpha=True, update_stats=False,
+            )
+            pooled = torch.cat((source_pooled, target_pooled), dim=0)
+        student_logits = self.model.classify_features(self.aligner(pooled))
+        teacher = teacher_logits.detach().float().softmax(dim=1)
+        return F.kl_div(
+            student_logits.float().log_softmax(dim=1), teacher, reduction="batchmean"
+        )
 
     def on_train_epoch_start(self):
         self._epoch_started_at = time.perf_counter()
@@ -712,6 +798,11 @@ class HADATCFormer(ClassificationModule):
             domain_logits, domain_targets
         )
         mmd_loss = self.mmd_loss(source_features, target_features)
+        shift_consistency_loss = source_logits.new_zeros(())
+        if self.shift_consistency_weight > 0.0:
+            shift_consistency_loss = self._shift_consistency(
+                source_x, target_x, torch.cat((source_logits, target_logits), dim=0)
+            )
         loss = (
             classification_loss
             + self.target_im_weight * target_im_loss
@@ -721,6 +812,8 @@ class HADATCFormer(ClassificationModule):
                 + self.mmd_weight * mmd_loss
                 + self.temporal_mmd_weight * temporal_mmd_loss
             )
+            # Same 0 -> 1 ramp as the GRL: the teacher is unreliable early on.
+            + self.shift_consistency_weight * alpha * shift_consistency_loss
         )
 
         acc = accuracy(
@@ -761,6 +854,8 @@ class HADATCFormer(ClassificationModule):
             batch_size=batch_size,
         )
         self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
+        if self.shift_consistency_weight > 0.0:
+            self.log("train_shift_consistency", shift_consistency_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         if self.domain_norm is not None:
             self.log("train_target_im_loss", target_im_loss, on_step=False, on_epoch=True, batch_size=batch_size)
             for group, value in enumerate(self.domain_norm.alpha(detach=True)):
@@ -796,6 +891,7 @@ class HADATCFormer(ClassificationModule):
                 f"domain={adversarial_loss.detach().item():.4f} | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
                 f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
+                f"shift={shift_consistency_loss.detach().item():.4f} | "
                 f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "
                 f"gap={target_gap.detach().item():.2f} | "
                 f"conf={target_confidence.detach().item():.2f} | "

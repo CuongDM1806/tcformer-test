@@ -192,6 +192,14 @@ model_kwargs:
   im_tta_steps: 5
   im_tta_lr: 0.0001
   im_tta_diversity_weight: 1.0
+  # Session-shift consistency (0 = off, the paper's SSM-DAN). Each source and
+  # target trial also passes as x' = A x with a random SPD A: energy scaled by
+  # exp(U(-shift_log_energy, shift_log_energy)) (0.47 -> 0.63-1.6x) and spatial
+  # re-weighting expm(U(0, shift_spatial) * S); KL(pred(x) || pred(x')) is
+  # added with the GRL ramp. Simulates the drift a frozen RA reference misses.
+  shift_consistency_weight: 0.0
+  shift_log_energy: 0.47
+  shift_spatial: 0.4
   log_every_n_batches: 5
 
   lr: 0.0009
