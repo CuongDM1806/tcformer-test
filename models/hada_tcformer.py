@@ -548,6 +548,9 @@ class HADATCFormer(ClassificationModule):
         offsets = self._target_context_offsets
         if offsets is None:
             offsets = self.predict_offsets(x)
+        # The cached prediction is a plain attribute, not a buffer: Lightning moves the
+        # module between CPU and GPU around fit/test, so follow the input's device.
+        offsets = offsets.to(x.device)
         return offsets.unsqueeze(1).expand(-1, x.shape[0], -1)
 
     def _extract_target_features(self, x: Tensor) -> Tensor:

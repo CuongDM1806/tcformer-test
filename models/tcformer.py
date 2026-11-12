@@ -580,11 +580,11 @@ class _SelectiveSSMMixer(nn.Module):
         if self.row_offsets is not None:
             if self.row_offsets.shape != shift.shape:
                 raise ValueError("row_offsets must have shape [batch, d_model].")
-            shift = shift + self.row_offsets.to(dtype=delta_raw.dtype)
+            shift = shift + self.row_offsets.to(device=delta_raw.device, dtype=delta_raw.dtype)
         if use_target:
             # Rows before target_start get a zero shift, i.e. their exact step size.
             rows = torch.arange(shift.shape[0], device=shift.device) >= self.target_start
-            shift = shift + rows.unsqueeze(1).to(shift.dtype) * self.target_step_offset.to(shift.dtype)
+            shift = shift + rows.unsqueeze(1).to(shift.dtype) * self.target_step_offset.to(device=shift.device, dtype=shift.dtype)
         return shift.unsqueeze(1)
 
     def _shifted_steps(self, delta_raw: Tensor, delta: Tensor, shift: Tensor) -> Tensor:
