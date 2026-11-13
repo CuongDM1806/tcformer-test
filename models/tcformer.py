@@ -14,7 +14,10 @@ in the published paper.
 """
 
 # Core Libraries
+import math
+
 import torch
+import torch.nn.functional as F
 from torch import nn, Tensor
 from typing import List
 
@@ -31,6 +34,39 @@ from utils.latency  import measure_latency
 
 
 # ------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------------- #
+def warp_temporal_kernel(weight: Tensor, log_scale: Tensor, max_log_scale: float):
+    """Rescale the frequency axis of a temporal convolution kernel.
+
+    ``weight`` has shape (F, 1, 1, k). The returned kernel is
+    ``s * w(s * (tau - c) + c)`` (linear interpolation, zero outside the
+    original support) with ``s = exp(log_scale)``, so every passband moves
+    from f to s * f while its gain is preserved and the kernel stays centred.
+    The kernel is lengthened by ``pad`` taps per side so a stretched kernel
+    (s < 1) is never truncated; at s = 1 the extra taps are zero and the
+    convolution is unchanged once the input is padded by the same ``pad``.
+    """
+    n_filters, k = weight.shape[0], weight.shape[-1]
+    pad = int(math.ceil(k * (math.exp(max_log_scale) - 1.0) / 2.0))
+    scale = torch.exp(log_scale).to(weight.dtype)
+    positions = torch.arange(
+        -pad, k + pad, device=weight.device, dtype=weight.dtype
+    )
+    center = (k - 1) / 2.0
+    source = (center + scale * (positions - center)).clamp(-1.0, float(k))
+    lower = torch.floor(source)
+    fraction = source - lower
+    # Index into the kernel padded by one zero tap on each side.
+    lower_index = lower.long() + 1
+    upper_index = (lower_index + 1).clamp(max=k + 1)
+    padded = F.pad(weight.reshape(n_filters, k), (1, 1))
+    warped = (
+        padded[:, lower_index] * (1.0 - fraction)
+        + padded[:, upper_index] * fraction
+    )
+    return (scale * warped).reshape(n_filters, 1, 1, k + 2 * pad), pad
+
+
 class MultiKernelConvBlock(nn.Module):
     """
     Multi-Kernel Convolution Block for EEG Feature Extraction.
@@ -119,10 +155,35 @@ class MultiKernelConvBlock(nn.Module):
         # Initialize weights
         glorot_weight_zero_bias(self)
 
-    def forward(self, x):
+    def _warped_temporal_conv(self, block, x, spectral_warp):
+        """Temporal conv where rows ``start:`` use a frequency-warped kernel.
+
+        ``spectral_warp = (start, log_scale, max_log_scale)``. Rows before
+        ``start`` (source trials) see the unchanged kernel; BatchNorm still
+        normalizes all rows together, exactly as without the warp.
+        """
+        start, log_scale, max_log_scale = spectral_warp
+        pad_layer, conv, batch_norm = block[0], block[1], block[2]
+        parts = []
+        if start > 0:
+            parts.append(conv(pad_layer(x[:start])))
+        if start < x.size(0):
+            kernel, extra = warp_temporal_kernel(conv.weight, log_scale, max_log_scale)
+            left, right, top, bottom = pad_layer.padding
+            target = F.pad(x[start:], (left + extra, right + extra, top, bottom))
+            parts.append(F.conv2d(target, kernel))
+        return batch_norm(torch.cat(parts, dim=0))
+
+    def forward(self, x, spectral_warp=None):
         # --- 1. one temporal conv per kernel -----------------
         x = self.rearrange(x)         # (B, 1, C, T)
-        feats = [conv(x) for conv in self.temporal_convs] # list of (B, F1, C, T')
+        if spectral_warp is None:
+            feats = [conv(x) for conv in self.temporal_convs] # list of (B, F1, C, T')
+        else:
+            feats = [
+                self._warped_temporal_conv(block, x, spectral_warp)
+                for block in self.temporal_convs
+            ]
         x = torch.cat(feats, dim=1)   # concat on channel dim # [B, F1 x n_groups, C, T]
 
         # --- 2. shared processing after concatenation --------
@@ -726,8 +787,8 @@ class TCFormerModule(nn.Module):
         # # Kaiming (He) init is recommended for Conv layers that precede SiLU / ReLU
         # nn.init.kaiming_normal_(self.reduce[0].weight, nonlinearity="linear") 
 
-    def extract_temporal_features(self, x):  # x: [B, C_electrodes, T]
-        conv_features = self.conv_block(x)         
+    def extract_temporal_features(self, x, spectral_warp=None):  # x: [B, C_electrodes, T]
+        conv_features = self.conv_block(x, spectral_warp)
         _, _, T = conv_features.shape
 
         tokens = self.rearrange(self.mix(conv_features)) 
@@ -743,8 +804,8 @@ class TCFormerModule(nn.Module):
         features = torch.cat((conv_features, tran_features), dim=1) 
         return self.tcn_head.extract_temporal_features(features)
 
-    def extract_features(self, x):
-        temporal_features = self.extract_temporal_features(x)
+    def extract_features(self, x, spectral_warp=None):
+        temporal_features = self.extract_temporal_features(x, spectral_warp)
         return self.tcn_head.pool_temporal_features(temporal_features)
 
     def classify_features(self, features):

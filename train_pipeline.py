@@ -154,6 +154,30 @@ def train_and_test(config):
             if datamodule.all_target_dataset is not None
             else None
         )
+        # Optional check of the spectral warp: individual mu peak of the
+        # source pool and of the unlabeled target adaptation trials.
+        mu_peaks = None
+        if (
+            config.get("measure_mu_peak", False)
+            and datamodule.train_dataset is not None
+            and datamodule.target_dataset is not None
+        ):
+            from utils.spectral_peak import mu_peak_hz
+
+            sfreq = float(config["preprocessing"]["sfreq"])
+            source_peak = mu_peak_hz(datamodule.train_dataset.tensors[0].numpy(), sfreq)
+            target_peak = mu_peak_hz(datamodule.target_dataset.tensors[0].numpy(), sfreq)
+            mu_peaks = {
+                "source_mu_peak_hz": source_peak,
+                "target_mu_peak_hz": target_peak,
+                "mu_peak_ratio": target_peak / source_peak,
+            }
+            print(
+                f"Mu peak | source={source_peak:.2f} Hz | target={target_peak:.2f} Hz | "
+                f"ratio={target_peak / source_peak:.4f}",
+                flush=True,
+            )
+
         datamodule.dataset = None
         datamodule.train_dataset = None
         datamodule.val_dataset = None
@@ -287,6 +311,13 @@ def train_and_test(config):
             "confusion_matrix": cm.tolist(),
             "class_names": list(datamodule_cls.class_names),
         }
+        warp_scale = (
+            model.spectral_warp_scale() if hasattr(model, "spectral_warp_scale") else None
+        )
+        if warp_scale is not None:
+            subject_record["spectral_warp_scale"] = warp_scale
+        if mu_peaks is not None:
+            subject_record.update(mu_peaks)
         if no_tta_result is not None:
             subject_record.update({
                 "no_tta_acc": float(no_tta_result["test_acc"]),

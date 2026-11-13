@@ -254,6 +254,8 @@ class HADATCFormer(ClassificationModule):
         im_tta_steps: int = 0,
         im_tta_lr: float = 1e-4,
         im_tta_diversity_weight: float = 1.0,
+        spectral_warp_max: float = 0.0,
+        spectral_warp_mode: str = "joint",
         log_every_n_batches: int = 5,
         **kwargs,
     ):
@@ -325,6 +327,23 @@ class HADATCFormer(ClassificationModule):
         self.im_tta_steps = int(im_tta_steps)
         self.im_tta_lr = float(im_tta_lr)
         self.im_tta_diversity_weight = float(im_tta_diversity_weight)
+        # Spectral warp alignment: one learned frequency-scale factor s for the
+        # target subject, applied to the first temporal convolutions of target
+        # trials only, s in [1 / (1 + max), 1 + max]. "joint": s is trained by
+        # every Stage-1 loss next to the usual GRL. "adversarial": the
+        # discriminator no longer sends a reversed gradient into the network;
+        # instead s alone is moved to make target features look like source.
+        if spectral_warp_max < 0.0:
+            raise ValueError("spectral_warp_max must be non-negative.")
+        if spectral_warp_mode not in ("joint", "adversarial"):
+            raise ValueError("spectral_warp_mode must be 'joint' or 'adversarial'.")
+        self.spectral_warp_mode = spectral_warp_mode
+        self._warp_max_log = math.log1p(float(spectral_warp_max))
+        self.spectral_warp_logit = (
+            nn.Parameter(torch.zeros(())) if spectral_warp_max > 0.0 else None
+        )
+        if self.spectral_warp_logit is None and spectral_warp_mode == "adversarial":
+            raise ValueError("spectral_warp_mode 'adversarial' needs spectral_warp_max > 0.")
         if log_every_n_batches < 0:
             raise ValueError("log_every_n_batches must be non-negative.")
         self.log_every_n_batches = int(log_every_n_batches)
@@ -343,10 +362,58 @@ class HADATCFormer(ClassificationModule):
             return features
         return self.domain_norm(features, domain)
 
+    def _target_warp(self, start: int = 0):
+        """Warp spec for rows ``start:`` (target trials), or None if disabled."""
+        if self.spectral_warp_logit is None:
+            return None
+        log_scale = self._warp_max_log * torch.tanh(self.spectral_warp_logit)
+        return (start, log_scale, self._warp_max_log)
+
+    def spectral_warp_scale(self) -> float | None:
+        warp = self._target_warp()
+        return None if warp is None else float(torch.exp(warp[1]).detach())
+
     def forward(self, x: Tensor, domain: str | None = None) -> Tensor:
-        features = self.model.extract_features(x)
-        features = self._normalize(features, domain or self._inference_domain)
+        domain = domain or self._inference_domain
+        warp = self._target_warp() if domain == "target" else None
+        features = self.model.extract_features(x, spectral_warp=warp)
+        features = self._normalize(features, domain)
         return self.model.classify_features(self.aligner(features))
+
+    def _warp_adversarial_loss(self, target_x: Tensor) -> Tensor:
+        """Discriminator loss that trains only the target warp factor.
+
+        Target trials pass through the network in inference mode (running
+        BatchNorm/AutoDIAL statistics, no dropout) with every weight frozen,
+        so neither the backbone nor the discriminator receives this gradient
+        and no running statistic changes. The loss asks the discriminator to
+        label the warped target trials as source.
+        """
+        modules = [self.model, self.aligner, self.domain_discriminator]
+        if self.domain_norm is not None:
+            modules.append(self.domain_norm)
+        was_training = [module.training for module in modules]
+        frozen = [
+            parameter
+            for parameter in self.parameters()
+            if parameter.requires_grad and parameter is not self.spectral_warp_logit
+        ]
+        try:
+            for module in modules:
+                module.eval()
+            for parameter in frozen:
+                parameter.requires_grad_(False)
+            features = self.model.extract_features(
+                target_x, spectral_warp=self._target_warp()
+            )
+            features = self.aligner(self._normalize(features, "target"))
+            logits = self.domain_discriminator(features)
+            return F.binary_cross_entropy_with_logits(logits, torch.zeros_like(logits))
+        finally:
+            for parameter in frozen:
+                parameter.requires_grad_(True)
+            for module, training in zip(modules, was_training):
+                module.train(training)
 
     def on_validation_start(self):
         self._inference_domain = "source"
@@ -436,6 +503,11 @@ class HADATCFormer(ClassificationModule):
             epoch % 10 == 0 or epoch == int(self.hparams.max_epochs)
         ):
             self.print(f"Epoch {epoch} | AutoDIAL alpha: {self.autodial_alpha()}")
+        warp_scale = self.spectral_warp_scale()
+        if warp_scale is not None and (
+            epoch % 10 == 0 or epoch == int(self.hparams.max_epochs)
+        ):
+            self.print(f"Epoch {epoch} | spectral warp s = {warp_scale:.4f}")
 
     def adapt_to_target(self, target_loader):
         """Label-free adaptation to the target trials after training.
@@ -464,7 +536,8 @@ class HADATCFormer(ClassificationModule):
         for batch in target_loader:
             target_x = batch[0] if isinstance(batch, (tuple, list)) else batch
             features = self.model.extract_features(
-                target_x.to(device, non_blocking=True)
+                target_x.to(device, non_blocking=True),
+                spectral_warp=self._target_warp(),
             ).double()
             if feature_sum is None:
                 feature_sum = features.sum(dim=0)
@@ -645,7 +718,8 @@ class HADATCFormer(ClassificationModule):
         # A shared forward pass also gives BatchNorm both domains without ever
         # reading target labels.
         temporal_features = self.model.extract_temporal_features(
-            torch.cat((source_x, target_x), dim=0)
+            torch.cat((source_x, target_x), dim=0),
+            spectral_warp=self._target_warp(source_count),
         )
         pooled_features = self.model.tcn_head.pool_temporal_features(temporal_features)
 
@@ -700,7 +774,13 @@ class HADATCFormer(ClassificationModule):
         )
 
         alpha = self._grl_alpha()
-        domain_logits = self.domain_discriminator(self.grl(all_features, alpha))
+        adversarial_mode = self.spectral_warp_mode == "adversarial"
+        # Adversarial warp mode: the discriminator trains on detached features
+        # and its counter-signal reaches only the warp factor (below).
+        discriminator_input = (
+            all_features.detach() if adversarial_mode else self.grl(all_features, alpha)
+        )
+        domain_logits = self.domain_discriminator(discriminator_input)
         domain_targets = torch.cat(
             (
                 torch.zeros(source_count, 1, device=all_features.device),
@@ -722,6 +802,10 @@ class HADATCFormer(ClassificationModule):
                 + self.temporal_mmd_weight * temporal_mmd_loss
             )
         )
+        warp_adversarial_loss = None
+        if adversarial_mode:
+            warp_adversarial_loss = self._warp_adversarial_loss(target_x)
+            loss = loss + adaptation_gate * self.adversarial_weight * alpha * warp_adversarial_loss
 
         acc = accuracy(
             source_logits, source_y, task="multiclass", num_classes=self.hparams.n_classes
@@ -761,6 +845,11 @@ class HADATCFormer(ClassificationModule):
             batch_size=batch_size,
         )
         self.log("grl_alpha", alpha, on_step=False, on_epoch=True, batch_size=batch_size)
+        target_warp = self._target_warp()
+        if target_warp is not None:
+            self.log("spectral_warp_scale", torch.exp(target_warp[1]).detach(), on_step=False, on_epoch=True, batch_size=batch_size)
+        if warp_adversarial_loss is not None:
+            self.log("train_warp_adv_loss", warp_adversarial_loss, on_step=False, on_epoch=True, batch_size=batch_size)
         if self.domain_norm is not None:
             self.log("train_target_im_loss", target_im_loss, on_step=False, on_epoch=True, batch_size=batch_size)
             for group, value in enumerate(self.domain_norm.alpha(detach=True)):
@@ -788,6 +877,11 @@ class HADATCFormer(ClassificationModule):
             adaptation_mode = (
                 "light" if adaptation_gate.detach().item() < 1.0 else "normal"
             )
+            warp_text = ""
+            if target_warp is not None:
+                warp_text = f"warp_s={self.spectral_warp_scale():.4f} | "
+            if warp_adversarial_loss is not None:
+                warp_text += f"warp_adv={warp_adversarial_loss.detach().item():.4f} | "
             self.print(
                 f"Epoch {self.current_epoch + 1}/{self.hparams.max_epochs} | "
                 f"Batch {batch_progress} | "
@@ -796,6 +890,7 @@ class HADATCFormer(ClassificationModule):
                 f"domain={adversarial_loss.detach().item():.4f} | "
                 f"mmd={mmd_loss.detach().item():.4f} | "
                 f"tmmd={temporal_mmd_loss.detach().item():.4f} | "
+                f"{warp_text}"
                 f"DA={adaptation_mode}({adaptation_gate.detach().item():.2f}) | "
                 f"gap={target_gap.detach().item():.2f} | "
                 f"conf={target_confidence.detach().item():.2f} | "
