@@ -119,7 +119,7 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 | 1 | Bảng Δ_RA trên 4 dataset, cả 2 kiểu RA (gồm Zhou PS-RA, OpenBMI PS-RA đủ 54) | — | ✅ Xong 2026-11-13 (đã cập nhật `tab:ablation` EN + VI) |
 | 2 | MDM trước/sau RA frozen trên 2a, 2b, Zhou, kèm đối chứng 3 kênh và 2 lớp | Không | ✅ Đã có (`analysis/ra_mechanism_outputs/`) |
 | 3 | Xác minh các ô "(kiểm tra)" ở mục 4: tham chiếu của Zhou, số trial fit tham chiếu của 2b và Zhou | Không | ✅ Xong 2026-11-13: Zhou tham chiếu mastoid trái; 2b 400 trial; Zhou ~300 trial |
-| 4 | **Đo đặc trưng H1–H4** trên đủ 4 dataset, theo subject | Không | ❌ |
+| 4 | **Đo đặc trưng H1–H4** trên đủ 4 dataset, theo subject | Không | ⏳ Notebook sẵn sàng: `analysis/ra_data_characteristics.ipynb` (Kaggle CPU), chờ kết quả |
 | 5 | **Can thiệp proxy** cho H1–H3 (MDM + TS-LR, RA và không RA, frozen và per-session) | Không | ❌ |
 | 6 | Thêm OpenBMI và RA per-session vào phân tích MDM có sẵn, thêm TS-LR | Không | ❌ |
 | 7 | **Xác nhận bằng mạng:** lấy đặc trưng có tác động lớn nhất ở mục 5, chạy SSM-DAN trên 2a đã tắt đặc trưng đó, có RA và không RA | Có (2 run × 9 subject) | ❌ |
