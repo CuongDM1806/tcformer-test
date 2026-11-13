@@ -61,7 +61,7 @@
                    country={[Quốc gia]}}
 
 \begin{abstract}
-Giải mã điện não đồ tưởng tượng vận động (MI-EEG) liên chủ thể gặp khó khăn do tỉ số tín hiệu trên nhiễu thấp, dữ liệu có nhãn khan hiếm, và độ dịch chuyển phân phối lớn giữa các chủ thể và các phiên ghi. Nghiên cứu này đề xuất SSM-DAN, một mạng không gian trạng thái chọn lọc thích ứng miền, kết hợp khối tích chập đa thang với các khối không gian trạng thái chọn lọc hai chiều để nắm bắt cả mẫu thời gian cục bộ lẫn tầm xa, đồng thời giảm độ dịch chuyển giữa các chủ thể bằng căn chỉnh phân cấp, gồm một lớp chuẩn hóa nguồn--đích được học và thích ứng tại thời điểm kiểm thử không cần nhãn. Khung phương pháp được đánh giá trên ba bộ dữ liệu MI-EEG công khai theo giao thức kiểm định bỏ-một-chủ-thể (leave-one-subject-out) với các phiên huấn luyện, thích ứng và kiểm thử được tách theo thứ tự thời gian. SSM-DAN đạt độ chính xác trung bình 76,12\% trên BCI Competition IV-2a, 84,09\% trên BCI Competition IV-2b và 84,33\% trên Zhou2016. Các nghiên cứu loại bỏ thành phần (ablation) cho thấy đóng góp của từng thành phần thích ứng phụ thuộc vào bộ dữ liệu. Kết quả cho thấy việc kết hợp mô hình không gian trạng thái chọn lọc với căn chỉnh phân cấp được học giúp cải thiện giải mã MI liên chủ thể mà không cần nhãn của chủ thể đích.
+Giải mã điện não đồ tưởng tượng vận động (MI-EEG) liên chủ thể gặp khó khăn do tỉ số tín hiệu trên nhiễu thấp, dữ liệu có nhãn khan hiếm, và độ dịch chuyển phân phối lớn giữa các chủ thể và các phiên ghi. Nghiên cứu này đề xuất SSM-DAN, một mạng không gian trạng thái chọn lọc thích ứng miền, kết hợp khối tích chập đa thang với các khối không gian trạng thái chọn lọc hai chiều để nắm bắt cả mẫu thời gian cục bộ lẫn tầm xa, đồng thời giảm độ dịch chuyển giữa các chủ thể bằng căn chỉnh phân cấp, gồm một lớp chuẩn hóa nguồn--đích được học và thích ứng tại thời điểm kiểm thử không cần nhãn. Khung phương pháp được đánh giá trên ba bộ dữ liệu MI-EEG công khai theo giao thức kiểm định bỏ-một-chủ-thể (leave-one-subject-out) với các phiên huấn luyện, thích ứng và kiểm thử được tách theo thứ tự thời gian. SSM-DAN đạt độ chính xác trung bình 76,12\% trên BCI Competition IV-2a, 84,09\% trên BCI Competition IV-2b và 84,33\% trên Zhou2016. Các nghiên cứu loại bỏ thành phần (ablation), thực hiện thêm trên tập OpenBMI gồm 54 chủ thể, cho thấy đóng góp của từng thành phần thích ứng phụ thuộc vào bộ dữ liệu, và tham chiếu Riemann cần được ước lượng lại khi năng lượng tín hiệu thay đổi giữa các phiên. Kết quả cho thấy việc kết hợp mô hình không gian trạng thái chọn lọc với căn chỉnh phân cấp được học giúp cải thiện giải mã MI liên chủ thể mà không cần nhãn của chủ thể đích.
 \end{abstract}
 
 \begin{keyword}
@@ -457,42 +457,49 @@ BFT~\cite{li2026bft} & (e) & 77.47$^{\dagger}$ & -- & 84.38$^{\dagger}$ & 63.08 
 
 Bảng~\ref{tab:ablation} tuân theo giao thức chính theo thời gian. Biến thể không có thích ứng miền loại bỏ mọi thành phần thích ứng miền ở Giai đoạn~1 (AutoDIAL, cực đại hóa thông tin trên đích, hàm mất mát đối kháng và cả hai hàm MMD) nhưng giữ lại căn chỉnh Riemann và IM-TTA; ngoài ra, mọi biến thể dùng cùng các lượt và cùng quy tắc chọn checkpoint.
 
-PhysioNet MI (EEG Motor Movement/Imagery Dataset) \cite{schalk2004bci2000,goldberger2000physiobank} được bổ sung như một tập chủ thể lớn hơn, chỉ dùng cho nghiên cứu loại bỏ thành phần. Dữ liệu 64 kênh, 160~Hz gồm bốn lớp tưởng tượng vận động (nắm tay trái, nắm tay phải, nắm cả hai tay và cử động hai bàn chân). Các chủ thể 88, 92 và 100 bị loại vì được ghi ở 128~Hz với cách định thời trial khác, còn lại 106 chủ thể. Mỗi trial là khoảng 4,1~s sau tín hiệu gợi ý (656 mẫu), không lọc tần số và không chuẩn hóa z-score; các trial bị cắt ở cuối lượt ghi bị loại, còn 84--90 trial mỗi chủ thể. Đánh giá theo LOSO với 106 lượt: 105 chủ thể nguồn được chia 95/5 thành trial huấn luyện và trial kiểm định để chọn checkpoint, mọi mô hình được huấn luyện 65 epoch với kích thước batch hiệu dụng 108. Vì PhysioNet chỉ có một phiên cho mỗi chủ thể, cùng một tập trial đích không nhãn vừa dùng để thích ứng vừa dùng để đánh giá; thiết lập transductive này kém chặt chẽ hơn giao thức theo thời gian của các bộ dữ liệu còn lại, nên kết quả PhysioNet không được so sánh trực tiếp với chúng.
+OpenBMI (Lee2019\_MI) \cite{lee2019openbmi} được bổ sung như một tập chủ thể lớn hơn cho nghiên cứu loại bỏ thành phần. Bộ dữ liệu gồm 54 chủ thể, ghi bằng 62 kênh EEG trong hai phiên vào hai ngày khác nhau; mỗi phiên có một lượt ghi ngoại tuyến gồm 100 lần thử tưởng tượng tay trái hoặc tay phải. Tín hiệu được lọc thông dải 4--38~Hz, tham chiếu lại theo trung bình chung, hạ mẫu xuống 100~Hz và cắt trong khoảng 0--4~s sau tín hiệu gợi ý; không dùng tăng cường S\&R. Nhờ có hai phiên, OpenBMI dùng được cùng giao thức theo thời gian như các bộ dữ liệu còn lại: trong mỗi lượt của 54 lượt LOSO, 53 chủ thể nguồn cung cấp các lần thử có nhãn của phiên~1 để huấn luyện và của phiên~2 để chọn checkpoint, còn phiên~1 không nhãn của chủ thể đích được dùng ở Giai đoạn~1 và phiên~2 dùng cho IM-TTA và đánh giá. RA được khớp trên phiên~1 của từng chủ thể, và mọi biến thể dùng thiết lập tối ưu của BCI IV-2a. Do mỗi phiên đánh giá có 100 lần thử cân bằng hai lớp, $\kappa=2P-1$ với độ chính xác $P$. Với 54 cặp chủ thể đích, kiểm định Wilcoxon trên OpenBMI dùng xấp xỉ chuẩn thay cho phép liệt kê chính xác, kèm hiệu chỉnh Holm trên bốn phép so sánh loại bỏ thành phần.
 
 \begin{table*}[!htbp]
 \centering
-\caption{Kết quả loại bỏ thành phần: trung bình $\pm$ độ lệch chuẩn của độ chính xác (\%) và $\kappa$ của Cohen trên các chủ thể đích.}
+\caption{Kết quả loại bỏ thành phần: trung bình $\pm$ độ lệch chuẩn của độ chính xác (\%) và $\kappa$ của Cohen trên các chủ thể đích. Biến thể tốt nhất của mỗi bộ dữ liệu được in đậm. Cột cuối thay tham chiếu RA cố định của SSM-DAN bằng tham chiếu theo từng phiên (Mục~\ref{subsec:ra_reference}). $^{a}$53 trong 54 chủ thể đích của OpenBMI.}
 \label{tab:ablation}
 \footnotesize
 \setlength{\tabcolsep}{3.0pt}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{llccccc}
+\begin{tabular}{llcccccc}
 \toprule
-Bộ dữ liệu & Thước đo & SSM-DAN & \colhead{Chỉ huấn\\luyện trên\\nguồn} & \colhead{Không có\\căn chỉnh\\Riemann} & \colhead{Không có\\thích ứng\\miền} & \colhead{Không có\\thích ứng tại\\thời điểm kiểm thử} \\
+Bộ dữ liệu & Thước đo & SSM-DAN & \colhead{Chỉ huấn\\luyện trên\\nguồn} & \colhead{Không có\\căn chỉnh\\Riemann} & \colhead{Không có\\thích ứng\\miền} & \colhead{Không có\\thích ứng tại\\thời điểm kiểm thử} & \colhead{Tham chiếu\\RA theo\\từng phiên} \\
 \midrule
 \multirow{2}{*}{BCI IV-2a}
- & Đ.c.x. & $\mathbf{76.12\pm11.96}$ & $64.35\pm12.77$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.159}$ & $0.525\pm0.170$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ \\
+ & Đ.c.x. & $76.12\pm11.96$ & $64.35\pm12.77$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ & $\mathbf{77.74\pm11.72}$ \\
+ & $\kappa$ & $0.682\pm0.159$ & $0.525\pm0.170$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ & $\mathbf{0.703\pm0.156}$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
- & Đ.c.x. & $\mathbf{84.09\pm10.42}$ & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ \\
+ & Đ.c.x. & $84.09\pm10.42$ & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ & $\mathbf{84.10\pm10.23}$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ & $\mathbf{0.682\pm0.205}$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Đ.c.x. & $\mathbf{84.33\pm0.75}$ & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
- & $\kappa$ & $\mathbf{0.765\pm0.011}$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ \\
+ & Đ.c.x. & $84.33\pm0.75$ & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ & $\mathbf{85.33\pm2.05}$ \\
+ & $\kappa$ & $0.765\pm0.011$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ & $\mathbf{0.780\pm0.031}$ \\
 \midrule
-% TODO: fill the adaptive PhysioNet cells from the full / no_ra / no_da Kaggle runs
-% (feature/hada-autodial-physionet106); without IM-TTA = no_tta_acc of the full run.
-\multirow{2}{*}{PhysioNet MI}
- & Đ.c.x. & -- & $60.68\pm13.89$ & -- & -- & -- \\
- & $\kappa$ & -- & $0.476\pm0.185$ & -- & -- & -- \\
+% OpenBMI, seed 0, 54 LOSO folds, fixed (session-1) RA reference. Source-only has 53 folds:
+% TODO: add target S37 when its source-only run is available and recompute this cell.
+\multirow{2}{*}{OpenBMI}
+ & Đ.c.x. & $80.61\pm10.26$ & $79.92\pm11.04^{a}$ & $83.50\pm9.43$ & $79.85\pm10.02$ & $76.65\pm12.19$ & $\mathbf{84.00\pm9.56}$ \\
+ & $\kappa$ & $0.612\pm0.205$ & $0.598\pm0.221^{a}$ & $0.670\pm0.189$ & $0.597\pm0.200$ & $0.533\pm0.244$ & $\mathbf{0.680\pm0.191}$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table*}
 
-Trên BCI IV-2a, việc loại bỏ căn chỉnh Riemann, thích ứng miền Giai đoạn~1, hoặc thích ứng tại thời điểm kiểm thử đều làm giảm độ chính xác có ý nghĩa thống kê. Trên BCI IV-2b và Zhou2016, mô hình đầy đủ vẫn là biến thể tốt nhất, nhưng mức chênh nhỏ và không có ý nghĩa. Do đó, đóng góp của từng thành phần phụ thuộc vào bộ dữ liệu. Trên PhysioNet MI, mô hình chỉ huấn luyện trên nguồn đạt $60,68\pm13,89\%$ ($\kappa=0,476\pm0,185$) trên 106 chủ thể đích, với độ chính xác từng chủ thể từ 32,22\% đến 90,00\%.
+Trên BCI IV-2a, việc loại bỏ căn chỉnh Riemann, thích ứng miền Giai đoạn~1, hoặc thích ứng tại thời điểm kiểm thử đều làm giảm độ chính xác có ý nghĩa thống kê. Trên BCI IV-2b và Zhou2016, mô hình đầy đủ vẫn là biến thể tốt nhất, nhưng mức chênh nhỏ và không có ý nghĩa. Do đó, đóng góp của từng thành phần phụ thuộc vào bộ dữ liệu. Trên OpenBMI, IM-TTA tăng độ chính xác thêm 3,96 điểm (cao hơn ở 38 trong 54 chủ thể đích, $p_\mathrm{Holm}<0{,}001$), trong khi mức tăng so với biến thể không có thích ứng miền (0,76 điểm) và so với mô hình chỉ huấn luyện trên nguồn (0,51 điểm) không có ý nghĩa ($p_\mathrm{Holm}=0{,}68$ và $0{,}72$). Ngược lại, loại bỏ RA làm độ chính xác tăng 2,89 điểm (cao hơn ở 33 trong 54 chủ thể đích, $p_\mathrm{Holm}=0{,}002$): với tham chiếu cố định trên phiên~1, RA làm giảm độ chính xác trên bộ dữ liệu này. Mục~\ref{subsec:ra_reference} phân tích hiện tượng này.
+
+\subsection{Tham chiếu RA theo từng phiên}
+\label{subsec:ra_reference}
+
+Tham chiếu cố định giả định rằng hiệp phương sai trung bình của một chủ thể ổn định giữa các phiên. Trên OpenBMI, giả định này không đúng: sau RA theo phiên~1, trung vị năng lượng lần thử của phiên~2 bằng 1,55 lần phiên~1 tính trên các chủ thể, và hơn hai lần ở 20 trong 54 chủ thể, so với 1,08--1,39 lần trên BCI IV-2a. Vì vậy, SSM-DAN được chạy lại với tham chiếu theo từng phiên: mỗi phiên của mỗi chủ thể, kể cả phiên đánh giá của chủ thể đích, được làm trắng bằng trung bình Riemann của chính các lần thử không nhãn trong phiên đó. Tham chiếu của phiên đánh giá dùng đúng các lần thử đánh giá không nhãn mà IM-TTA vốn đã truy cập, nên mức truy cập dữ liệu đích không thay đổi; giống IM-TTA, nó cần các lần thử này theo lô. Mọi thiết lập khác giữ nguyên như các thí nghiệm chính; kết quả nằm ở cột cuối của Bảng~\ref{tab:ablation}.
+
+Trên OpenBMI, tham chiếu theo từng phiên tăng 3,39 điểm khi có IM-TTA (84,00\% so với 80,61\%; cao hơn ở 43 trong 54 chủ thể đích, $p<0{,}001$) và 7,24 điểm khi không có IM-TTA (83,89\% so với 76,65\%; 45 trong 54, $p<0{,}001$), trong khi mức đóng góp của IM-TTA giảm từ 3,96 xuống 0,11 điểm ($p=0{,}50$); như vậy phần lớn lợi ích của IM-TTA khi dùng tham chiếu cố định là bù cho độ lệch năng lượng giữa các phiên. Với tham chiếu theo từng phiên, SSM-DAN cũng vượt biến thể không có RA (84,00\% so với 83,50\%), dù không có ý nghĩa ($p=0{,}61$). Trên BCI IV-2a, độ chính xác tăng 1,62 điểm khi có IM-TTA (8 trong 9 chủ thể đích, $p$ chính xác $=0{,}023$), và IM-TTA vẫn đóng góp thêm 2,89 điểm (từ 74,85\% lên 77,74\%; 8 trong 9, $p=0{,}008$). Trên BCI IV-2b, hai loại tham chiếu cho độ chính xác như nhau (84,10\% so với 84,09\%; cao hơn ở 3 chủ thể đích, thấp hơn ở 5, $p=0{,}97$). Trên Zhou2016, tham chiếu theo từng phiên tăng 1,00 điểm (85,33\% so với 84,33\%; cao hơn ở 3 trong 4 chủ thể đích, $p$ chính xác $=0{,}38$), và IM-TTA đóng góp thêm 2,83 điểm (từ 82,50\% lên 85,33\%; 4 trong 4, $p=0{,}125$, giá trị nhỏ nhất có thể đạt với bốn chủ thể đích). Do biến thể này được khảo sát sau các thí nghiệm chính, các kiểm định trên không hiệu chỉnh Holm và chỉ đóng vai trò bằng chứng bổ trợ; mọi kết quả khác dùng tham chiếu cố định.
 
 \subsection{Hiệu năng tính toán}
 \label{subsec:results_efficiency}
@@ -542,16 +549,16 @@ SSM-DAN\newline (không RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 13
 \section{Thảo luận}
 \label{sec:discussion}
 
-Lợi ích của từng thành phần thích ứng phụ thuộc vào bộ dữ liệu: rõ rệt trên BCI IV-2a nhưng nhỏ và không có ý nghĩa trên BCI IV-2b và Zhou2016, nơi cần các thí nghiệm lặp với nhiều hạt giống để xác nhận khác biệt.
+Lợi ích của từng thành phần thích ứng phụ thuộc vào bộ dữ liệu: rõ rệt trên BCI IV-2a nhưng nhỏ và không có ý nghĩa trên BCI IV-2b và Zhou2016, nơi cần các thí nghiệm lặp với nhiều hạt giống để xác nhận khác biệt. Tập OpenBMI lớn hơn xác nhận lợi ích của IM-TTA, nhưng cho thấy tham chiếu RA cố định trên một phiên trước có thể làm giảm độ chính xác khi năng lượng tín hiệu thay đổi giữa các phiên. Ước lượng lại tham chiếu trên từng phiên loại bỏ được mức giảm này và giải thích phần lớn lợi ích của IM-TTA, gợi ý rằng một phần lớn độ dịch chuyển giữa các phiên mà thích ứng tại thời điểm kiểm thử xử lý là sự thay đổi của thống kê bậc hai của tín hiệu.
 
 Các lượt quét xen kẽ khai thác trọn vẹn các lần thử ngoại tuyến và không nhân quả, nên ứng dụng trực tuyến sẽ cần xử lý chỉ theo chiều xuôi.
 
-Do IM-TTA sử dụng tín hiệu không nhãn của phiên đánh giá, phương pháp mang tính chuyển nạp và phải được so sánh với các phương pháp cơ sở có cùng mức truy cập dữ liệu đích. Các hạn chế khác gồm thiết lập ba kênh của BCI IV-2b, số người tham gia ít của Zhou2016, và các phương pháp cơ sở tương ứng chưa đầy đủ.
+Do IM-TTA, cũng như tham chiếu RA theo từng phiên, sử dụng tín hiệu không nhãn của phiên đánh giá, phương pháp mang tính chuyển nạp và phải được so sánh với các phương pháp cơ sở có cùng mức truy cập dữ liệu đích; ứng dụng trực tuyến sẽ cần ước lượng dần tham chiếu và các thống kê được thích ứng. Các hạn chế khác gồm thiết lập ba kênh của BCI IV-2b, số người tham gia ít của Zhou2016, và các phương pháp cơ sở tương ứng chưa đầy đủ.
 
 \section{Kết luận}
 \label{sec:conclusion}
 
-Chúng tôi đã trình bày SSM-DAN, một khung MI-EEG liên chủ thể kết hợp tích chập đa thang và mô hình không gian trạng thái chọn lọc hai chiều với UDA phân cấp và IM-TTA có ràng buộc, được đánh giá theo giao thức LOSO theo thời gian, giữ nhãn đích nằm ngoài huấn luyện, thích ứng và chọn mô hình. Phương pháp đạt độ chính xác trung bình 76,12\% trên BCI IV-2a, 84,09\% trên BCI IV-2b và 84,33\% trên Zhou2016. Vẫn cần các phương pháp cơ sở tương ứng và thí nghiệm lặp với nhiều hạt giống trước khi rút ra kết luận rộng hơn.
+Chúng tôi đã trình bày SSM-DAN, một khung MI-EEG liên chủ thể kết hợp tích chập đa thang và mô hình không gian trạng thái chọn lọc hai chiều với UDA phân cấp và IM-TTA có ràng buộc, được đánh giá theo giao thức LOSO theo thời gian, giữ nhãn đích nằm ngoài huấn luyện, thích ứng và chọn mô hình. Phương pháp đạt độ chính xác trung bình 76,12\% trên BCI IV-2a, 84,09\% trên BCI IV-2b và 84,33\% trên Zhou2016. Trên tập OpenBMI gồm 54 chủ thể, nghiên cứu loại bỏ thành phần cho thấy tham chiếu RA cần được ước lượng lại trên từng phiên khi năng lượng tín hiệu trôi giữa các phiên. Vẫn cần các phương pháp cơ sở tương ứng và thí nghiệm lặp với nhiều hạt giống trước khi rút ra kết luận rộng hơn.
 
 \section*{Đóng góp của tác giả theo CRediT}
 \textbf{[Tên tác giả]:} Lên ý tưởng, Phương pháp luận, Phần mềm, Kiểm chứng, Phân tích hình thức, Điều tra, Quản lý dữ liệu, Trực quan hóa, Viết -- bản thảo đầu, Viết -- rà soát và chỉnh sửa.
@@ -563,7 +570,7 @@ Các tác giả tuyên bố không có xung đột lợi ích tài chính hay qu
 Nghiên cứu này không nhận tài trợ cụ thể nào từ các cơ quan tài trợ thuộc khu vực công, thương mại hay phi lợi nhuận.
 
 \section*{Tính sẵn có của dữ liệu}
-Toàn bộ dữ liệu EEG được phân tích trong nghiên cứu này đều công khai. Các bộ dữ liệu BCI Competition IV 2a và 2b \cite{tangermann2012review} và bộ dữ liệu Zhou2016 \cite{zhou2016trialselection} được truy cập qua thư viện MOABB \cite{jayaram2018moabb}; không thu thập dữ liệu mới.
+Toàn bộ dữ liệu EEG được phân tích trong nghiên cứu này đều công khai. Các bộ dữ liệu BCI Competition IV 2a và 2b \cite{tangermann2012review}, bộ dữ liệu Zhou2016 \cite{zhou2016trialselection} và bộ dữ liệu OpenBMI \cite{lee2019openbmi} được truy cập qua thư viện MOABB \cite{jayaram2018moabb}; không thu thập dữ liệu mới.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{references}

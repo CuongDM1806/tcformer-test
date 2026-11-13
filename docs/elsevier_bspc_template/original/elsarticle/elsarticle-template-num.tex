@@ -55,7 +55,7 @@
                    country={[Country]}}
 
 \begin{abstract}
-Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. This study proposes SSM-DAN, a domain-adaptive selective state-space network that couples a multi-scale convolutional front-end with bidirectional selective state-space blocks to capture both local and long-range temporal patterns, and reduces subject shift through hierarchical alignment, including a learned source--target normalization layer and label-free test-time adaptation. The framework was evaluated on three public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. The proposed SSM-DAN achieved mean accuracies of 76.12\% on BCI Competition IV-2a, 84.09\% on BCI Competition IV-2b, and 84.33\% on Zhou2016. Ablation studies showed that the contribution of each adaptation component depends on the dataset. These results indicate that combining selective state-space modeling with learned, hierarchical alignment improves cross-subject MI decoding without target labels.
+Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. This study proposes SSM-DAN, a domain-adaptive selective state-space network that couples a multi-scale convolutional front-end with bidirectional selective state-space blocks to capture both local and long-range temporal patterns, and reduces subject shift through hierarchical alignment, including a learned source--target normalization layer and label-free test-time adaptation. The framework was evaluated on three public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. The proposed SSM-DAN achieved mean accuracies of 76.12\% on BCI Competition IV-2a, 84.09\% on BCI Competition IV-2b, and 84.33\% on Zhou2016. Ablation studies, which also covered a 54-subject OpenBMI cohort, showed that the contribution of each adaptation component depends on the dataset and that the Riemannian reference should be re-estimated when the signal energy changes between sessions. These results indicate that combining selective state-space modeling with learned, hierarchical alignment improves cross-subject MI decoding without target labels.
 \end{abstract}
 
 \begin{keyword}
@@ -451,42 +451,49 @@ BFT~\cite{li2026bft} & (e) & 77.47$^{\dagger}$ & -- & 84.38$^{\dagger}$ & 63.08 
 
 Table~\ref{tab:ablation} follows the primary chronological protocol. The variant without domain adaptation removes every Stage~1 domain-adaptation component (AutoDIAL, target information maximization, and the adversarial and both MMD losses) while retaining Riemannian alignment and IM-TTA; all variants otherwise use the same folds and checkpoint rule.
 
-PhysioNet MI (EEG Motor Movement/Imagery Dataset) \cite{schalk2004bci2000,goldberger2000physiobank} is added as a larger cohort for the ablation only. Its 64-channel, 160-Hz recordings provide four imagined movements (left fist, right fist, both fists, and both feet). Subjects 88, 92, and 100 were excluded because they were recorded at 128~Hz with a different trial timing, leaving 106 subjects. Each trial is the 4.1-s cue interval (656 samples) without filtering or z-scoring, and trials truncated by the end of a run were discarded, leaving 84--90 trials per subject. Evaluation is LOSO with 106 folds: the 105 source subjects are split 95/5 into training and validation trials for checkpoint selection, and all models are trained for 65 epochs with an effective batch size of 108. Because PhysioNet has a single session per subject, the same unlabeled target trials serve for adaptation and evaluation; this transductive setting is less strict than the chronological protocol of the other datasets, so PhysioNet results are not compared with them directly.
+OpenBMI (Lee2019\_MI) \cite{lee2019openbmi} is added as a larger cohort for the ablation. It contains 54 subjects recorded with 62 EEG channels in two sessions on different days, each with one offline run of 100 left- versus right-hand MI trials. Signals are band-pass filtered at 4--38~Hz, re-referenced to the common average, downsampled to 100~Hz, and cut to the 0--4-s cue interval; S\&R augmentation is not used. The two sessions allow the chronological protocol of the other datasets: in each of the 54 LOSO folds, the 53 source subjects provide labeled session-1 trials for training and session-2 trials for checkpoint selection, while the target's unlabeled session~1 is used in Stage~1 and its session~2 for IM-TTA and evaluation. RA is fitted on session~1 of each subject, and all variants use the BCI IV-2a optimization settings. Because every evaluation session has 100 class-balanced trials, $\kappa=2P-1$ for accuracy $P$. With 54 paired targets, the OpenBMI Wilcoxon tests use the normal approximation instead of exact enumeration, with Holm correction over the four ablation comparisons.
 
 \begin{table*}[!htbp]
 \centering
-\caption{Ablation results: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ across target subjects.}
+\caption{Ablation results: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ across target subjects. The best variant of each dataset is in bold. The last column replaces the fixed RA reference of SSM-DAN by a session-specific one (Section~\ref{subsec:ra_reference}). $^{a}$53 of the 54 OpenBMI targets.}
 \label{tab:ablation}
 \footnotesize
 \setlength{\tabcolsep}{3.0pt}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{llccccc}
+\begin{tabular}{llcccccc}
 \toprule
-Dataset & Metric & SSM-DAN & \colhead{Source-\\only} & \colhead{Without\\Riemannian\\alignment} & \colhead{Without\\domain\\adaptation} & \colhead{Without\\test-time\\adaptation} \\
+Dataset & Metric & SSM-DAN & \colhead{Source-\\only} & \colhead{Without\\Riemannian\\alignment} & \colhead{Without\\domain\\adaptation} & \colhead{Without\\test-time\\adaptation} & \colhead{Session-\\specific RA\\reference} \\
 \midrule
 \multirow{2}{*}{BCI IV-2a}
- & Acc. & $\mathbf{76.12\pm11.96}$ & $64.35\pm12.77$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.159}$ & $0.525\pm0.170$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ \\
+ & Acc. & $76.12\pm11.96$ & $64.35\pm12.77$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ & $\mathbf{77.74\pm11.72}$ \\
+ & $\kappa$ & $0.682\pm0.159$ & $0.525\pm0.170$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ & $\mathbf{0.703\pm0.156}$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
- & Acc. & $\mathbf{84.09\pm10.42}$ & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ \\
+ & Acc. & $84.09\pm10.42$ & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ & $\mathbf{84.10\pm10.23}$ \\
+ & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ & $\mathbf{0.682\pm0.205}$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Acc. & $\mathbf{84.33\pm0.75}$ & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ \\
- & $\kappa$ & $\mathbf{0.765\pm0.011}$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ \\
+ & Acc. & $84.33\pm0.75$ & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ & $\mathbf{85.33\pm2.05}$ \\
+ & $\kappa$ & $0.765\pm0.011$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ & $\mathbf{0.780\pm0.031}$ \\
 \midrule
-% TODO: fill the adaptive PhysioNet cells from the full / no_ra / no_da Kaggle runs
-% (feature/hada-autodial-physionet106); without IM-TTA = no_tta_acc of the full run.
-\multirow{2}{*}{PhysioNet MI}
- & Acc. & -- & $60.68\pm13.89$ & -- & -- & -- \\
- & $\kappa$ & -- & $0.476\pm0.185$ & -- & -- & -- \\
+% OpenBMI, seed 0, 54 LOSO folds, fixed (session-1) RA reference. Source-only has 53 folds:
+% TODO: add target S37 when its source-only run is available and recompute this cell.
+\multirow{2}{*}{OpenBMI}
+ & Acc. & $80.61\pm10.26$ & $79.92\pm11.04^{a}$ & $83.50\pm9.43$ & $79.85\pm10.02$ & $76.65\pm12.19$ & $\mathbf{84.00\pm9.56}$ \\
+ & $\kappa$ & $0.612\pm0.205$ & $0.598\pm0.221^{a}$ & $0.670\pm0.189$ & $0.597\pm0.200$ & $0.533\pm0.244$ & $\mathbf{0.680\pm0.191}$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table*}
 
-On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent. On PhysioNet MI, the source-only model reached $60.68\pm13.89\%$ ($\kappa=0.476\pm0.185$) across the 106 targets, with per-target accuracy from 32.22\% to 90.00\%.
+On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent. On OpenBMI, IM-TTA increased accuracy by 3.96 points (higher for 38 of 54 targets, $p_\mathrm{Holm}<0.001$), whereas the gains over the variant without domain adaptation (0.76 points) and over the source-only model (0.51 points) were not significant ($p_\mathrm{Holm}=0.68$ and $0.72$). Removing RA, however, increased accuracy by 2.89 points (higher for 33 of 54 targets, $p_\mathrm{Holm}=0.002$): with a reference fixed on session~1, RA reduced accuracy on this dataset. Section~\ref{subsec:ra_reference} examines this effect.
+
+\subsection{Session-specific RA reference}
+\label{subsec:ra_reference}
+
+The fixed reference assumes that a subject's mean covariance is stable across sessions. On OpenBMI this assumption fails: after session-1 RA, the median trial energy of session~2 was 1.55 times that of session~1 across subjects, and more than twice for 20 of the 54 subjects, compared with 1.08--1.39 on BCI IV-2a. SSM-DAN was therefore re-run with a session-specific reference, in which every session of every subject, including the target evaluation session, is whitened by the Riemannian mean of its own unlabeled trials. The evaluation-session reference uses the same unlabeled evaluation trials that IM-TTA already accesses, so the target-data access is unchanged; like IM-TTA, it needs these trials as a batch. All other settings are those of the main experiments; the results are in the last column of Table~\ref{tab:ablation}.
+
+On OpenBMI, the session-specific reference added 3.39 points with IM-TTA (84.00\% vs.\ 80.61\%; higher for 43 of 54 targets, $p<0.001$) and 7.24 points without it (83.89\% vs.\ 76.65\%; 45 of 54, $p<0.001$), while the gain of IM-TTA fell from 3.96 to 0.11 points ($p=0.50$); most of the IM-TTA gain under the fixed reference therefore compensated the energy shift between sessions. With the session-specific reference, SSM-DAN also exceeded the variant without RA (84.00\% vs.\ 83.50\%), although not significantly ($p=0.61$). On BCI IV-2a, accuracy rose by 1.62 points with IM-TTA (8 of 9 targets, exact $p=0.023$), and IM-TTA still added 2.89 points (74.85\% to 77.74\%; 8 of 9, $p=0.008$). On BCI IV-2b, the two references gave the same accuracy (84.10\% vs.\ 84.09\%; higher for 3 targets, lower for 5, $p=0.97$). On Zhou2016, the session-specific reference added 1.00 point (85.33\% vs.\ 84.33\%; higher for 3 of 4 targets, exact $p=0.38$), and IM-TTA added 2.83 points (82.50\% to 85.33\%; 4 of 4, $p=0.125$, the smallest value attainable with four targets). Because this variant was examined after the main experiments, these tests are not Holm-corrected and serve as supporting evidence; all other results use the fixed reference.
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
@@ -536,16 +543,16 @@ SSM-DAN\newline (w/o RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4
 \section{Discussion}
 \label{sec:discussion}
 
-The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences.
+The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences. The larger OpenBMI cohort confirmed the gain of IM-TTA but showed that an RA reference fixed on an earlier session can reduce accuracy when the signal energy changes between sessions. Re-estimating the reference on each session removed this loss and accounted for most of the IM-TTA gain, which suggests that a large part of the session shift handled by test-time adaptation is a change of second-order signal statistics.
 
 The alternating scans exploit complete offline trials and are non-causal, so online use would require forward-only processing.
 
-Because IM-TTA uses unlabeled evaluation-session signals, the method is transductive and must be compared with baselines of identical target access. Further limitations are the three-channel BCI IV-2b setting, the small Zhou2016 cohort, and incomplete matched baselines.
+Because IM-TTA, and the session-specific RA reference, use unlabeled evaluation-session signals, the method is transductive and must be compared with baselines of identical target access; online use would require running estimates of the reference and of the adapted statistics. Further limitations are the three-channel BCI IV-2b setting, the small Zhou2016 cohort, and incomplete matched baselines.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented SSM-DAN, a cross-subject MI-EEG framework that combines multi-scale convolution and bidirectional selective state-space modeling with hierarchical UDA and constrained IM-TTA, evaluated under a chronological LOSO protocol that keeps target labels out of training, adaptation, and model selection. It reached mean accuracies of 76.12\% on BCI IV-2a, 84.09\% on BCI IV-2b, and 84.33\% on Zhou2016. Matched baselines and repeated-seed experiments are still needed before drawing broader conclusions.
+We presented SSM-DAN, a cross-subject MI-EEG framework that combines multi-scale convolution and bidirectional selective state-space modeling with hierarchical UDA and constrained IM-TTA, evaluated under a chronological LOSO protocol that keeps target labels out of training, adaptation, and model selection. It reached mean accuracies of 76.12\% on BCI IV-2a, 84.09\% on BCI IV-2b, and 84.33\% on Zhou2016. On the 54-subject OpenBMI cohort, the ablation showed that the RA reference should be re-estimated on each session when the signal energy drifts between sessions. Matched baselines and repeated-seed experiments are still needed before drawing broader conclusions.
 
 \section*{CRediT authorship contribution statement}
 %% One line per author; keep only the CRediT roles each author actually had.
@@ -558,7 +565,7 @@ The authors declare that they have no known competing financial interests or per
 This research did not receive any specific grant from funding agencies in the public, commercial, or not-for-profit sectors.
 
 \section*{Data availability}
-All EEG data analyzed in this study are publicly available. BCI Competition IV datasets 2a and 2b \cite{tangermann2012review} and the Zhou2016 dataset \cite{zhou2016trialselection} were accessed through the MOABB library \cite{jayaram2018moabb}; no new data were collected.
+All EEG data analyzed in this study are publicly available. BCI Competition IV datasets 2a and 2b \cite{tangermann2012review}, the Zhou2016 dataset \cite{zhou2016trialselection}, and the OpenBMI dataset \cite{lee2019openbmi} were accessed through the MOABB library \cite{jayaram2018moabb}; no new data were collected.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{references}
