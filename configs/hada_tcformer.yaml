@@ -115,10 +115,14 @@ preprocessing:
     # labeled offline left/right-hand MI run (100 trials) per session, 62 EEG
     # channels at 1000 Hz. Cross-subject preprocessing of the published
     # Ensemble-MI pipeline: 4-38 Hz, CAR, 100 Hz, the 0-4 s MI cue interval.
+    # This branch turns CAR off (everything else unchanged) to test whether
+    # RA helps OpenBMI once the common reference component is left in the
+    # signals, as in BCI IV-2a. Its cache is the Kaggle Dataset
+    # openbmi-nocar-cuong, built by kaggle_openbmi_no_car/prepare_openbmi_nocar_cache.ipynb.
     sfreq: 100
     low_cut: 4.0
     high_cut: 38.0
-    common_average_reference: true
+    common_average_reference: false
     start: 0.0
     trial_duration: 4.0
     z_scale: true
