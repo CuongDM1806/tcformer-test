@@ -288,7 +288,7 @@ Kết luận không đổi so với bản 47 subject bên dưới.
 5. PS-RA là thiết lập transductive: cần thấy một lô trial không nhãn của session test trước
    khi suy luận. Phải nói rõ điều này trong bài.
 
-#### Đối chiếu trên BCI IV-2a và 2b (seed 0)
+#### Đối chiếu trên BCI IV-2a, 2b và Zhou2016 (seed 0)
 
 BCI IV-2a, run `ssm_dan_per_session_ra_bcic2a_s01_s09` (Acc %, session E, 288 trial):
 
@@ -302,15 +302,29 @@ BCI IV-2a, run `ssm_dan_per_session_ra_bcic2a_s01_s09` (Acc %, session E, 288 tr
 - IM-TTA khi dùng PS-RA: +2.89, tăng 8/9, p = 0.0078. Với RA cố định, bài ghi 76.12 so với 72.15 (+3.97).
   Trên 2a, IM-TTA **vẫn có đóng góp**, khác với OpenBMI (+0.21).
 - 2b: PS-RA 84.10 ± 10.23 so với RA cố định 84.09 ± 10.42 (ngang nhau; 4 subject tăng, 4 giảm).
+- Zhou2016 (4 subject, session 3; số đã đưa vào `tab:ablation` ngày 2026-11-13):
+
+  | Zhou2016 | Acc (%) | κ |
+  |---|---|---|
+  | w/o RA | 84.00 ± 3.16 | 0.760 ± 0.047 |
+  | RA cố định, IM-TTA (bài) | 84.33 ± 0.75 | 0.765 ± 0.011 |
+  | **PS-RA, IM-TTA** | **85.33 ± 2.05** | **0.780 ± 0.031** |
+
+  PS-RA hơn RA cố định +1.00 và hơn w/o RA +1.33 (khoảng 1–2 trial/subject). Với n = 4,
+  Wilcoxon chính xác có p nhỏ nhất là 0.125, nên chỉ kết luận được là ngang hoặc nhỉnh hơn.
+  Chưa có số từng subject và cột không IM-TTA: cần `summary.csv` của run
+  `zhou2016_autodial_per_session_ra_mi8_30hz_t0p5_5p0_s01_s04`.
 
 #### Việc còn lại
 
 - ~~Chạy nốt S25, S26, S38–S40, S53, S54~~: xong 2026-11-13.
-- ~~Chạy BCI IV-2a với PS-RA~~: xong, 2a tăng (xem trên). Còn Zhou2016
-  (`ssm_dan_per_session_ra_zhou2016_s01_s04.ipynb`).
-- 7 subject OpenBMI còn thiếu: `ssm_dan_per_session_ra_openbmi_leftover.ipynb` (commit `0c6f6039`).
-- BCI IV-2b: lần chạy lại nhận ngày 2026-11-12 cho 84.10% (trước đây 84.09%). Cần kiểm tra
-  `config.yaml` có `ra_reference: per_session` không, vì chưa có notebook PS-RA cho 2b.
+- ~~Chạy BCI IV-2a với PS-RA~~: xong, 2a tăng (xem trên).
+- ~~Chạy Zhou2016 với PS-RA~~: xong, 85.33% (xem trên). Còn thiếu số từng subject.
+- ~~7 subject OpenBMI còn thiếu~~: xong qua `ssm_dan_per_session_ra_openbmi_leftover.ipynb` (commit `0c6f6039`).
+- BCI IV-2b: notebook PS-RA đã có từ 2026-11-11
+  (`kaggle_per_session_ra/ssm_dan_per_session_ra_bcic2b_s01_s09.ipynb`, commit `c2b793c2`).
+  Kiểm tra run 84.10% có tên chứa `per_session_ra` (hoặc `config.yaml` có
+  `ra_reference: per_session`) để chắc đó là run PS-RA.
 - Nếu chuyển hẳn: chạy lại source-only, w/o DA, w/o IM-TTA trên OpenBMI với PS-RA; sửa
   claim (iv) so với RMETNet và phần IM-TTA trong cả bản EN lẫn VI.
 
