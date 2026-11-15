@@ -199,7 +199,7 @@ baseline thiếu subject trong file đó, nên n khác nhau giữa các dòng.
 | 34 | 68 | 0.36 | 66 | 0.32 | 0.8281 | 113.0 |
 | 35 | 81 | 0.62 | 61 | 0.22 | 0.8175 | 108.5 |
 | 36 | 91 | 0.82 | 90 | 0.80 | 0.8091 | 111.6 |
-| 37 | 93 | 0.86 | 93 | 0.86 | (bị | cắt) |
+| 37 | 93 | 0.86 | 93 | 0.86 | (bị cắt) | (bị cắt) |
 
 Dòng S37 bị cắt khi dán (mất `best_val_acc` và thời gian train). Accuracy vẫn đủ.
 
