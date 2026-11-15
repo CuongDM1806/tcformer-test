@@ -29,13 +29,15 @@ Mọi fold đều được chấm cả có IM-TTA (`test_*`) lẫn không IM-TTA
 
 | Biến thể | S1–S18 | S19–S37 | S38–S54 |
 |---|---|---|---|
-| Full (RA cố định) | **xong (18/18)** | chưa có | chưa có |
+| Full (RA cố định) | **xong (18/18)** | **xong (19/19)** | **xong (17/17)** |
 | No RA | chưa có | chưa có | chưa có |
 | Per-session RA | chưa có | chưa có | chưa có |
 
 ## 3. Kết quả
 
-### 3.1 Full, RA cố định, no-CAR, job S1–S18 (run `openbmi_nocar_full_s001-s018`)
+### 3.1 Full, RA cố định, no-CAR (đủ 54 subject)
+
+#### Job S1–S18 (run `openbmi_nocar_full_s001-s018`)
 
 | S | Acc IM-TTA (%) | κ | Acc không IM-TTA (%) | κ | best_val_acc | Train (phút) |
 |---|---:|---:|---:|---:|---:|---:|
@@ -58,44 +60,112 @@ Mọi fold đều được chấm cả có IM-TTA (`test_*`) lẫn không IM-TTA
 | 17 | 76 | 0.52 | 67 | 0.34 | 0.7543 | 115.1 |
 | 18 | 84 | 0.68 | 78 | 0.56 | 0.7525 | 115.9 |
 
-**Tóm tắt (n = 18; std với ddof = 0, giống bảng trong bài):**
+Tóm tắt job S1–S18 (n = 18; std ddof = 0):
 - Có IM-TTA: **80.39 ± 6.72%**, κ 0.608 ± 0.134.
 - Không IM-TTA: 73.78 ± 9.83%, κ 0.476 ± 0.197.
 - `best_val_acc` trung bình 0.758 (0.750–0.768). Thời gian train trung bình 114.3 phút/fold.
 
-### 3.2 So sánh cùng subject S1–S18 (Acc %, Wilcoxon hai phía)
+#### Job S19–S37 (run `openbmi_nocar_full_s019-s037`)
 
-Các cột "CAR" lấy từ `OPENBMI_THAY_PHYSIONET.md`: full RA cố định, w/o RA và PS-RA ở mục 4.5;
-source-only ở mục 4.3.
+| S | Acc IM-TTA (%) | κ | Acc không IM-TTA (%) | κ | best_val_acc | Train (phút) |
+|---|---:|---:|---:|---:|---:|---:|
+| 19 | 85 | 0.70 | 86 | 0.72 | 0.7611 | 116.0 |
+| 20 | 89 | 0.78 | 86 | 0.72 | 0.7555 | 116.2 |
+| 21 | 98 | 0.96 | 96 | 0.92 | 0.7474 | 116.7 |
+| 22 | 80 | 0.60 | 71 | 0.42 | 0.7511 | 117.0 |
+| 23 | 80 | 0.60 | 82 | 0.64 | 0.7583 | 117.7 |
+| 24 | 68 | 0.36 | 61 | 0.22 | 0.7564 | 116.9 |
+| 25 | 93 | 0.86 | 91 | 0.82 | 0.7362 | 117.5 |
+| 26 | 87 | 0.74 | 83 | 0.66 | 0.7649 | 117.0 |
+| 27 | 84 | 0.68 | 81 | 0.62 | 0.7479 | 116.9 |
+| 28 | 95 | 0.90 | 93 | 0.86 | 0.7598 | 116.6 |
+| 29 | 88 | 0.76 | 84 | 0.68 | 0.7779 | 117.0 |
+| 30 | 84 | 0.68 | 76 | 0.52 | 0.7547 | 115.6 |
+| 31 | 84 | 0.68 | 77 | 0.54 | 0.7592 | 116.7 |
+| 32 | 98 | 0.96 | 98 | 0.96 | 0.7462 | 119.5 |
+| 33 | 93 | 0.86 | 93 | 0.86 | 0.7479 | 111.1 |
+| 34 | 64 | 0.28 | 63 | 0.26 | 0.7670 | 111.8 |
+| 35 | 84 | 0.68 | 78 | 0.56 | 0.7558 | 109.1 |
+| 36 | 97 | 0.94 | 97 | 0.94 | 0.7564 | 111.1 |
+| 37 | 92 | 0.84 | 82 | 0.64 | 0.7500 | 107.1 |
 
-| No-CAR full (80.39) so với | TB baseline | Chênh lệch TB | Tăng/bằng/giảm | p |
-|---|---:|---:|---|---:|
-| CAR, full RA cố định | 78.67 | +1.72 | 12/1/5 | 0.092 |
-| CAR, w/o RA | 80.17 | +0.22 | 7/1/10 | 0.67 |
-| CAR, PS-RA | 82.61 | −2.22 | 6/0/12 | 0.024 |
-| CAR, source-only | 77.94 | +2.44 | 13/1/4 | 0.041 |
-| No-CAR, cùng run nhưng không IM-TTA (tác dụng IM-TTA) | 73.78 | +6.61 | 15/1/2 | 0.0008 |
+Tóm tắt (n = 19): có IM-TTA 86.47 ± 8.98%; không IM-TTA 83.05 ± 10.30%.
 
-So sánh không IM-TTA: no-CAR RA cố định đạt 73.78, còn CAR PS-RA đạt 82.50. Chênh −8.72, p < 0.001.
+#### Job S38–S54 (run `openbmi_nocar_full_s038-s054`)
 
-### 3.3 Nhận xét tạm (mới 18/54 subject; chưa có no-CAR w/o RA nên chưa tính được Δ_RA)
+| S | Acc IM-TTA (%) | κ | Acc không IM-TTA (%) | κ | best_val_acc | Train (phút) |
+|---|---:|---:|---:|---:|---:|---:|
+| 38 | 72 | 0.44 | 69 | 0.38 | 0.7485 | 108.1 |
+| 39 | 82 | 0.64 | 80 | 0.60 | 0.7543 | 107.8 |
+| 40 | 72 | 0.44 | 70 | 0.40 | 0.7494 | 108.9 |
+| 41 | 67 | 0.34 | 65 | 0.30 | 0.7475 | 108.3 |
+| 42 | 79 | 0.58 | 81 | 0.62 | 0.7549 | 107.5 |
+| 43 | 88 | 0.76 | 85 | 0.70 | 0.7594 | 107.4 |
+| 44 | 95 | 0.90 | 94 | 0.88 | 0.7519 | 107.9 |
+| 45 | 96 | 0.92 | 96 | 0.92 | 0.7662 | 107.9 |
+| 46 | 75 | 0.50 | 78 | 0.56 | 0.7532 | 108.1 |
+| 47 | 89 | 0.78 | 82 | 0.64 | 0.7615 | 109.4 |
+| 48 | 65 | 0.30 | 60 | 0.20 | 0.7632 | 108.7 |
+| 49 | 89 | 0.78 | 84 | 0.68 | 0.7589 | 108.9 |
+| 50 | 52 | 0.04 | 56 | 0.12 | 0.7591 | 110.3 |
+| 51 | 65 | 0.30 | 72 | 0.44 | 0.7566 | 107.6 |
+| 52 | 83 | 0.66 | 81 | 0.62 | 0.7600 | 108.8 |
+| 53 | 70 | 0.40 | 65 | 0.30 | 0.7538 | 108.8 |
+| 54 | 71 | 0.42 | 70 | 0.40 | 0.7681 | 105.4 |
 
-1. **Bỏ CAR không làm RA cố định "hoạt động" như trên 2a.** No-CAR với RA cố định (80.39) chỉ
-   ngang CAR w/o RA (80.17), và vẫn thấp hơn CAR với PS-RA (82.61, p = 0.024).
-2. **Vấn đề lệch giữa hai session vẫn còn:**
-   - `best_val_acc` vẫn khoảng 0.76, giống CAR với RA cố định (0.75), trong khi PS-RA đạt khoảng 0.85;
-   - không IM-TTA chỉ đạt 73.78%;
-   - IM-TTA phải bù tới +6.6 điểm.
+Tóm tắt (n = 17): có IM-TTA 77.06 ± 11.66%; không IM-TTA 75.76 ± 10.87%.
 
-   Như vậy độ lệch năng lượng giữa session, chứ không phải CAR, là nguyên nhân chính khiến RA
-   cố định kém trên OpenBMI.
-3. **Chưa kết luận được H1.** Phải có `openbmi_nocar_no_ra_s001_s018`
-   (Δ_RA = full − no RA trên cùng dữ liệu no-CAR) và `openbmi_nocar_per_session_ra_s001_s018`.
-   Nếu no-CAR có Δ_RA lớn rõ rệt hơn CAR (−2.89 với RA cố định, +0.50 với PS-RA), H1 mới
-   được ủng hộ.
+#### Tóm tắt đủ 54 subject (std ddof = 0, κ = 2·acc − 1)
+
+| Cấu hình | Acc (%) | κ |
+|---|---|---|
+| No-CAR, RA cố định, IM-TTA | **81.48 ± 10.08** | 0.630 ± 0.202 |
+| No-CAR, RA cố định, không IM-TTA | 77.67 ± 11.10 | 0.553 ± 0.222 |
+| *CAR, RA cố định, IM-TTA (bài)* | *80.61 ± 10.26* | *0.612 ± 0.205* |
+| *CAR, RA cố định, không IM-TTA (bài)* | *76.65 ± 12.19* | *0.533 ± 0.244* |
+| *CAR, w/o RA (bài)* | *83.50 ± 9.43* | *0.670 ± 0.189* |
+| *CAR, PS-RA, IM-TTA* | *84.00 ± 9.56* | *0.680 ± 0.191* |
+
+`best_val_acc` trung bình 0.757 (0.736–0.778). Train trung bình 112.7 phút/fold.
+
+### 3.2 So sánh cùng subject (Acc %, Wilcoxon hai phía)
+
+Số liệu CAR theo từng subject lấy từ `OPENBMI_THAY_PHYSIONET.md` (mục 4.1, 4.3, 4.5). Một số
+baseline thiếu subject trong file đó, nên n khác nhau giữa các dòng.
+
+| No-CAR full so với | n | TB no-CAR | TB baseline | Chênh lệch TB (trung vị) | Tăng/bằng/giảm | p |
+|---|---:|---:|---:|---:|---|---:|
+| CAR, RA cố định (thiếu S25, S26) | 52 | 81.15 | 80.40 | +0.75 (+1.0) | 29/4/19 | 0.23 |
+| CAR, w/o RA (thiếu S25, S26, S38–S40, S53, S54) | 47 | 81.98 | 83.38 | −1.40 (−2.0) | 13/4/30 | 0.059 |
+| CAR, PS-RA | 54 | 81.48 | 84.00 | −2.52 (−2.0) | 20/0/34 | 0.0021 |
+| CAR, source-only (S1–S36) | 36 | 83.28 | 81.14 | +2.14 (+1.5) | 21/5/10 | 0.039 |
+| Không IM-TTA: no-CAR RA cố định so với CAR PS-RA | 54 | 77.67 | 83.89 | −6.22 (−4.5) | 7/5/42 | < 0.0001 |
+| Tác dụng IM-TTA trong run no-CAR | 54 | 81.48 | 77.67 | +3.81 (+3.0) | 41/5/8 | < 0.0001 |
+
+### 3.3 Nhận xét (full đủ 54; chưa có no-CAR w/o RA nên chưa tính được Δ_RA)
+
+1. **Bỏ CAR gần như không thay đổi RA cố định.**
+   - No-CAR đạt 81.48%, CAR đạt 80.61%. So cùng 52 subject: +0.75, p = 0.23.
+   - No-CAR vẫn thấp hơn CAR w/o RA (−1.40, p = 0.059) và thấp hơn rõ CAR PS-RA (−2.52, p = 0.002).
+2. **Độ lệch giữa hai session vẫn là vấn đề chính, CAR không phải nguyên nhân.**
+   - `best_val_acc` vẫn khoảng 0.76, giống CAR với RA cố định (khoảng 0.75); PS-RA đạt khoảng 0.85.
+   - Không IM-TTA chỉ đạt 77.67%, kém PS-RA 6.2 điểm.
+   - IM-TTA vẫn phải bù +3.8 điểm, gần bằng mức +3.96 khi có CAR.
+3. **H1 chưa được ủng hộ.**
+   - Nếu tham chiếu chung là lý do RA giúp 2a, thì bỏ CAR phải làm RA cố định trên OpenBMI tốt lên
+     rõ rệt. Điều đó không xảy ra.
+   - Kết luận chắc chắn cần Δ_RA trên cùng dữ liệu no-CAR, tức là `openbmi_nocar_no_ra_*`.
+   - Cũng cần biết PS-RA no-CAR có hơn PS-RA CAR không, tức là `openbmi_nocar_per_session_ra_*`.
+4. **Hiệu ứng theo nhóm subject vẫn lớn.** Job S19–S37 đạt 86.5%, job S38–S54 đạt 77.1%, giống
+   các run CAR. Khi so sánh luôn phải ghép cặp theo subject.
 
 ## 4. Việc còn lại
 
-- No-CAR full: S19–S37, S38–S54.
-- No-CAR no RA: cả 3 job (ưu tiên S1–S18 để tính Δ_RA ngay).
-- No-CAR per-session RA: cả 3 job (ưu tiên S1–S18).
+- No-CAR no RA: cả 3 job. Đây là bước quyết định để tính Δ_RA và kết luận H1.
+- No-CAR per-session RA: cả 3 job.
+- Bổ sung số từng subject còn thiếu trong `OPENBMI_THAY_PHYSIONET.md`:
+  - CAR RA cố định: S25, S26;
+  - CAR w/o RA: S25, S26, S38–S40, S53, S54;
+  - source-only: S37–S54.
+
+  Có các số này thì các so sánh ở mục 3.2 mới đủ n = 54.
