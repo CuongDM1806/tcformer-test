@@ -142,7 +142,7 @@ baseline thiếu subject trong file đó, nên n khác nhau giữa các dòng.
 | Không IM-TTA: no-CAR RA cố định so với CAR PS-RA | 54 | 77.67 | 83.89 | −6.22 (−4.5) | 7/5/42 | < 0.0001 |
 | Tác dụng IM-TTA trong run no-CAR | 54 | 81.48 | 77.67 | +3.81 (+3.0) | 41/5/8 | < 0.0001 |
 
-### 3.3 Nhận xét (full đủ 54; chưa có no-CAR w/o RA nên chưa tính được Δ_RA)
+### 3.3 Nhận xét về riêng run full (Δ_RA xem mục 3.5–3.6)
 
 1. **Bỏ CAR gần như không thay đổi RA cố định.**
    - No-CAR đạt 81.48%, CAR đạt 80.61%. So cùng 52 subject: +0.75, p = 0.23.
