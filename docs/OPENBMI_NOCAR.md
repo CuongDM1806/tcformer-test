@@ -30,7 +30,7 @@ Mọi fold đều được chấm cả có IM-TTA (`test_*`) lẫn không IM-TTA
 | Biến thể | S1–S18 | S19–S37 | S38–S54 |
 |---|---|---|---|
 | Full (RA cố định) | **xong (18/18)** | **xong (19/19)** | **xong (17/17)** |
-| No RA | **xong (18/18)** | **xong (19/19)** | chưa có |
+| No RA | **xong (18/18)** | **xong (19/19)** | **xong (17/17)** |
 | Per-session RA | chưa có | chưa có | chưa có |
 
 ## 3. Kết quả
@@ -151,7 +151,7 @@ baseline thiếu subject trong file đó, nên n khác nhau giữa các dòng.
    - `best_val_acc` vẫn khoảng 0.76, giống CAR với RA cố định (khoảng 0.75); PS-RA đạt khoảng 0.85.
    - Không IM-TTA chỉ đạt 77.67%, kém PS-RA 6.2 điểm.
    - IM-TTA vẫn phải bù +3.8 điểm, gần bằng mức +3.96 khi có CAR.
-3. **H1 chưa được ủng hộ** (đã kiểm tra trực tiếp ở mục 3.5–3.6).
+3. **H1 không được ủng hộ** (đã kiểm tra trực tiếp ở mục 3.5–3.6).
    - Nếu tham chiếu chung là lý do RA giúp 2a, thì bỏ CAR phải làm RA cố định trên OpenBMI tốt lên
      rõ rệt. Điều đó không xảy ra.
    - Kết luận chắc chắn cần Δ_RA trên cùng dữ liệu no-CAR, tức là `openbmi_nocar_no_ra_*`.
@@ -159,7 +159,7 @@ baseline thiếu subject trong file đó, nên n khác nhau giữa các dòng.
 4. **Hiệu ứng theo nhóm subject vẫn lớn.** Job S19–S37 đạt 86.5%, job S38–S54 đạt 77.1%, giống
    các run CAR. Khi so sánh luôn phải ghép cặp theo subject.
 
-### 3.4 No RA, no-CAR, S1–S37 (run `openbmi_nocar_no_ra_s001-s018`, `_s019-s037`)
+### 3.4 No RA, no-CAR, đủ 54 subject (run `openbmi_nocar_no_ra_s001-s018`, `_s019-s037`, `_s038-s054`)
 
 | S | Acc IM-TTA (%) | κ | Acc không IM-TTA (%) | κ | best_val_acc | Train (phút) |
 |---|---:|---:|---:|---:|---:|---:|
@@ -200,51 +200,70 @@ baseline thiếu subject trong file đó, nên n khác nhau giữa các dòng.
 | 35 | 81 | 0.62 | 61 | 0.22 | 0.8175 | 108.5 |
 | 36 | 91 | 0.82 | 90 | 0.80 | 0.8091 | 111.6 |
 | 37 | 93 | 0.86 | 93 | 0.86 | (bị cắt) | (bị cắt) |
+| 38 | 67 | 0.34 | 70 | 0.40 | 0.8064 | 107.8 |
+| 39 | 80 | 0.60 | 80 | 0.60 | 0.8215 | 109.1 |
+| 40 | 77 | 0.54 | 78 | 0.56 | 0.8115 | 108.1 |
+| 41 | 46 | −0.08 | 50 | 0.00 | 0.8108 | 108.8 |
+| 42 | 82 | 0.64 | 79 | 0.58 | 0.8211 | 106.5 |
+| 43 | 88 | 0.76 | 86 | 0.72 | 0.8166 | 107.9 |
+| 44 | 96 | 0.92 | 93 | 0.86 | 0.8192 | 106.9 |
+| 45 | 93 | 0.86 | 93 | 0.86 | 0.8198 | 108.6 |
+| 46 | 76 | 0.52 | 73 | 0.46 | 0.8200 | 107.6 |
+| 47 | 93 | 0.86 | 91 | 0.82 | 0.8232 | 108.3 |
+| 48 | 65 | 0.30 | 69 | 0.38 | 0.8232 | 107.9 |
+| 49 | 87 | 0.74 | 89 | 0.78 | 0.8164 | 108.6 |
+| 50 | 59 | 0.18 | 56 | 0.12 | 0.8236 | 107.3 |
+| 51 | 71 | 0.42 | 62 | 0.24 | 0.8172 | 109.3 |
+| 52 | 80 | 0.60 | 81 | 0.62 | 0.8194 | 106.9 |
+| 53 | 78 | 0.56 | 75 | 0.50 | 0.8183 | 109.2 |
+| 54 | 81 | 0.62 | 81 | 0.62 | 0.8258 | 103.6 |
 
 Dòng S37 bị cắt khi dán (mất `best_val_acc` và thời gian train). Accuracy vẫn đủ.
 
-**Tóm tắt (n = 37; std ddof = 0):**
-- Có IM-TTA: **84.14 ± 8.93%**, κ 0.683 ± 0.179. Theo job: S1–S18 81.06 ± 8.28; S19–S37 87.05 ± 8.54.
-- Không IM-TTA: 82.59 ± 10.82%, κ 0.652.
-- `best_val_acc` trung bình 0.816 (0.807–0.828), cao hơn full RA cố định (khoảng 0.757).
-- Train trung bình 109.5 phút/fold.
+**Tóm tắt (n = 54; std ddof = 0):**
+- Có IM-TTA: **82.07 ± 10.68%**, κ 0.641 ± 0.214. Theo job: S1–S18 81.06 ± 8.28;
+  S19–S37 87.05 ± 8.54; S38–S54 77.59 ± 12.64.
+- Không IM-TTA: 80.78 ± 11.57%, κ 0.616.
+- `best_val_acc` trung bình 0.817 (0.806–0.828), cao hơn full RA cố định (khoảng 0.757).
+- Train trung bình 108.9 phút/fold.
 
-### 3.5 Δ_RA trên dữ liệu no-CAR (cùng subject S1–S37)
+### 3.5 Δ_RA trên dữ liệu no-CAR (đủ 54 subject)
 
-Δ_RA = Acc(full, RA cố định) − Acc(no RA). Wilcoxon hai phía.
+Δ_RA = Acc(full, RA cố định) − Acc(no RA). Wilcoxon hai phía. Số liệu CAR theo từng subject
+lấy từ `OPENBMI_THAY_PHYSIONET.md`. CAR w/o RA thiếu S25, S26, S38–S40, S53, S54, nên các dòng
+có CAR dùng n = 47.
 
 | So sánh | n | TB A | TB B | Chênh lệch TB (trung vị) | Tăng/bằng/giảm | p |
 |---|---:|---:|---:|---:|---|---:|
-| **Δ_RA no-CAR, có IM-TTA** (full − no RA) | 37 | 83.51 | 84.14 | **−0.62** (0.0) | 16/4/17 | 0.27 |
-| Δ_RA no-CAR, không IM-TTA | 37 | 78.54 | 82.59 | −4.05 (−4.0) | 8/1/28 | 0.0017 |
-| Δ_RA CAR, có IM-TTA (RA cố định − w/o RA; thiếu S25, S26) | 35 | 81.74 | 83.77 | −2.03 (−1.0) | 13/4/18 | 0.050 |
-| Δ_RA no-CAR so với Δ_RA CAR (cùng 35 subject) | 35 | −0.46 | −2.03 | +1.57 | | 0.18 |
-| No RA: no-CAR so với CAR | 35 | 83.60 | 83.77 | −0.17 (+1.0) | 18/3/14 | 0.95 |
-| CAR PS-RA so với no-CAR no RA | 37 | 85.08 | 84.14 | +0.95 (0.0) | 17/3/17 | 0.35 |
+| **Δ_RA no-CAR, có IM-TTA** (full − no RA) | 54 | 81.48 | 82.07 | **−0.59** (0.0) | 22/6/26 | 0.14 |
+| Δ_RA no-CAR, không IM-TTA | 54 | 77.67 | 80.78 | −3.11 (−4.0) | 14/4/36 | 0.0019 |
+| Δ_RA CAR, có IM-TTA (RA cố định − w/o RA) | 47 | 80.74 | 83.38 | −2.64 (−2.0) | 14/5/28 | 0.0023 |
+| **Δ_RA no-CAR so với Δ_RA CAR** (cùng 47 subject) | 47 | −0.19 | −2.64 | **+2.45** | | **0.018** |
+| No RA: no-CAR so với CAR | 47 | 82.17 | 83.38 | −1.21 (0.0) | 19/6/22 | 0.26 |
+| CAR PS-RA so với no-CAR no RA | 54 | 84.00 | 82.07 | +1.93 (+1.0) | 29/4/21 | 0.073 |
 
-### 3.6 Kết luận về H1 (tạm, S1–S37)
+### 3.6 Kết luận về H1 (đủ 54 subject cho full và no RA)
 
-1. **H1 bị bác trên OpenBMI.**
-   - Khi bỏ CAR, RA cố định vẫn không giúp: Δ_RA = −0.62 (p = 0.27). Không IM-TTA thì RA còn gây
-     hại: −4.05, p = 0.002.
-   - Δ_RA của no-CAR không khác có ý nghĩa so với Δ_RA của CAR (−0.46 so với −2.03, p = 0.18).
-   - Trên 2a, Δ_RA là +5.83 (RA cố định) và +7.45 (PS-RA). OpenBMI không đạt mức đó dù đã giữ thành
-     phần tham chiếu chung.
-2. **CAR gần như không ảnh hưởng tới mạng khi không dùng RA.** No-CAR no RA đạt 83.60 trên cùng
-   35 subject, CAR w/o RA đạt 83.77 (p = 0.95).
-3. **Lý do RA cố định gây hại vẫn là lệch giữa hai session.** `best_val_acc`: no RA khoảng 0.82,
-   RA cố định khoảng 0.76. Không IM-TTA, RA cố định kém no RA 4 điểm.
-4. **Hệ quả cho Claim 1.** Lợi ích của RA trên 2a nhiều khả năng đến từ yếu tố khác tham chiếu
-   chung. Ứng viên còn lại:
-   - H2: 2a không lọc tần số;
-   - H3: chất lượng ước lượng reference;
-   - H4: dạng khác biệt giữa các subject.
-
-   Còn thiếu no-CAR no RA S38–S54 và PS-RA no-CAR để chốt.
+1. **Bỏ CAR không làm RA có lợi như trên 2a.** Trên dữ liệu no-CAR, RA cố định vẫn không giúp:
+   Δ_RA = −0.59, p = 0.14. Không IM-TTA thì RA còn gây hại (−3.11, p = 0.002). Trên 2a, Δ_RA là
+   +5.83 với RA cố định và +7.45 với PS-RA. Vậy riêng việc giữ thành phần tham chiếu chung
+   **không đủ** để tạo ra lợi ích của RA. Dạng mạnh của H1 bị bác.
+2. **CAR có làm RA cố định tệ hơn.** Δ_RA cải thiện từ −2.64 (CAR) lên −0.19 (no-CAR) trên cùng
+   47 subject, p = 0.018. Nguyên nhân chủ yếu là RA cố định no-CAR tốt hơn (81.15 so với 80.40),
+   còn no RA no-CAR hơi thấp hơn CAR (−1.21, p = 0.26). Cách giải thích hợp lý: sau CAR, ma trận
+   hiệp phương sai 62×62 bị suy biến, nên reference RA kém ổn định (H3). Vậy **CAR là yếu tố
+   góp phần làm RA hại trên OpenBMI**, nhưng không giải thích vì sao RA giúp 2a.
+3. **Lệch giữa hai session vẫn là vấn đề chính của RA cố định.** `best_val_acc`: no RA khoảng
+   0.82, RA cố định khoảng 0.76. Không IM-TTA, RA cố định kém no RA 3 điểm. PS-RA (CAR) vẫn
+   tốt nhất: 84.00, hơn no-CAR no RA +1.93 (p = 0.073).
+4. **Hệ quả cho Claim 1.** Lợi ích của RA trên 2a nhiều khả năng đến từ yếu tố khác: H2 (2a không
+   lọc tần số) hoặc H4 (dạng khác biệt giữa các subject). H3 có bằng chứng phụ từ điểm 2.
+   Bước tiếp theo nên là PS-RA no-CAR (`openbmi_nocar_per_session_ra_*`), để xem khi đã khử lệch
+   session thì bỏ CAR có giúp RA hay không.
 
 ## 4. Việc còn lại
 
-- No-CAR no RA: còn job S38–S54 (S1–S37 đã xong; Δ_RA tạm thời ở mục 3.5).
+- ~~No-CAR no RA~~: xong 54/54 (mục 3.4–3.6).
 - No-CAR per-session RA: cả 3 job.
 - Bổ sung số từng subject còn thiếu trong `OPENBMI_THAY_PHYSIONET.md`:
   - CAR RA cố định: S25, S26;
