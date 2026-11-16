@@ -17,7 +17,7 @@ import threading
 import time
 from pathlib import Path
 
-REPO_URL = "https://github.com/CuongDM1806/tcformer-test.git"
+REPO_URL = "https://github.com/CuongDM1806/ssm-dan.git"
 VENV = Path("/tmp/ssm-dan-venv")
 WORKING = Path("/kaggle/working")
 INPUT = Path("/kaggle/input")

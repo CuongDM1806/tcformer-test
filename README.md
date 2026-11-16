@@ -140,9 +140,9 @@ The three notebooks are short. They clone this repository and call `ssm_dan/kagg
 
 | Notebook | Purpose | Open |
 |---|---|---|
-| `notebooks/kaggle_run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/tcformer-test/blob/main/notebooks/kaggle_run.ipynb) |
-| `notebooks/kaggle_openbmi_cache.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/tcformer-test/blob/main/notebooks/kaggle_openbmi_cache.ipynb) |
-| `notebooks/kaggle_parity_check.ipynb` | Compare this code with the development code that produced the paper's results. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/tcformer-test/blob/main/notebooks/kaggle_parity_check.ipynb) |
+| `notebooks/kaggle_run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_run.ipynb) |
+| `notebooks/kaggle_openbmi_cache.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_openbmi_cache.ipynb) |
+| `notebooks/kaggle_parity_check.ipynb` | Compare this code with the development code that produced the paper's results. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_parity_check.ipynb) |
 
 To use `kaggle_run.ipynb`, edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`), enable Internet, and run *Save Version → Save & Run All*. `MODE = 'paper'` launches the folds the way the reported run did. For BCI IV and Zhou2016 that is all folds in one process on one GPU; for OpenBMI and the session-specific RA runs it is one process per fold, two GPUs at a time. `MODE = 'per_fold'` always uses both GPUs. Folds that do not fit in the 12-hour limit are deferred. To finish them, attach the version's output (*Add Input → Your Work → Notebook Output*) and run again; finished folds are skipped.
 
