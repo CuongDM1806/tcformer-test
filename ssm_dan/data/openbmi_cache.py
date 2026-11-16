@@ -215,3 +215,49 @@ def load_openbmi_subject(subject_id: int, preprocessing_dict: Dict,
         print(f"  S{subject_id:02d} session={session_id} | trials={len(y)} | "
               f"class_counts={counts.tolist()} | shape={tuple(X.shape)} | {cached}", flush=True)
     return sessions[0], sessions[1]
+
+
+# --------------------------------------------------------------------------- download
+def download(subjects, out, no_car=False):
+    """Download, preprocess and cache the given subjects into ``out`` (skips cached ones).
+
+    The preprocessing is the ``openbmi`` block of configs/datasets.yaml (with the
+    ``no_car`` variant when ``no_car``). Matching cache files found under
+    $OPENBMI_CACHE_INPUT (e.g. an earlier, interrupted output) are copied into ``out``.
+    """
+    import shutil
+    from .. import config as cfg
+
+    out = Path(out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    os.environ["OPENBMI_CACHE_DIR"] = str(out)
+    settings = cfg.resolve("ssm_dan", "openbmi", ["no_car"] if no_car else [])["preprocessing"]
+    signature = cache_signature(settings)
+    _, read_dirs = _cache_dirs(settings)
+    started = time.time()
+    for index, subject in enumerate(subjects, start=1):
+        found = _find_cached(subject, signature, read_dirs)
+        if found is not None and found.parent != out:
+            shutil.copy2(found, out / _cache_name(subject))
+            print(f"  copied S{subject:02d} from {found}", flush=True)
+        load_openbmi_subject(subject, settings)
+        print(f"[{index}/{len(subjects)}] S{subject:02d} cached | {(time.time() - started) / 60:.1f} min | "
+              f"free disk {shutil.disk_usage(out).free / 1e9:.1f} GB", flush=True)
+
+
+def main(argv=None):
+    """python -m ssm_dan.data.openbmi_cache --out DIR [--no-car] [--subjects 1-54]"""
+    import argparse
+    from ..config import parse_subjects
+
+    parser = argparse.ArgumentParser(prog="python -m ssm_dan.data.openbmi_cache",
+                                     description="Download and cache OpenBMI (Lee2019_MI).")
+    parser.add_argument("--out", default="openbmi_cache")
+    parser.add_argument("--subjects", default="1-54")
+    parser.add_argument("--no-car", action="store_true", help="skip the common average reference")
+    args = parser.parse_args(argv)
+    download(parse_subjects(args.subjects, list(range(1, 55))), args.out, args.no_car)
+
+
+if __name__ == "__main__":
+    main()

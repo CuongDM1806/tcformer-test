@@ -304,14 +304,29 @@ def run(method="ssm_dan", dataset="bcic2a", variant="", subjects="all", seed=0, 
 
 
 def build_openbmi_cache(no_car=False, subjects="1-54", workers=3, platform=None):
-    """Download and preprocess OpenBMI into <work>/openbmi_cache[_nocar]."""
+    """Download and preprocess OpenBMI into <work>/openbmi_cache[_nocar], ``workers`` subjects at a time."""
+    sys.path.insert(0, str(ROOT))
     platform = platform if isinstance(platform, Platform) else detect(platform)
     python = python_for_training(platform)
     out = platform.work / ("openbmi_cache_nocar" if no_car else "openbmi_cache")
-    command = [python, "-u", ROOT / "scripts" / "openbmi.py", "--out", out,
-               "--subjects", subjects, "--workers", workers] + (["--no-car"] if no_car else [])
-    if _stream(command, out.parent / f"{out.name}_build.log", "", environment(platform)) != 0:
-        print("Some subjects are missing: run again to finish them.", flush=True)
+    env = environment(platform)
+    from ssm_dan.config import parse_subjects
+    ids = parse_subjects(subjects, list(range(1, 55)))
+    threads = []
+    for worker in range(max(1, workers)):
+        part = ids[worker::max(1, workers)]
+        if not part:
+            continue
+        command = [python, "-u", "-m", "ssm_dan.data.openbmi_cache", "--out", out,
+                   "--subjects", ",".join(map(str, part))] + (["--no-car"] if no_car else [])
+        threads.append(threading.Thread(target=_stream, args=(
+            command, out.parent / f"{out.name}_download_w{worker}.log", f"[w{worker}]", env)))
+        threads[-1].start()
+        time.sleep(20)   # stagger the MOABB set-up of the workers
+    for thread in threads:
+        thread.join()
+    missing = [s for s in ids if not (out / f"openbmi_S{s:02d}.npz").exists()]
+    print(f"OpenBMI cache in {out}; missing subjects: {missing or 'none'}", flush=True)
     return out
 
 

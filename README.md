@@ -22,12 +22,12 @@ ssm_dan/
   config.py              dataset + method + variants + overrides -> run configuration
   pipeline.py            one LOSO fold: Stage 1, checkpoint selection, Stage 2, scoring
   results.py             output layout and summaries
+  tables.py              paper-style tables and statistics (python -m ssm_dan.tables)
   data/                  LOSO data modules, loaders, Riemannian alignment, S&R augmentation
   models/                SSM backbone, SSM-DAN, Lightning wrapper, re-implemented baselines
   baselines/             RMETNet, T-TIME and BFT (their own training loops)
   launch.py              launcher: several GPUs, resume, time budget, any platform
-notebooks/               Kaggle/Colab: run any experiment, build the OpenBMI cache
-scripts/                 build the OpenBMI cache; paper-style tables and statistics
+notebooks/               Kaggle/Colab: run any experiment, download OpenBMI
 ```
 
 ## Installation
@@ -108,8 +108,8 @@ A subject record holds:
 Paper-style tables (per-subject accuracy, mean ± SD, κ, ITR, exact Wilcoxon test with Holm correction) are built from these records:
 
 ```bash
-python scripts/summarize.py --dataset bcic2a --reference ssm_dan
-python scripts/summarize.py --dataset bcic2a --reference ssm_dan-source_only \
+python -m ssm_dan.tables --dataset bcic2a --reference ssm_dan
+python -m ssm_dan.tables --dataset bcic2a --reference ssm_dan-source_only \
     --runs eegconformer,atcnet,tcformer,eegencoder,satransnet
 ```
 
@@ -164,7 +164,7 @@ The notebooks are short. They clone this repository and call the launcher, and t
 | Notebook | Purpose | Open |
 |---|---|---|
 | `notebooks/run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) |
-| `notebooks/openbmi.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) |
+| `notebooks/openbmi_download.ipynb` | Download and preprocess OpenBMI, with or without CAR. No GPU needed. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_download.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_download.ipynb) |
 
 Edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`) and run it, with a GPU and Internet enabled. On Kaggle, use *Save Version → Save & Run All*. If the session ends before all folds are done, run again with the earlier results visible and finished folds are skipped. On Kaggle, attach the previous output (*Add Input → Your Work → Notebook Output*); on Colab, keep the results in the mounted Drive.
 
@@ -173,12 +173,12 @@ Edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MOD
 Lee2019_MI comes as about 61 GB of MAT files. Each subject is therefore preprocessed once into `openbmi_SXX.npz` (about 20 MB). The cache records the preprocessing it was built with, and a cache built with different settings is never used.
 
 ```bash
-python scripts/openbmi.py --out openbmi_cache --workers 3              # paper (with CAR)
-python scripts/openbmi.py --out openbmi_cache_nocar --no-car --workers 3
+python -m ssm_dan.launch --build-openbmi-cache --workers 3          # -> openbmi_cache/ (paper, with CAR)
+python -m ssm_dan.launch --build-openbmi-cache --no-car --workers 3 # -> openbmi_cache_nocar/
 export OPENBMI_CACHE_INPUT=$PWD/openbmi_cache:$PWD/openbmi_cache_nocar
 ```
 
-On Kaggle, attach the cache Dataset (`openbmi-dataset-cuong` with CAR, `openbmi-nocar-cuong` without). `ssm_dan.launch` checks that all 54 subjects are present before training.
+Or use `notebooks/openbmi_download.ipynb` (Kaggle, Colab). On Kaggle, attach the cache Dataset (`openbmi-dataset-cuong` with CAR, `openbmi-nocar-cuong` without). `ssm_dan.launch` checks that all 54 subjects are present before training.
 
 ## Reproducibility
 

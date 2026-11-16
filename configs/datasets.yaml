@@ -73,7 +73,8 @@ openbmi:
     test_num_workers: 0
     # Per-subject preprocessed arrays (openbmi_SXX.npz, ~20 MB each) are cached in
     # cache_dir; $OPENBMI_CACHE_DIR overrides it and $OPENBMI_CACHE_INPUT adds read-only
-    # directories (e.g. an attached Kaggle Dataset). See scripts/openbmi.py.
+    # directories (e.g. an attached Kaggle Dataset). Built by python -m ssm_dan.data.openbmi_cache
+    # or notebooks/openbmi_download.ipynb.
     cache_dir: openbmi_cache
     delete_raw_after_cache: true
     download_retries: 8

@@ -1,8 +1,8 @@
 """Paper-style tables from results/: per-subject accuracy, mean +- std, kappa, ITR and paired tests.
 
-    python scripts/summarize.py                         # every dataset under results/
-    python scripts/summarize.py --dataset bcic2a --reference ssm_dan
-    python scripts/summarize.py --metric no_tta_acc     # e.g. the same weights without IM-TTA
+    python -m ssm_dan.tables                         # every dataset under results/
+    python -m ssm_dan.tables --dataset bcic2a --reference ssm_dan
+    python -m ssm_dan.tables --metric no_tta_acc     # e.g. the same weights without IM-TTA
 
 For every dataset, each run (method + variants, seed 0 by default) is one row.
 ``p`` is the two-sided Wilcoxon signed-rank test of the per-subject accuracy
@@ -10,23 +10,19 @@ against the reference run (exact up to 25 subjects, normal approximation
 otherwise); ``p_holm`` applies Holm's correction over the compared runs. The
 paper forms one family per target-data access, e.g.
 
-    python scripts/summarize.py --dataset bcic2a --reference ssm_dan-source_only \
+    python -m ssm_dan.tables --dataset bcic2a --reference ssm_dan-source_only \
         --runs eegconformer,atcnet,tcformer,eegencoder,satransnet,ssm_dan-source_only Standard deviations are population SDs across subjects, as in the
 paper. Tables are printed and written to <results>/tables/<dataset>.csv.
 """
 import argparse
 import csv
 import math
-import sys
 from pathlib import Path
 
 import numpy as np
 from scipy.stats import wilcoxon
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
-from ssm_dan import results  # noqa: E402
+from . import results
 
 N_CLASSES = {"bcic2a": 4, "bcic2b": 2, "zhou2016": 3, "openbmi": 2}
 WINDOW_SECONDS = {"bcic2a": 4.0, "bcic2b": 4.0, "zhou2016": 4.5, "openbmi": 4.0}
