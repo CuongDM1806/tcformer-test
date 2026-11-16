@@ -1,0 +1,25 @@
+description: >-
+  SATrans-Net (Miao et al., Sci. Rep. 2025), the authors' network and settings (AdamW lr 1e-3,
+  batch 72, S&R augmentation), source-only; best source-validation checkpoint.
+model: SATransNet
+preprocessing: {batch_size: 72, riemannian_alignment: false}
+model_kwargs:
+  heads: 8
+  emb_size: 40
+  depth: 6
+  eeg1_f1: 20
+  eeg1_kernel_size: 64
+  eeg1_D: 2
+  eeg1_pooling_size1: 8
+  eeg1_pooling_size2: 8
+  eeg1_dropout_rate: 0.25
+  lr: 0.001
+  beta_1: 0.5
+  weight_decay: 0.01
+  optimizer: adamW
+  scheduler: false
+  warmup_epochs: 3
+datasets:
+  bcic2a: {model_kwargs: {n_samples: 1000}}
+  bcic2b: {model_kwargs: {n_samples: 1000}}
+  zhou2016: {model_kwargs: {n_samples: 1125}}

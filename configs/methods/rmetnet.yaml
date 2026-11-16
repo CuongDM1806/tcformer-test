@@ -1,0 +1,21 @@
+description: >-
+  RMETNet (Zhao et al., PLOS ONE 2026), unsupervised domain adaptation: the authors' network and
+  training loop (CE + MMD to the unlabeled earlier target sessions); best source-validation
+  checkpoint. Own training loop (ssm_dan/baselines/rmetnet.py).
+runner: rmetnet
+preprocessing:
+  # Raw windows: the EEG branch is z-scored inside the runner; no S&R augmentation.
+  z_scale: false
+  interaug: false
+method_settings:
+  epochs: 1000
+  batch_size: 64
+  lr: 0.0002
+  betas: [0.5, 0.999]
+  weight_decay: 0.075
+  cov_reg: 0.0          # ridge (x mean eigenvalue) added to every trial covariance
+log_every_n_epochs: 25
+datasets:
+  bcic2a: {method_settings: {epochs: 500}}     # as reported for BCI IV-2a
+  bcic2b: {}
+  zhou2016: {method_settings: {cov_reg: 0.001}}  # Zhou2016 trials can be rank-deficient

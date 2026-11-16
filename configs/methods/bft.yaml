@@ -1,0 +1,16 @@
+description: >-
+  BFT (IEEE JBHI 2026), backpropagation-free test-time adaptation (BFT-D) of an EEGNet trained on
+  Euclidean-aligned sources (authors' code). Own loop (ssm_dan/baselines/tta.py).
+runner: tta
+preprocessing: {z_scale: false, interaug: false}
+method_settings:
+  method: bft
+  lr: 0.001
+  batch_size: 32
+  max_epoch: 100
+  bft: {variant: BFT-D, K: 10, temperature: 0.25, ranker_lr: 0.001, ranker_epoch: 20, test_batch: 8,
+        steps: 1, stride: 1}
+datasets:
+  bcic2a: {}
+  bcic2b: {}
+  zhou2016: {}

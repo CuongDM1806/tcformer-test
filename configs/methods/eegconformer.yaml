@@ -1,0 +1,18 @@
+description: >-
+  EEG Conformer (Song et al., IEEE TNSRE 2023), source-only: no RA, no target data, no test-time
+  adaptation; best source-validation checkpoint.
+model: EEGConformer
+preprocessing: {batch_size: 72, riemannian_alignment: false}
+model_kwargs:
+  embedding_size: 40
+  depth: 6
+  lr: 0.0002
+  beta_1: 0.5
+  weight_decay: 0.0
+  optimizer: adam
+  scheduler: true
+  warmup_epochs: 3
+datasets:
+  bcic2a: {model_kwargs: {input_size_cls: 2440}}
+  bcic2b: {model_kwargs: {input_size_cls: 2440}}
+  zhou2016: {model_kwargs: {input_size_cls: 2760}}

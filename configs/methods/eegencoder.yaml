@@ -1,0 +1,17 @@
+description: >-
+  EEGEncoder (Liao et al., Sci. Rep. 2025), the authors' network, loss and optimizer (label
+  smoothing 0.2, explicit L2 terms, no augmentation), source-only; best source-validation
+  checkpoint. Needs the `transformers` package.
+model: EEGEncoder
+preprocessing: {batch_size: 64, riemannian_alignment: false, interaug: false}
+model_kwargs:
+  label_smoothing: 0.2
+  lr: 0.001
+  weight_decay: 0.0
+  optimizer: adam
+  scheduler: false
+  warmup_epochs: 3
+datasets:
+  bcic2a: {}
+  bcic2b: {}
+  zhou2016: {}

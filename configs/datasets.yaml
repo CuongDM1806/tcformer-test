@@ -1,0 +1,80 @@
+# Data protocol and preprocessing shared by every method.
+# Methods add their own settings (batch size, RA, ...) in configs/methods/<method>.yaml.
+#
+# Chronological LOSO: each fold holds out one target subject; the others are labeled sources.
+#   dataset   source training / validation   target Stage-1 (unlabeled) / evaluation
+#   bcic2a    session T / session E           session T / session E
+#   bcic2b    sessions 1-3 / 4-5              sessions 1-3 / 4-5
+#   zhou2016  sessions 1-2 / 3                sessions 1-2 / 3
+#   openbmi   session 1 / 2                   session 1 / 2
+#
+# preprocessing keys
+#   sfreq                  resampling rate (Hz)
+#   low_cut, high_cut      band-pass edges (Hz); null = no filter
+#   start, stop            BCI IV: window offsets (s) relative to the MOABB event interval
+#   start, trial_duration  Zhou2016 / OpenBMI: window start after the cue and its length (s)
+#   z_scale                per-channel z-score fitted on the source training trials
+#   interaug               segmentation-and-reconstruction augmentation of labeled source batches
+#   num_workers            training data-loader workers (fixed: the augmentation runs in them)
+#   test_num_workers       evaluation data-loader workers
+
+bcic2a:
+  max_epochs: 125
+  preprocessing:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0                 # full MOABB event window [2, 6] s -> 0-4 s after the cue
+    stop: 0.0
+    z_scale: true
+    interaug: true
+    num_workers: 2
+    test_num_workers: 0
+
+bcic2b:
+  max_epochs: 125
+  preprocessing:
+    sfreq: 250
+    low_cut: null
+    high_cut: null
+    start: 0.0
+    stop: -0.5                 # drop the last 0.5 s of the event window
+    z_scale: true
+    interaug: true
+    num_workers: 2
+    test_num_workers: 0
+
+zhou2016:
+  max_epochs: 100
+  preprocessing:
+    sfreq: 250
+    low_cut: 8.0               # mu/beta band of the original study
+    high_cut: 30.0
+    start: 0.5                 # 0.5-5.0 s after the cue (skips the cue transient)
+    trial_duration: 4.5
+    z_scale: true
+    interaug: false
+    num_workers: 2
+    test_num_workers: 0
+
+openbmi:
+  max_epochs: 125
+  preprocessing:
+    # Lee2019_MI: 54 subjects, 62 channels, one offline 100-trial left/right-hand run per session.
+    sfreq: 100
+    low_cut: 4.0
+    high_cut: 38.0
+    common_average_reference: true
+    start: 0.0
+    trial_duration: 4.0
+    z_scale: true
+    interaug: false
+    num_workers: 2
+    test_num_workers: 0
+    # Per-subject preprocessed arrays (openbmi_SXX.npz, ~20 MB each) are cached in
+    # cache_dir; $OPENBMI_CACHE_DIR overrides it and $OPENBMI_CACHE_INPUT adds read-only
+    # directories (e.g. an attached Kaggle Dataset). See scripts/build_openbmi_cache.py.
+    cache_dir: openbmi_cache
+    delete_raw_after_cache: true
+    download_retries: 8
+    download_retry_delay_seconds: 5

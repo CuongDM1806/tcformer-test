@@ -1,0 +1,29 @@
+description: >-
+  ATCNet (Altaheri et al., IEEE TII 2023), source-only: no RA, no target data, no test-time
+  adaptation; best source-validation checkpoint.
+model: ATCNet
+preprocessing: {batch_size: 48, riemannian_alignment: false}
+model_kwargs:
+  F1: 16
+  D: 2
+  kernel_length_conv: 64
+  pool_length: 8
+  dropout_conv: 0.3
+  d_model: 32
+  key_dim: 8
+  n_head: 2
+  dropout_attn: 0.5
+  tcn_depth: 2
+  kernel_length_tcn: 4
+  dropout_tcn: 0.3
+  n_windows: 5
+  lr: 0.0009
+  beta_1: 0.5
+  weight_decay: 0.001
+  optimizer: adam
+  scheduler: true
+  warmup_epochs: 3
+datasets:
+  bcic2a: {}
+  bcic2b: {}
+  zhou2016: {}

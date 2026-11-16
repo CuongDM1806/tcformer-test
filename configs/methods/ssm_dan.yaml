@@ -1,0 +1,99 @@
+description: >-
+  SSM-DAN: multi-scale convolution + bidirectional selective SSM + grouped TCN, Riemannian
+  alignment, Stage-1 domain adaptation (AutoDIAL, residual aligner, adversarial, MMD, target
+  InfoMax) and IM-TTA.
+model: SSMDAN
+domain_adaptation: true        # Stage 1 also sees the unlabeled earlier target sessions
+evaluate_without_im_tta: true  # also score the same weights without IM-TTA (no_tta_* in the results)
+
+preprocessing:
+  batch_size: 48               # per domain: 48 source + 48 target trials per step
+  riemannian_alignment: true
+  ra_reference: calibration    # calibration | per_session (see the per_session_ra variant)
+
+model_kwargs:
+  # Backbone
+  F1: 32
+  temp_kernel_lengths: [20, 32, 64]
+  d_group: 16
+  D: 2
+  pool_length_1: 8
+  pool_length_2: 7
+  dropout_conv: 0.4
+  use_group_attn: true
+  ssm_directions: [forward, backward, forward, backward, forward]
+  ssm_dropout: 0.4
+  ssm_d_state: 8
+  ssm_d_conv: 3
+  ssm_scan: hoisted
+  tcn_depth: 2
+  kernel_length_tcn: 4
+  dropout_tcn: 0.3
+  # Optimization
+  lr: 0.0009
+  beta_1: 0.5
+  weight_decay: 0.001
+  optimizer: adam
+  scheduler: true
+  warmup_epochs: 3
+
+adaptation_kwargs:
+  feature_alignment: autodial  # autodial | none
+  autodial_alpha_init: 0.5
+  domain_norm_momentum: 0.1
+  target_im_weight: 0.1        # target InfoMax: the only signal that updates alpha
+  recalibrate_target_statistics: true
+  aligner_hidden_dim: 128
+  domain_hidden_dim: 128
+  adaptation_dropout: 0.3
+  adversarial_weight: 1.0
+  mmd_weight: 0.5
+  temporal_mmd_weight: 0.1
+  im_tta_steps: 5
+  im_tta_lr: 0.0001
+  im_tta_diversity_weight: 1.0
+
+datasets:
+  bcic2a: {}
+  bcic2b: {}
+  zhou2016:
+    preprocessing: {batch_size: 32}
+    model_kwargs: {lr: 0.001, weight_decay: 0.0001}
+  openbmi: {}
+
+# Ablations (python -m ssm_dan.run --variant <name>[,<name>]); applied in the listed order.
+variants:
+  no_ra:
+    description: without Riemannian alignment
+    preprocessing: {riemannian_alignment: false}
+  no_da:
+    description: without Stage-1 domain adaptation (RA and IM-TTA kept)
+    domain_adaptation: false
+    adaptation_kwargs: {feature_alignment: none, target_im_weight: 0.0, adversarial_weight: 0.0,
+                        mmd_weight: 0.0, temporal_mmd_weight: 0.0}
+  no_tta:
+    description: without test-time adaptation (= the Stage-1 UDA model)
+    adaptation_kwargs: {im_tta_steps: 0}
+  per_session_ra:
+    description: every session whitened by its own label-free RA reference
+    preprocessing: {ra_reference: per_session}
+  source_only:
+    description: the backbone alone on labeled source data (no RA, no adaptation head, no IM-TTA)
+    model: SSMSourceOnly
+    domain_adaptation: false
+    evaluate_without_im_tta: false
+    preprocessing: {riemannian_alignment: false}
+  source_only_head:
+    description: >-
+      source-only training of the full SSM-DAN network (adaptation head kept but inactive);
+      used for the OpenBMI source-only column of the paper
+    domain_adaptation: false
+    evaluate_without_im_tta: false
+    preprocessing: {riemannian_alignment: false}
+    adaptation_kwargs: {feature_alignment: none, target_im_weight: 0.0, adversarial_weight: 0.0,
+                        mmd_weight: 0.0, temporal_mmd_weight: 0.0, im_tta_steps: 0,
+                        recalibrate_target_statistics: false}
+  no_car:
+    description: OpenBMI without the common average reference (needs a cache built without CAR)
+    datasets_only: [openbmi]
+    preprocessing: {common_average_reference: false}

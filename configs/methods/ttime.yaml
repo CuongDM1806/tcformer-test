@@ -1,0 +1,15 @@
+description: >-
+  T-TIME (Li et al., IEEE TBME 2024), online test-time adaptation of an SML ensemble of five
+  EEGNets trained on Euclidean-aligned sources (authors' code). Own loop (ssm_dan/baselines/tta.py).
+runner: tta
+preprocessing: {z_scale: false, interaug: false}
+method_settings:
+  method: ttime
+  lr: 0.001
+  batch_size: 32
+  max_epoch: 100
+  ttime: {ensemble_size: 5, test_batch: 8, steps: 1, stride: 1, t: 2}
+datasets:
+  bcic2a: {}
+  bcic2b: {}
+  zhou2016: {}

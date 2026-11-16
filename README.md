@@ -1,286 +1,191 @@
-# TCFormer: Temporal Convolutional Transformer
+# SSM-DAN
 
-> Official code for the paper **“Temporal convolutional transformer for EEG based motor imagery decoding.”**  
-> Paper: https://www.nature.com/articles/s41598-025-16219-7 (Nature Scientific Reports, 2025)
+Code for **Domain-Adaptive Selective State-Space Learning for Cross-Subject Motor-Imagery EEG Decoding**.
 
-- Built upon ideas/code from **EEG-ATCNet**: https://github.com/Altaheri/EEG-ATCNet  
-- Training pipeline structure and several implementations adapted from **channel-attention**: https://github.com/martinwimpff/channel-attention
+SSM-DAN decodes motor-imagery EEG of an unseen subject (leave-one-subject-out, LOSO). It combines:
 
----
+- **Backbone**: multi-scale temporal convolutions, five bidirectional selective state-space (Mamba-style) blocks and a grouped TCN head.
+- **Riemannian alignment (RA)** of every subject's trials.
+- **Stage 1, unsupervised domain adaptation**: AutoDIAL feature normalization with a learned source/target mixing weight, a residual aligner, adversarial and multi-kernel MMD alignment, and target information maximization.
+- **Stage 2, IM-TTA**: test-time adaptation of the BatchNorm affine parameters on the unlabeled evaluation trials.
 
-<img width="6225" height="3488" alt="TCFormer architecture blocks" src="https://github.com/user-attachments/assets/1ff17b1d-0d81-4f55-b321-9fb13a27df16" />
+One code base runs every experiment in the paper on BCI IV-2a, BCI IV-2b, Zhou2016 and OpenBMI. That covers SSM-DAN, its ablations and the eight re-trained baselines. Each experiment is selected by configuration, and all outputs go to one results layout.
 
-**TCFormer** fuses a **Multi-Kernel CNN (MK-CNN)** front-end, a **Transformer encoder** with **Grouped-Query Attention (GQA)** + **RoPE**, and a **Temporal Convolutional Network (TCN)** head. The model captures **local** (CNN), **global** (Transformer), and **long-range** (TCN) temporal dependencies in MI-EEG.
+## Contents
 
----
-
-## Environment
-**Python** 3.10 • **PyTorch** 2.6.0 • **CUDA** 12.4  
-> Tested on Ubuntu 24.04 with RTX A6000 GPUs (48 GB). Results may vary slightly by hardware and seeds.
-
-### 1. Create and activate the conda environment
-
-```bash
-conda create -n tcformer python=3.10 -y
-conda activate tcformer
+```
+configs/
+  datasets.yaml          data protocol and preprocessing shared by all methods
+  methods/*.yaml         one file per method; SSM-DAN ablations are "variants"
+ssm_dan/
+  run.py                 command-line entry point (python -m ssm_dan.run)
+  config.py              dataset + method + variants + overrides -> run configuration
+  pipeline.py            one LOSO fold: Stage 1, checkpoint selection, Stage 2, scoring
+  results.py             output layout and summaries
+  data/                  LOSO data modules, loaders, Riemannian alignment, S&R augmentation
+  models/                SSM backbone, SSM-DAN, Lightning wrapper, re-implemented baselines
+  baselines/             RMETNet, T-TIME and BFT (their own training loops)
+  kaggle.py              helpers for the Kaggle notebooks
+notebooks/               Kaggle: run any experiment, build the OpenBMI cache, parity check
+scripts/                 build the OpenBMI cache; paper-style tables and statistics
+tests/                   configuration parity with the reported runs, unit tests, parity probe
 ```
 
-### 2. Install PyTorch with CUDA support
+## Installation
+
+Python 3.10 is required, because MOABB 0.5 needs Python < 3.11 and NumPy < 2.
 
 ```bash
-pip install --upgrade pip
+python3.10 -m venv .venv && source .venv/bin/activate
 pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu126
-```
-
-> PyTorch 2.7.1 ships official CUDA wheels for **cu118, cu126, and cu128** (no cu124 build).
-> The bundled CUDA runtime is independent of your system CUDA Toolkit — you only need an NVIDIA driver that supports CUDA 12.6+ (driver ≥ 560). Check with `nvidia-smi`.
-
-### 3. Install remaining dependencies
-
-```bash
 pip install -r requirements.txt
+pip install transformers==4.48.3        # only for the EEGEncoder baseline
 ```
 
-### 4. Verify the installation
+MOABB downloads BCI IV-2a, BCI IV-2b and Zhou2016 on first use, into `~/mne_data` or `$MNE_DATA`. OpenBMI is handled separately; see [OpenBMI](#openbmi).
+
+## Running experiments
 
 ```bash
-python -c "import torch; print(f'PyTorch: {torch.__version__} | CUDA: {torch.cuda.is_available()} ({torch.version.cuda})')"
+python -m ssm_dan.run --method ssm_dan --dataset bcic2a                 # SSM-DAN, all 9 folds
+python -m ssm_dan.run --method ssm_dan --dataset zhou2016 --variant no_ra
+python -m ssm_dan.run --method ssm_dan --dataset openbmi --subjects 1-18 --gpu 1
+python -m ssm_dan.run --method eegconformer --dataset bcic2b
+python -m ssm_dan.run --method ssm_dan --dataset bcic2a --subjects 1 --set max_epochs=2   # quick check
+python -m ssm_dan.run --list                                            # methods and variants
 ```
 
-Expected output:
+| Option | Meaning |
+|---|---|
+| `--method` | A file in `configs/methods/`: `ssm_dan`, `eegconformer`, `atcnet`, `tcformer`, `eegencoder`, `satransnet`, `rmetnet`, `ttime`, `bft`. |
+| `--variant` | Variants of the method, comma-separated and applied in order (e.g. `no_car,no_ra`). |
+| `--dataset` | `bcic2a`, `bcic2b`, `zhou2016` or `openbmi`. |
+| `--subjects` | Target subjects: `all`, `3`, `1-9` or `1,4,7-9`. |
+| `--seed` | Random seed. Every fold is seeded independently, so folds can run in any order or in parallel. |
+| `--set KEY=VALUE` | Override any configuration entry, e.g. `preprocessing.batch_size=32` or `adaptation_kwargs.im_tta_steps=10`. Repeatable. |
+| `--results` | Results root (default `./results`, or `$SSM_DAN_RESULTS`). |
+| `--overwrite` | Re-run folds that are already finished. Without it, they are skipped. |
+
+### Experiments of the paper
+
+| Paper | Command (add `--dataset ...`) |
+|---|---|
+| SSM-DAN | `--method ssm_dan` |
+| SSM-DAN (source-only) | `--method ssm_dan --variant source_only` |
+| SSM-DAN (Stage 1 UDA) = without test-time adaptation | `--method ssm_dan --variant no_tta` |
+| SSM-DAN (IM-TTA) = without domain adaptation | `--method ssm_dan --variant no_da` |
+| Without Riemannian alignment | `--method ssm_dan --variant no_ra` |
+| Session-specific RA reference | `--method ssm_dan --variant per_session_ra` |
+| OpenBMI source-only column of the ablation table | `--method ssm_dan --variant source_only_head --dataset openbmi` |
+| OpenBMI without common average reference | `--method ssm_dan --variant no_car --dataset openbmi` |
+| EEG Conformer, ATCNet, TCFormer, EEGEncoder, SATrans-Net | `--method eegconformer` / `atcnet` / `tcformer` / `eegencoder` / `satransnet` |
+| RMETNet, T-TIME, BFT | `--method rmetnet` / `ttime` / `bft` |
+| Computational cost | `param_count`, `train_time_min` and `cpu_latency_ms` in every subject record |
+
+Every SSM-DAN run also scores the same trained weights without IM-TTA (`no_tta_acc`, `no_tta_kappa`). The Stage-1 UDA numbers therefore come with the full model at no extra cost.
+
+## Results
+
+All methods, variants and datasets write to the same place:
+
 ```
-PyTorch: 2.7.1+cu126 | CUDA: True (12.6)
+results/<dataset>/<run>/seed<seed>/        <run> = method[-variant...], e.g. ssm_dan-no_ra
+    config.yaml               resolved configuration of the run
+    subjects/S01.json         one record per target subject
+    checkpoints/S01.ckpt      best source-validation checkpoint
+    figures/                  per-fold confusion matrix and learning curves
+    logs/                     per-fold logs (Kaggle notebook)
+    summary.csv, summary.txt  per-subject rows, mean and standard deviation
 ```
 
+A subject record holds:
 
+- `test_acc`, `test_kappa`, `test_loss`: the evaluation session(s), after IM-TTA.
+- `no_tta_*`: the same weights without IM-TTA.
+- `all_sessions_*`: an auxiliary view over every target session.
+- `best_val_acc`: the source-validation accuracy of the selected checkpoint.
+- `confusion_counts`, `autodial_alpha`, `param_count`, `train_time_min`, `cpu_latency_ms`.
 
+Paper-style tables (per-subject accuracy, mean ± SD, κ, ITR, exact Wilcoxon test with Holm correction) are built from these records:
 
----
-
-## Training & Evaluation
-
-Examples:
 ```bash
-# BCI IV-2a, subject-dependent (within-subject), with augmentation
-python train_pipeline.py --model tcformer --dataset bcic2a --interaug
-
-# BCI IV-2b, subject-dependent (within-subject), no augmentation
-python train_pipeline.py --model tcformer --dataset bcic2b --no_interaug
-
-# HGD, cross-subject (LOSO), no augmentation
-python train_pipeline.py --model tcformer --dataset hgd --loso --no_interaug
+python scripts/summarize.py --dataset bcic2a --reference ssm_dan
+python scripts/summarize.py --dataset bcic2a --reference ssm_dan-source_only \
+    --runs eegconformer,atcnet,tcformer,eegencoder,satransnet
 ```
-Batch a full sweep:
-> Helper script to enumerate **models × datasets × seeds × {±augmentation}** in both **subject-dependent** and **LOSO** settings:
+
+## Configuration
+
+A run is resolved from four layers, each overriding the previous one:
+
+1. `configs/datasets.yaml[dataset]`: the session protocol and the preprocessing shared by all methods (sampling rate, filter, window, z-scoring, S&R augmentation).
+2. `configs/methods/<method>.yaml`: the model, the optimizer and the method's defaults, then its `datasets.<dataset>` block (e.g. a batch size of 32 and a learning rate of 1e-3 on Zhou2016).
+3. The requested `variants` of the method.
+4. `--set` overrides.
+
+The resolved configuration is saved as `config.yaml` with the results. To add an experiment, add a variant to a method file, or a new method file. No new code or notebook is needed.
+
+| Dataset | Source training / validation | Target Stage 1 (unlabeled) / evaluation |
+|---|---|---|
+| BCI IV-2a | session T / session E | session T / session E |
+| BCI IV-2b | sessions 1–3 / 4–5 | sessions 1–3 / 4–5 |
+| Zhou2016 | sessions 1–2 / 3 | sessions 1–2 / 3 |
+| OpenBMI | session 1 / 2 | session 1 / 2 |
+
+Checkpoints are selected on the labeled source validation sessions only. Target labels are read only for scoring.
+
+## Kaggle
+
+The three notebooks are short. They clone this repository and call `ssm_dan/kaggle.py`.
+
+| Notebook | Purpose | Open |
+|---|---|---|
+| `notebooks/kaggle_run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/tcformer-test/blob/main/notebooks/kaggle_run.ipynb) |
+| `notebooks/kaggle_openbmi_cache.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/tcformer-test/blob/main/notebooks/kaggle_openbmi_cache.ipynb) |
+| `notebooks/kaggle_parity_check.ipynb` | Compare this code with the development code that produced the paper's results. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/tcformer-test/blob/main/notebooks/kaggle_parity_check.ipynb) |
+
+To use `kaggle_run.ipynb`, edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`), enable Internet, and run *Save Version → Save & Run All*. `MODE = 'paper'` launches the folds the way the reported run did. For BCI IV and Zhou2016 that is all folds in one process on one GPU; for OpenBMI and the session-specific RA runs it is one process per fold, two GPUs at a time. `MODE = 'per_fold'` always uses both GPUs. Folds that do not fit in the 12-hour limit are deferred. To finish them, attach the version's output (*Add Input → Your Work → Notebook Output*) and run again; finished folds are skipped.
+
+## OpenBMI
+
+Lee2019_MI comes as about 61 GB of MAT files. Each subject is therefore preprocessed once into `openbmi_SXX.npz` (about 20 MB). The cache records the preprocessing it was built with, and a cache built with different settings is never used.
+
 ```bash
-bash run_all.sh
+python scripts/build_openbmi_cache.py --out openbmi_cache --workers 3              # paper (with CAR)
+python scripts/build_openbmi_cache.py --out openbmi_cache_nocar --no-car --workers 3
+export OPENBMI_CACHE_INPUT=$PWD/openbmi_cache:$PWD/openbmi_cache_nocar
 ```
 
+On Kaggle, attach the cache Dataset (`openbmi-dataset-cuong` with CAR, `openbmi-nocar-cuong` without). `kaggle_run.ipynb` checks that all 54 subjects are present before training.
 
-Summaries (tables are written under your results directory):
-```bash
-# Per-subject (Per‑subject and per-seed)
-python summarize_per_subject.py /results/
+## Reproducibility
 
-# Dataset-level aggregation (averaged across subjects; per-seed)
-python summarize_results.py /results/TCFormer/2a
-```
+- All results in the paper use seed 0, on one NVIDIA T4 per fold, with PyTorch 2.7.1 and the package versions in `requirements.txt`. cuDNN runs in deterministic mode. Data-loader workers are fixed at 2, because S&R augmentation draws its random numbers in the workers.
+- `tests/test_config_parity.py` checks that every run reported in the paper resolves to the configuration it was run with. That configuration is stored in `tests/fixtures/paper_configs.json`, reconstructed from the development code and Kaggle notebooks (or the `config.yaml` saved with the results). This test needs only PyYAML: `python -m pytest tests/test_config_parity.py`.
+- `notebooks/kaggle_parity_check.ipynb` runs `tests/parity/probe.py` on this code and on the development code for the same fold. It compares the data splits, the initial weights, the weights after several training steps and the adapted test logits.
+- TorchScript optimizes the selective scan after its first calls in a process, so the first fold of a process can differ from later folds in the last bits. To match the reported runs, launch folds as they were launched. `MODE = 'paper'` in the Kaggle notebook does this; locally, run all folds in one command for BCI IV/Zhou2016, and one command per fold for OpenBMI and `per_session_ra`.
+- GPU kernels are not bit-reproducible across GPU models or driver versions. Re-runs on other hardware can differ slightly from the reported per-subject numbers.
 
+## Baselines and credits
 
----
+Each baseline is the authors' released network, re-trained under the protocol above:
 
-## Datasets
+- EEG Conformer (Song et al., 2023).
+- ATCNet (Altaheri et al., 2023).
+- TCFormer (Altaheri et al., 2025).
+- EEGEncoder (Liao et al., 2025).
+- SATrans-Net (Miao et al., 2025).
+- RMETNet (Zhao et al., 2026).
+- T-TIME (Li et al., 2024) and BFT (2026), from DeepTransferEEG.
 
-| Dataset | Tasks (classes) | Channels | SR (Hz) | Split (sessions) | Notes |
-|---|---|---:|---:|---|---|
-| [BCI Comp IV-2a](http://www.bbci.de/competition/iv/) | L/R hand, Feet, Tongue (4) | 22 EEG | 250 | S1 train, S2 test | Motor **imagery** |
-| [BCI Comp IV-2b](http://www.bbci.de/competition/iv/) | L vs R hand (2) | 3 (C3, Cz, C4) | 250 | S1–S3 train, S4–S5 test | Motor **imagery** |
-| [HGD (High-Gamma)](https://github.com/robintibor/high-gamma-dataset) | L/R hand, Feet, Rest (4) | 128 → **44** | 512→**250** | S1 train, S2 test | Motor **execution** |
-
-> The three datasets above are **downloaded automatically** by the pipeline.  
-> This repository also supports **[BCI Comp III-IVa](https://www.bbci.de/competition/iii/#data_set_iva)** and **[REH-MI](https://dx.doi.org/10.21227/xgzb-6s98)**. For these two, download them manually and place the files in the directories defined in  
-> [`utils/load_bcic3.py`](https://github.com/Altaheri/TCFormer/blob/main/utils/load_bcic3.py) and [`utils/load_reh_mi.py`](https://github.com/Altaheri/TCFormer/blob/main/utils/load_reh_mi.py).
-
----
-
-## Results (from the paper)
-
-**Accuracy Summary (Subject-Dependent vs. LOSO, ± Augmentation)**
-
-The table reports **mean accuracy (%)** for all models across **BCI IV-2a**, **BCI IV-2b**, and **HGD** in both **subject-dependent (Sub-Dep)** and **Leave-One-Subject-Out (LOSO)** settings, **with (+aug)** and **without (–aug)** augmentation, plus model **parameter counts (k)**. Parameter counts are referenced from the IV-2a configuration and may vary slightly with dataset/channel count.
-
-<table>
-  <thead>
-    <tr>
-      <th rowspan="3">Model</th>
-      <th rowspan="3">Params (k)</th>
-      <th colspan="4"><a href="https://www.bbci.de/competition/iv/#dataset2a">BCI Comp IV-2a</a></th>
-      <th colspan="4"><a href="https://www.bbci.de/competition/iv/#dataset2b">BCI Comp IV-2b</a></th>
-      <th colspan="4"><a href="https://github.com/robintibor/high-gamma-dataset">HGD (High-Gamma)</a></th>
-    </tr>
-    <tr>
-      <th colspan="2">Sub-Dep</th>
-      <th colspan="2">LOSO</th>
-      <th colspan="2">Sub-Dep</th>
-      <th colspan="2">LOSO</th>
-      <th colspan="2">Sub-Dep</th>
-      <th colspan="2">LOSO</th>
-    </tr>
-    <tr>
-      <th>–aug</th><th>+aug</th>
-      <th>–aug</th><th>+aug</th>
-      <th>–aug</th><th>+aug</th>
-      <th>–aug</th><th>+aug</th>
-      <th>–aug</th><th>+aug</th>
-      <th>–aug</th><th>+aug</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>EEGNet</td>
-      <td align="right">1.7</td>
-      <td align="right">70.39</td><td align="right">72.62</td>
-      <td align="right">52.01</td><td align="right">52.03</td>
-      <td align="right">82.80</td><td align="right">83.65</td>
-      <td align="right">77.67</td><td align="right">77.89</td>
-      <td align="right">85.59</td><td align="right">85.94</td>
-      <td align="right">57.95</td><td align="right">60.12</td>
-    </tr>
-    <tr>
-      <td>ShallowNet</td>
-      <td align="right">44.6</td>
-      <td align="right">60.50</td><td align="right">65.72</td>
-      <td align="right">48.83</td><td align="right">47.31</td>
-      <td align="right">79.12</td><td align="right">81.45</td>
-      <td align="right">74.50</td><td align="right">75.58</td>
-      <td align="right">89.75</td><td align="right">91.54</td>
-      <td align="right"><strong>72.47</strong></td><td align="center">—</td>
-    </tr>
-    <tr>
-      <td>BaseNet</td>
-      <td align="right">3.7</td>
-      <td align="right">76.45</td><td align="right">78.58</td>
-      <td align="right">57.82</td><td align="right">56.89</td>
-      <td align="right">84.51</td><td align="right">86.11</td>
-      <td align="right">78.55</td><td align="right">78.61</td>
-      <td align="right">93.64</td><td align="right">95.40</td>
-      <td align="right">68.55</td><td align="center">—</td>
-    </tr>
-    <tr>
-      <td>EEGTCNet</td>
-      <td align="right">4.1</td>
-      <td align="right">75.62</td><td align="right">78.82</td>
-      <td align="right">55.09</td><td align="right">55.99</td>
-      <td align="right">85.54</td><td align="right">86.74</td>
-      <td align="right">78.82</td><td align="right">80.56</td>
-      <td align="right">91.83</td><td align="right">93.54</td>
-      <td align="right">60.59</td><td align="center">—</td>
-    </tr>
-    <tr>
-      <td>TS-SEFFNet</td>
-      <td align="right">334.8</td>
-      <td align="right">76.65</td><td align="center">—</td>
-      <td align="right">56.74</td><td align="center">—</td>
-      <td align="right">84.18</td><td align="center">—</td>
-      <td align="right">77.82</td><td align="center">—</td>
-      <td align="right">92.45</td><td align="center">—</td>
-      <td align="right">69.99</td><td align="center">—</td>
-    </tr>
-    <!-- CTNet split into two rows (two configurations) -->
-    <tr>
-      <td rowspan="2">CTNet,&nbsp;&nbsp;F1=20<br/><span style="opacity:.7">CTNet, F1=8</span></td>
-      <td rowspan="2" align="right">152.7<br/><span style="opacity:.7">27.3</span></td>
-      <!-- conf-1 -->
-      <td align="right">78.08</td><td align="right">81.91</td>
-      <td align="right">59.67</td><td align="right">60.09</td>
-      <td align="right">86.81</td><td align="right">86.91</td>
-      <td align="right">79.44</td><td align="right">80.29</td>
-      <td align="right">93.53</td><td align="right">94.21</td>
-      <td align="right">64.87</td><td align="right">64.60</td>
-    </tr>
-    <tr>
-      <!-- conf-2 -->
-      <td align="center">—</td><td align="right">79.24</td>
-      <td align="center">—</td><td align="right">56.17</td>
-      <td align="center">—</td><td align="right">87.50</td>
-      <td align="center">—</td><td align="right">80.15</td>
-      <td align="center">—</td><td align="right">92.22</td>
-      <td align="center">—</td><td align="center">—</td>
-    </tr>
-    <tr>
-      <td>MSCFormer</td>
-      <td align="right">150.7</td>
-      <td align="right">75.25</td><td align="right">79.16</td>
-      <td align="right">52.04</td><td align="right">54.27</td>
-      <td align="right">85.57</td><td align="right">87.60</td>
-      <td align="right">78.88</td><td align="right">79.20</td>
-      <td align="right">91.33</td><td align="right">94.31</td>
-      <td align="right">61.06</td><td align="right">61.19</td>
-    </tr>
-    <tr>
-      <td>EEGConformer</td>
-      <td align="right">789.6</td>
-      <td align="right">70.70</td><td align="right">75.39</td>
-      <td align="right">45.44</td><td align="right">45.59</td>
-      <td align="right">79.46</td><td align="right">81.89</td>
-      <td align="right">73.44</td><td align="right">75.25</td>
-      <td align="right">93.60</td><td align="right">94.67</td>
-      <td align="right">69.21</td><td align="right">69.92</td>
-    </tr>
-    <tr>
-      <td>ATCNet</td>
-      <td align="right">113.7</td>
-      <td align="right"><strong>83.40</strong></td><td align="right">83.78</td>
-      <td align="right">60.05</td><td align="right">59.66</td>
-      <td align="right">86.25</td><td align="right">86.26</td>
-      <td align="right"><strong>80.29</strong></td><td align="right">80.94</td>
-      <td align="right">93.65</td><td align="right">95.08</td>
-      <td align="right">67.42</td><td align="center">—</td>
-    </tr>
-    <tr>
-      <td><strong>TCFormer (proposed)</strong></td>
-      <td align="right">77.8</td>
-      <td align="right">83.06</td><td align="right"><strong>84.79</strong></td>
-      <td align="right"><strong>62.44</strong></td><td align="right"><strong>63.00</strong></td>
-      <td align="right"><strong>87.11</strong></td><td align="right"><strong>87.71</strong></td>
-      <td align="right">79.73</td><td align="right"><strong>81.34</strong></td>
-      <td align="right"><strong>95.62</strong></td><td align="right"><strong>96.27</strong></td>
-      <td align="right">71.90<sup>1</sup></td><td align="right"><strong>72.83<sup>1</sup></strong></td>
-    </tr>
-  </tbody>
-</table>
-
-> <sup>1</sup> Using a deeper TCFormer encoder (**N = 5**, ≈131 k params). See the paper for details.  
-> Reported accuracies were averaged over 5 runs (BCI IV-2a/2b) or 3 runs (HGD) using the final (last-epoch) checkpoint; no early stopping or validation-based model selection.
-
-![Figure 8 1](https://github.com/user-attachments/assets/292066bd-e0e8-4586-bbf1-e466b2f2ba97)
-
----
+Third-party code keeps its original notices in the file headers. The training framework and the convolution/TCN components derive from [TCFormer](https://github.com/altaheri/TCFormer) (MIT license; see `LICENSE`).
 
 ## Citation
 
-Please cite the paper if you use this code:
-
 ```bibtex
-@article{Altaheri2025,
-  title   = {Temporal convolutional transformer for EEG based motor imagery decoding},
-  author  = {Altaheri, Hamdi and Karray, Fakhri and Karimi, Amir-Hossein},
-  journal = {Scientific Reports},
-  year    = {2025},
-  volume  = {15},
-  number  = {1},
-  pages   = {32959},
-  issn    = {2045-2322},
-  doi     = {10.1038/s41598-025-16219-7},
-  url     = {https://doi.org/10.1038/s41598-025-16219-7},}
+@article{ssmdan,
+  title   = {Domain-Adaptive Selective State-Space Learning for Cross-Subject Motor-Imagery EEG Decoding},
+  journal = {Biomedical Signal Processing and Control},
+  note    = {under review}
+}
 ```
-
----
-
-## Acknowledgements & License
-
-- Built upon ideas/code from **EEG-ATCNet**: https://github.com/Altaheri/EEG-ATCNet  
-- Training pipeline structure and certain implementations adapted from **channel-attention**: https://github.com/martinwimpff/channel-attention
-
-This repository is released under the **MIT License** (see `LICENSE`).  
-**Contact:** Hamdi Altaheri
