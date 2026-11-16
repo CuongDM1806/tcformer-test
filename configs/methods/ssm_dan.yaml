@@ -71,9 +71,6 @@ variants:
     domain_adaptation: false
     adaptation_kwargs: {feature_alignment: none, target_im_weight: 0.0, adversarial_weight: 0.0,
                         mmd_weight: 0.0, temporal_mmd_weight: 0.0}
-  no_tta:
-    description: without test-time adaptation (= the Stage-1 UDA model)
-    adaptation_kwargs: {im_tta_steps: 0}
   per_session_ra:
     description: every session whitened by its own label-free RA reference
     preprocessing: {ra_reference: per_session}

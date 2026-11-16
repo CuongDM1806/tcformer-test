@@ -71,7 +71,7 @@ python -m ssm_dan.run --list                                            # method
 |---|---|
 | SSM-DAN | `--method ssm_dan` |
 | SSM-DAN (source-only) | `--method ssm_dan --variant source_only` |
-| SSM-DAN (Stage 1 UDA) = without test-time adaptation | `--method ssm_dan --variant no_tta` |
+| SSM-DAN (Stage 1 UDA) = without test-time adaptation | `--method ssm_dan`, read `no_tta_acc` / `no_tta_kappa` (see below) |
 | SSM-DAN (IM-TTA) = without domain adaptation | `--method ssm_dan --variant no_da` |
 | Without Riemannian alignment | `--method ssm_dan --variant no_ra` |
 | Session-specific RA reference | `--method ssm_dan --variant per_session_ra` |
@@ -81,7 +81,7 @@ python -m ssm_dan.run --list                                            # method
 | RMETNet, T-TIME, BFT | `--method rmetnet` / `ttime` / `bft` |
 | Computational cost | `param_count`, `train_time_min` and `cpu_latency_ms` in every subject record |
 
-Every SSM-DAN run also scores the same trained weights without IM-TTA (`no_tta_acc`, `no_tta_kappa`). The Stage-1 UDA numbers therefore come with the full model at no extra cost.
+Every SSM-DAN run also scores the same trained weights without IM-TTA (`no_tta_acc`, `no_tta_kappa`; the AutoDIAL target statistics are still re-estimated on the evaluation trials). The Stage-1 UDA numbers therefore come with the full model, so there is no separate variant for them; `python -m ssm_dan.tables --metric no_tta_acc` tabulates them.
 
 ## Results
 
