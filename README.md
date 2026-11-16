@@ -25,8 +25,8 @@ ssm_dan/
   data/                  LOSO data modules, loaders, Riemannian alignment, S&R augmentation
   models/                SSM backbone, SSM-DAN, Lightning wrapper, re-implemented baselines
   baselines/             RMETNet, T-TIME and BFT (their own training loops)
-  kaggle.py              helpers for the Kaggle notebooks
-notebooks/               Kaggle: run any experiment, build the OpenBMI cache
+  launch.py              launcher: several GPUs, resume, time budget, any platform
+notebooks/               Kaggle/Colab: run any experiment, build the OpenBMI cache
 scripts/                 build the OpenBMI cache; paper-style tables and statistics
 ```
 
@@ -93,7 +93,7 @@ results/<dataset>/<run>/seed<seed>/        <run> = method[-variant...], e.g. ssm
     subjects/S01.json         one record per target subject
     checkpoints/S01.ckpt      best source-validation checkpoint
     figures/                  per-fold confusion matrix and learning curves
-    logs/                     per-fold logs (Kaggle notebook)
+    logs/                     per-fold logs (ssm_dan.launch)
     summary.csv, summary.txt  per-subject rows, mean and standard deviation
 ```
 
@@ -133,16 +133,40 @@ The resolved configuration is saved as `config.yaml` with the results. To add an
 
 Checkpoints are selected on the labeled source validation sessions only. Target labels are read only for scoring.
 
-## Kaggle
+## Several GPUs, long runs and hosted notebooks
 
-The two notebooks are short. They clone this repository and call `ssm_dan/kaggle.py`.
+`python -m ssm_dan.run` trains in the current environment, one fold after another. `python -m ssm_dan.launch` takes the same options plus `--gpus`, `--mode` and `--time-budget-h`, and adds what long runs need:
+
+- **Python environment.** If the current Python cannot train (it must be 3.10 with the requirements installed), the launcher builds a pinned Python 3.10 environment once and uses it.
+- **Several GPUs.** It trains one fold per GPU at a time.
+- **Resume.** Folds finished in an earlier session are copied over and skipped.
+- **Time budget.** It does not start a fold that cannot finish in time.
+- **OpenBMI.** It checks that the cache is complete before training starts.
+
+It runs on a workstation or GPU server and in Kaggle or Colab notebooks. The platform is detected automatically; `--platform` overrides it.
+
+| Platform | Results and caches written to | Searched for earlier results and the OpenBMI cache |
+|---|---|---|
+| local / server | current directory | `$SSM_DAN_INPUT` (directories separated by `:`) |
+| Kaggle | `/kaggle/working` | `/kaggle/input` (attached Datasets and notebook outputs) |
+| Colab | `/content` | `/content/drive/MyDrive` (if Google Drive is mounted) |
+
+```bash
+python -m ssm_dan.launch --method ssm_dan --dataset openbmi --gpus 0,1             # two folds at a time
+python -m ssm_dan.launch --method ssm_dan --dataset bcic2a --variant no_ra --gpus 0
+python -m ssm_dan.launch --build-openbmi-cache --no-car --workers 3
+```
+
+`--mode paper` (the default) launches the folds the way the reported run did. For BCI IV and Zhou2016 that is all folds in one process on the first GPU; for OpenBMI and `per_session_ra` it is one process per fold, spread over the GPUs. `--mode per_fold` always spreads folds over the GPUs, which is faster.
+
+The notebooks are short. They clone this repository and call the launcher, and they run on Kaggle and on Colab.
 
 | Notebook | Purpose | Open |
 |---|---|---|
-| `notebooks/kaggle_run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_run.ipynb) |
-| `notebooks/kaggle_openbmi_cache.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_openbmi_cache.ipynb) |
+| `notebooks/run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) |
+| `notebooks/openbmi_cache.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_cache.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_cache.ipynb) |
 
-To use `kaggle_run.ipynb`, edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`), enable Internet, and run *Save Version → Save & Run All*. `MODE = 'paper'` launches the folds the way the reported run did. For BCI IV and Zhou2016 that is all folds in one process on one GPU; for OpenBMI and the session-specific RA runs it is one process per fold, two GPUs at a time. `MODE = 'per_fold'` always uses both GPUs. Folds that do not fit in the 12-hour limit are deferred. To finish them, attach the version's output (*Add Input → Your Work → Notebook Output*) and run again; finished folds are skipped.
+Edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`) and run it, with a GPU and Internet enabled. On Kaggle, use *Save Version → Save & Run All*. If the session ends before all folds are done, run again with the earlier results visible and finished folds are skipped. On Kaggle, attach the previous output (*Add Input → Your Work → Notebook Output*); on Colab, keep the results in the mounted Drive.
 
 ## OpenBMI
 
@@ -154,12 +178,12 @@ python scripts/build_openbmi_cache.py --out openbmi_cache_nocar --no-car --worke
 export OPENBMI_CACHE_INPUT=$PWD/openbmi_cache:$PWD/openbmi_cache_nocar
 ```
 
-On Kaggle, attach the cache Dataset (`openbmi-dataset-cuong` with CAR, `openbmi-nocar-cuong` without). `kaggle_run.ipynb` checks that all 54 subjects are present before training.
+On Kaggle, attach the cache Dataset (`openbmi-dataset-cuong` with CAR, `openbmi-nocar-cuong` without). `ssm_dan.launch` checks that all 54 subjects are present before training.
 
 ## Reproducibility
 
 - All results in the paper use seed 0, on one NVIDIA T4 per fold, with PyTorch 2.7.1 and the package versions in `requirements.txt`. cuDNN runs in deterministic mode. Data-loader workers are fixed at 2, because S&R augmentation draws its random numbers in the workers.
-- TorchScript optimizes the selective scan after its first calls in a process, so the first fold of a process can differ from later folds in the last bits. To match the reported runs, launch folds as they were launched. `MODE = 'paper'` in the Kaggle notebook does this; locally, run all folds in one command for BCI IV/Zhou2016, and one command per fold for OpenBMI and `per_session_ra`.
+- TorchScript optimizes the selective scan after its first calls in a process, so the first fold of a process can differ from later folds in the last bits. To match the reported runs, launch folds as they were launched. `python -m ssm_dan.launch` (and the notebooks) do this by default (`--mode paper`).
 - GPU kernels are not bit-reproducible across GPU models or driver versions. Re-runs on other hardware can differ slightly from the reported per-subject numbers.
 
 ## Baselines and credits
