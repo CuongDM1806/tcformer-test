@@ -7,8 +7,8 @@ preprocessing are skipped; cache files found under $OPENBMI_CACHE_INPUT (e.g.
 an earlier, interrupted output attached on Kaggle) are copied into ``--out``.
 Several subjects can be built in parallel (``--workers``).
 
-    python scripts/build_openbmi_cache.py --out openbmi_cache                 # with CAR (paper)
-    python scripts/build_openbmi_cache.py --out openbmi_cache_nocar --no-car  # without CAR
+    python scripts/openbmi.py --out openbmi_cache                 # with CAR (paper)
+    python scripts/openbmi.py --out openbmi_cache_nocar --no-car  # without CAR
 """
 import argparse
 import os

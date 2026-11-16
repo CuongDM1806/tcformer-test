@@ -164,7 +164,7 @@ The notebooks are short. They clone this repository and call the launcher, and t
 | Notebook | Purpose | Open |
 |---|---|---|
 | `notebooks/run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) |
-| `notebooks/openbmi_cache.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_cache.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_cache.ipynb) |
+| `notebooks/openbmi.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) |
 
 Edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`) and run it, with a GPU and Internet enabled. On Kaggle, use *Save Version → Save & Run All*. If the session ends before all folds are done, run again with the earlier results visible and finished folds are skipped. On Kaggle, attach the previous output (*Add Input → Your Work → Notebook Output*); on Colab, keep the results in the mounted Drive.
 
@@ -173,8 +173,8 @@ Edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MOD
 Lee2019_MI comes as about 61 GB of MAT files. Each subject is therefore preprocessed once into `openbmi_SXX.npz` (about 20 MB). The cache records the preprocessing it was built with, and a cache built with different settings is never used.
 
 ```bash
-python scripts/build_openbmi_cache.py --out openbmi_cache --workers 3              # paper (with CAR)
-python scripts/build_openbmi_cache.py --out openbmi_cache_nocar --no-car --workers 3
+python scripts/openbmi.py --out openbmi_cache --workers 3              # paper (with CAR)
+python scripts/openbmi.py --out openbmi_cache_nocar --no-car --workers 3
 export OPENBMI_CACHE_INPUT=$PWD/openbmi_cache:$PWD/openbmi_cache_nocar
 ```
 

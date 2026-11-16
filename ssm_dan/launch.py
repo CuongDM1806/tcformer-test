@@ -308,7 +308,7 @@ def build_openbmi_cache(no_car=False, subjects="1-54", workers=3, platform=None)
     platform = platform if isinstance(platform, Platform) else detect(platform)
     python = python_for_training(platform)
     out = platform.work / ("openbmi_cache_nocar" if no_car else "openbmi_cache")
-    command = [python, "-u", ROOT / "scripts" / "build_openbmi_cache.py", "--out", out,
+    command = [python, "-u", ROOT / "scripts" / "openbmi.py", "--out", out,
                "--subjects", subjects, "--workers", workers] + (["--no-car"] if no_car else [])
     if _stream(command, out.parent / f"{out.name}_build.log", "", environment(platform)) != 0:
         print("Some subjects are missing: run again to finish them.", flush=True)
