@@ -26,9 +26,8 @@ ssm_dan/
   models/                SSM backbone, SSM-DAN, Lightning wrapper, re-implemented baselines
   baselines/             RMETNet, T-TIME and BFT (their own training loops)
   kaggle.py              helpers for the Kaggle notebooks
-notebooks/               Kaggle: run any experiment, build the OpenBMI cache, parity check
+notebooks/               Kaggle: run any experiment, build the OpenBMI cache
 scripts/                 build the OpenBMI cache; paper-style tables and statistics
-tests/                   configuration parity with the reported runs, unit tests, parity probe
 ```
 
 ## Installation
@@ -136,13 +135,12 @@ Checkpoints are selected on the labeled source validation sessions only. Target 
 
 ## Kaggle
 
-The three notebooks are short. They clone this repository and call `ssm_dan/kaggle.py`.
+The two notebooks are short. They clone this repository and call `ssm_dan/kaggle.py`.
 
 | Notebook | Purpose | Open |
 |---|---|---|
 | `notebooks/kaggle_run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_run.ipynb) |
 | `notebooks/kaggle_openbmi_cache.ipynb` | Build the OpenBMI cache, with or without CAR. No GPU needed. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_openbmi_cache.ipynb) |
-| `notebooks/kaggle_parity_check.ipynb` | Compare this code with the development code that produced the paper's results. | [Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/kaggle_parity_check.ipynb) |
 
 To use `kaggle_run.ipynb`, edit the settings cell (`METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`), enable Internet, and run *Save Version → Save & Run All*. `MODE = 'paper'` launches the folds the way the reported run did. For BCI IV and Zhou2016 that is all folds in one process on one GPU; for OpenBMI and the session-specific RA runs it is one process per fold, two GPUs at a time. `MODE = 'per_fold'` always uses both GPUs. Folds that do not fit in the 12-hour limit are deferred. To finish them, attach the version's output (*Add Input → Your Work → Notebook Output*) and run again; finished folds are skipped.
 
@@ -161,8 +159,6 @@ On Kaggle, attach the cache Dataset (`openbmi-dataset-cuong` with CAR, `openbmi-
 ## Reproducibility
 
 - All results in the paper use seed 0, on one NVIDIA T4 per fold, with PyTorch 2.7.1 and the package versions in `requirements.txt`. cuDNN runs in deterministic mode. Data-loader workers are fixed at 2, because S&R augmentation draws its random numbers in the workers.
-- `tests/test_config_parity.py` checks that every run reported in the paper resolves to the configuration it was run with. That configuration is stored in `tests/fixtures/paper_configs.json`, reconstructed from the development code and Kaggle notebooks (or the `config.yaml` saved with the results). This test needs only PyYAML: `python -m pytest tests/test_config_parity.py`.
-- `notebooks/kaggle_parity_check.ipynb` runs `tests/parity/probe.py` on this code and on the development code for the same fold. It compares the data splits, the initial weights, the weights after several training steps and the adapted test logits.
 - TorchScript optimizes the selective scan after its first calls in a process, so the first fold of a process can differ from later folds in the last bits. To match the reported runs, launch folds as they were launched. `MODE = 'paper'` in the Kaggle notebook does this; locally, run all folds in one command for BCI IV/Zhou2016, and one command per fold for OpenBMI and `per_session_ra`.
 - GPU kernels are not bit-reproducible across GPU models or driver versions. Re-runs on other hardware can differ slightly from the reported per-subject numbers.
 
