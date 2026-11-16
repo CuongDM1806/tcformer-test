@@ -27,7 +27,7 @@ ssm_dan/
   models/                SSM backbone, SSM-DAN, Lightning wrapper, re-implemented baselines
   baselines/             RMETNet, T-TIME and BFT (their own training loops)
   launch.py              launcher: several GPUs, resume, time budget, any platform
-notebooks/               Kaggle/Colab: run any experiment, download OpenBMI
+notebooks/               Kaggle/Colab: one notebook per dataset, any single run, OpenBMI download
 ```
 
 ## Installation
@@ -164,10 +164,13 @@ The notebooks clone this repository and call the launcher; they run on Kaggle an
 | Notebook | Purpose | Open |
 |---|---|---|
 | `notebooks/run.ipynb` | Any method, variant, dataset and subject range, on one or two GPUs. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/run.ipynb) |
-| `notebooks/bcic2a.ipynb` | BCI IV-2a end to end: SSM-DAN, its ablations and the baselines, one experiment per GPU, then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) |
+| `notebooks/bcic2a.ipynb` | BCI IV-2a end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) |
+| `notebooks/bcic2b.ipynb` | BCI IV-2b end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2b.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2b.ipynb) |
+| `notebooks/zhou2016.ipynb` | Zhou2016 end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/zhou2016.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/zhou2016.ipynb) |
+| `notebooks/openbmi.ipynb` | OpenBMI end to end (attach the cache, see below): SSM-DAN and its ablations; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) |
 | `notebooks/openbmi_download.ipynb` | Download and preprocess OpenBMI, with or without CAR. No GPU needed. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_download.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_download.ipynb) |
 
-Edit the settings cell (in `run.ipynb`: `METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`; in `bcic2a.ipynb`: the `EXPERIMENTS` list) and run it, with a GPU and Internet enabled. On Kaggle, use *Save Version → Save & Run All*. If the session ends before all folds are done, run again with the earlier results visible and finished folds are skipped. On Kaggle, attach the previous output (*Add Input → Your Work → Notebook Output*); on Colab, keep the results in the mounted Drive.
+Edit the settings cell (in `run.ipynb`: `METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`; in the dataset notebooks: the `EXPERIMENTS` list) and run it, with a GPU and Internet enabled. On Kaggle, use *Save Version → Save & Run All*. If the session ends before all folds are done, run again with the earlier results visible and finished folds are skipped. On Kaggle, attach the previous output (*Add Input → Your Work → Notebook Output*); on Colab, keep the results in the mounted Drive.
 
 ## OpenBMI
 
