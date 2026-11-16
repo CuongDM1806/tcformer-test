@@ -9,11 +9,13 @@ launcher adds what long runs need on shared or hosted machines:
 * resuming: folds finished in an earlier session are copied from the input
   directories (e.g. an attached Kaggle output, a mounted Drive) and skipped;
 * a time budget (hosted sessions end after a fixed time);
-* a check that the OpenBMI cache is complete before training starts.
+* the OpenBMI data: preprocessed files already present are used; otherwise they
+  are fetched from the repository's data branch ``openbmi-data`` (~1 GB), and
+  what is still missing (e.g. without CAR) is built from the raw recordings.
 
 Paths follow the platform (detected automatically, or ``--platform``):
 
-    platform  outputs (results/, caches)    searched for earlier results / OpenBMI cache
+    platform  outputs (results/, OpenBMI)   searched for earlier results / OpenBMI files
     kaggle    /kaggle/working                /kaggle/input
     colab     /content                       /content/drive/MyDrive (if mounted)
     local     current directory              $SSM_DAN_INPUT (os.pathsep-separated), if set
@@ -22,7 +24,7 @@ Command line (same options as ssm_dan.run, plus --gpus, --mode, --time-budget-h)
 
     python -m ssm_dan.launch --method ssm_dan --dataset openbmi --gpus 0,1
     python -m ssm_dan.launch --method ssm_dan --dataset bcic2a --variant no_ra --mode one_process
-    python -m ssm_dan.launch --build-openbmi-cache --no-car --workers 3
+    python -m ssm_dan.launch --openbmi-data [--no-car] [--workers 3]   # only get the OpenBMI files
 
 From a notebook:  from ssm_dan import launch; launch.run("ssm_dan", "bcic2a", gpus=[0, 1])
 Standard library + PyYAML only, so it also runs in a notebook kernel without PyTorch.
@@ -39,6 +41,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+OPENBMI_BRANCH = "openbmi-data"     # data-only branch of this repository: openbmi/openbmi_SXX.npz
+REPOSITORY_URLS = ["https://github.com/CuongDM1806/ssm-dan.git",
+                   "https://github.com/CuongDM1806/tcformer-test.git"]   # former name
 TORCH = ["torch==2.7.1", "torchvision==0.22.1", "--index-url", "https://download.pytorch.org/whl/cu126"]
 
 
@@ -110,15 +115,16 @@ def environment(platform: Platform):
     env = os.environ.copy()
     mne_data = Path(env.get("MNE_DATA", platform.scratch / "mne_data"))
     mne_data.mkdir(parents=True, exist_ok=True)
-    cache_inputs = [str(p) for p in platform.inputs] + [str(platform.work / "openbmi_cache"),
-                                                         str(platform.work / "openbmi_cache_nocar")]
+    cache_inputs = [str(p) for p in platform.inputs] + [str(platform.work / "openbmi"),
+                                                         str(platform.work / "openbmi_nocar"),
+                                                         str(platform.scratch / OPENBMI_BRANCH)]
     env.update({
         "PYTHONUNBUFFERED": "1",
         "MPLBACKEND": "Agg",
         "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
         "MNE_DATA": str(mne_data),
         "MNE_DATASETS_LEE2019_MI_PATH": str(mne_data),
-        "OPENBMI_CACHE_DIR": env.get("OPENBMI_CACHE_DIR", str(platform.scratch / "openbmi_cache")),
+        "OPENBMI_CACHE_DIR": env.get("OPENBMI_CACHE_DIR", str(platform.scratch / "openbmi")),
         "OPENBMI_CACHE_INPUT": os.pathsep.join(filter(None, [env.get("OPENBMI_CACHE_INPUT", "")] + cache_inputs)),
         "SSM_DAN_RESULTS": str(platform.results),
     })
@@ -157,8 +163,8 @@ def resume(platform: Platform, dataset, name, seed):
     return target
 
 
-def check_openbmi_cache(env, no_car=False):
-    """Fail early unless all 54 OpenBMI cache files with the right preprocessing are available."""
+def missing_openbmi(env, no_car=False):
+    """OpenBMI subjects without a preprocessed file (with / without CAR) in the search directories."""
     import json
     import numpy as np
 
@@ -170,13 +176,52 @@ def check_openbmi_cache(env, no_car=False):
                 with np.load(path, allow_pickle=False) as data:
                     if json.loads(str(data["signature"])).get("common_average_reference") is wanted:
                         found.add(int(path.stem[-2:]))
-    missing = sorted(set(range(1, 55)) - found)
+    return sorted(set(range(1, 55)) - found)
+
+
+def check_openbmi_cache(env, no_car=False):
+    """Fail unless all 54 OpenBMI files with the right preprocessing are available."""
+    missing = missing_openbmi(env, no_car)
     if missing:
         raise FileNotFoundError(
-            f"OpenBMI cache {'without' if no_car else 'with'} CAR is missing subjects {missing}. Build it "
-            f"with `python -m ssm_dan.launch --build-openbmi-cache{' --no-car' if no_car else ''}` or make "
-            "an existing cache visible (Kaggle: attach the Dataset; elsewhere: $OPENBMI_CACHE_INPUT).")
-    print(f"OpenBMI cache ({'no CAR' if no_car else 'CAR'}): all 54 subjects found.", flush=True)
+            f"OpenBMI {'without' if no_car else 'with'} CAR is missing subjects {missing}. Get them with "
+            f"`python -m ssm_dan.launch --openbmi-data{' --no-car' if no_car else ''}`.")
+    print(f"OpenBMI ({'no CAR' if no_car else 'CAR'}): all 54 subjects found.", flush=True)
+
+
+def _repository_urls():
+    origin = subprocess.run(["git", "-C", str(ROOT), "remote", "get-url", "origin"],
+                            capture_output=True, text=True).stdout.strip()
+    return list(dict.fromkeys(([origin] if origin.startswith("https://") else []) + REPOSITORY_URLS))
+
+
+def ensure_openbmi_data(no_car=False, workers=3, platform=None, env=None):
+    """Make all 54 preprocessed OpenBMI subjects available; use them as they are if they already are.
+
+    1. files already present (attached inputs, earlier outputs, an earlier fetch) are used;
+    2. with CAR (the paper's preprocessing): fetch the data branch ``openbmi-data`` (~1 GB);
+    3. subjects still missing (e.g. without CAR) are downloaded and preprocessed from the
+       raw recordings (~1.1 GB per subject, deleted after preprocessing).
+    """
+    platform = platform if isinstance(platform, Platform) else detect(platform)
+    env = env or environment(platform)
+    label = "no CAR" if no_car else "CAR"
+    missing = missing_openbmi(env, no_car)
+    if missing and not no_car:
+        target = platform.scratch / OPENBMI_BRANCH
+        if not (target / ".git").exists():
+            for url in _repository_urls():
+                print(f"OpenBMI ({label}): fetching branch {OPENBMI_BRANCH} of {url} (~1 GB)", flush=True)
+                fetched = subprocess.run(["git", "clone", "--depth", "1", "--single-branch", "--branch",
+                                          OPENBMI_BRANCH, url, str(target)],
+                                         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+                if fetched.returncode == 0:
+                    break
+        missing = missing_openbmi(env, no_car)
+    if missing:
+        print(f"OpenBMI ({label}): building subjects {missing} from the raw recordings", flush=True)
+        build_openbmi_cache(no_car, ",".join(map(str, missing)), workers, platform)
+    check_openbmi_cache(env, no_car)
 
 
 def paper_process_mode(dataset, variants):
@@ -234,7 +279,8 @@ def run(method="ssm_dan", dataset="bcic2a", variant="", subjects="all", seed=0, 
     variants = [v.strip() for v in variant.split(",") if v.strip()]
     config = cfg.resolve(method, dataset, variants, overrides, seed=seed)
     if dataset == "openbmi":
-        check_openbmi_cache(env, no_car=not config["preprocessing"].get("common_average_reference", True))
+        ensure_openbmi_data(not config["preprocessing"].get("common_average_reference", True),
+                            platform=platform, env=env)
     out_dir = resume(platform, dataset, config["name"], seed)
     targets = cfg.parse_subjects(subjects, SUBJECT_IDS[dataset])
     pending = [s for s in targets if not results.is_done(out_dir, s)]
@@ -304,11 +350,11 @@ def run(method="ssm_dan", dataset="bcic2a", variant="", subjects="all", seed=0, 
 
 
 def build_openbmi_cache(no_car=False, subjects="1-54", workers=3, platform=None):
-    """Download and preprocess OpenBMI into <work>/openbmi_cache[_nocar], ``workers`` subjects at a time."""
+    """Download and preprocess OpenBMI into <work>/openbmi[_nocar], ``workers`` subjects at a time."""
     sys.path.insert(0, str(ROOT))
     platform = platform if isinstance(platform, Platform) else detect(platform)
     python = python_for_training(platform)
-    out = platform.work / ("openbmi_cache_nocar" if no_car else "openbmi_cache")
+    out = platform.work / ("openbmi_nocar" if no_car else "openbmi")
     env = environment(platform)
     from ssm_dan.config import parse_subjects
     ids = parse_subjects(subjects, list(range(1, 55)))
@@ -326,7 +372,7 @@ def build_openbmi_cache(no_car=False, subjects="1-54", workers=3, platform=None)
     for thread in threads:
         thread.join()
     missing = [s for s in ids if not (out / f"openbmi_S{s:02d}.npz").exists()]
-    print(f"OpenBMI cache in {out}; missing subjects: {missing or 'none'}", flush=True)
+    print(f"OpenBMI files in {out}; missing subjects: {missing or 'none'}", flush=True)
     return out
 
 
@@ -343,13 +389,13 @@ def main(argv=None):
     parser.add_argument("--set", dest="overrides", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--time-budget-h", type=float, default=None)
     parser.add_argument("--platform", default=None, choices=["kaggle", "colab", "local"])
-    parser.add_argument("--build-openbmi-cache", action="store_true", help="build the OpenBMI cache instead")
-    parser.add_argument("--no-car", action="store_true", help="OpenBMI cache without CAR")
-    parser.add_argument("--workers", type=int, default=3, help="parallel subjects when building the cache")
+    parser.add_argument("--openbmi-data", action="store_true",
+                        help="only make the OpenBMI files available (use, fetch or build them)")
+    parser.add_argument("--no-car", action="store_true", help="OpenBMI files without CAR")
+    parser.add_argument("--workers", type=int, default=3, help="parallel subjects when building OpenBMI files")
     args = parser.parse_args(argv)
-    if args.build_openbmi_cache:
-        build_openbmi_cache(args.no_car, args.subjects if args.subjects != "all" else "1-54", args.workers,
-                            args.platform)
+    if args.openbmi_data:
+        ensure_openbmi_data(args.no_car, args.workers, args.platform)
         return 0
     run(args.method, args.dataset, args.variant, args.subjects, args.seed,
         [int(g) for g in args.gpus.split(",")], args.overrides, args.mode, args.time_budget_h,

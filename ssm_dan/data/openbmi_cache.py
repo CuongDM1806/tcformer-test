@@ -47,7 +47,7 @@ def _cache_name(subject_id: int) -> str:
 def _cache_dirs(preprocessing_dict: Dict):
     """Writable cache directory followed by read-only search directories."""
     write_dir = Path(os.environ.get(
-        "OPENBMI_CACHE_DIR", preprocessing_dict.get("cache_dir", "openbmi_cache")))
+        "OPENBMI_CACHE_DIR", preprocessing_dict.get("cache_dir", "openbmi")))
     read_dirs = [write_dir]
     for entry in os.environ.get("OPENBMI_CACHE_INPUT", "").split(os.pathsep):
         if entry:
@@ -252,7 +252,7 @@ def main(argv=None):
 
     parser = argparse.ArgumentParser(prog="python -m ssm_dan.data.openbmi_cache",
                                      description="Download and cache OpenBMI (Lee2019_MI).")
-    parser.add_argument("--out", default="openbmi_cache")
+    parser.add_argument("--out", default="openbmi")
     parser.add_argument("--subjects", default="1-54")
     parser.add_argument("--no-car", action="store_true", help="skip the common average reference")
     args = parser.parse_args(argv)

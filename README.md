@@ -27,7 +27,7 @@ ssm_dan/
   models/                SSM backbone, SSM-DAN, Lightning wrapper, re-implemented baselines
   baselines/             RMETNet, T-TIME and BFT (their own training loops)
   launch.py              launcher: several GPUs, resume, time budget, any platform
-notebooks/               Kaggle/Colab: one notebook per dataset, any single run, OpenBMI download
+notebooks/               Kaggle/Colab: one notebook per dataset, any single run
 ```
 
 ## Installation
@@ -141,11 +141,11 @@ Checkpoints are selected on the labeled source validation sessions only. Target 
 - **Several GPUs.** It trains one fold per GPU at a time.
 - **Resume.** Folds finished in an earlier session are copied over and skipped.
 - **Time budget.** It does not start a fold that cannot finish in time.
-- **OpenBMI.** It checks that the cache is complete before training starts.
+- **OpenBMI.** It makes the preprocessed files available before training: files already present are used, otherwise they are fetched from the `openbmi-data` branch, and anything still missing is built from the raw recordings (see [OpenBMI](#openbmi)).
 
 It runs on a workstation or GPU server and in Kaggle or Colab notebooks. The platform is detected automatically; `--platform` overrides it.
 
-| Platform | Results and caches written to | Searched for earlier results and the OpenBMI cache |
+| Platform | Results and OpenBMI files written to | Searched for earlier results and OpenBMI files |
 |---|---|---|
 | local / server | current directory | `$SSM_DAN_INPUT` (directories separated by `:`) |
 | Kaggle | `/kaggle/working` | `/kaggle/input` (attached Datasets and notebook outputs) |
@@ -154,7 +154,7 @@ It runs on a workstation or GPU server and in Kaggle or Colab notebooks. The pla
 ```bash
 python -m ssm_dan.launch --method ssm_dan --dataset openbmi --gpus 0,1             # two folds at a time
 python -m ssm_dan.launch --method ssm_dan --dataset bcic2a --variant no_ra --gpus 0
-python -m ssm_dan.launch --build-openbmi-cache --no-car --workers 3
+python -m ssm_dan.launch --openbmi-data --no-car --workers 3                     # only get the OpenBMI files
 ```
 
 `--mode paper` (the default) launches the folds the way the reported run did. For BCI IV and Zhou2016 that is all folds in one process on the first GPU; for OpenBMI and `per_session_ra` it is one process per fold, spread over the GPUs. `--mode per_fold` always spreads folds over the GPUs, which is faster.
@@ -167,22 +167,30 @@ The notebooks clone this repository and call the launcher; they run on Kaggle an
 | `notebooks/bcic2a.ipynb` | BCI IV-2a end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) |
 | `notebooks/bcic2b.ipynb` | BCI IV-2b end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2b.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2b.ipynb) |
 | `notebooks/zhou2016.ipynb` | Zhou2016 end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/zhou2016.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/zhou2016.ipynb) |
-| `notebooks/openbmi.ipynb` | OpenBMI end to end (attach the cache, see below): SSM-DAN and its ablations; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) |
-| `notebooks/openbmi_download.ipynb` | Download and preprocess OpenBMI, with or without CAR. No GPU needed. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_download.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi_download.ipynb) |
+| `notebooks/openbmi.ipynb` | OpenBMI end to end (gets the data itself, see below): SSM-DAN and its ablations; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) |
 
 Edit the settings cell (in `run.ipynb`: `METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`; in the dataset notebooks: the `EXPERIMENTS` list) and run it, with a GPU and Internet enabled. On Kaggle, use *Save Version → Save & Run All*. If the session ends before all folds are done, run again with the earlier results visible and finished folds are skipped. On Kaggle, attach the previous output (*Add Input → Your Work → Notebook Output*); on Colab, keep the results in the mounted Drive.
 
 ## OpenBMI
 
-Lee2019_MI comes as about 61 GB of MAT files. Each subject is therefore preprocessed once into `openbmi_SXX.npz` (about 20 MB). The cache records the preprocessing it was built with, and a cache built with different settings is never used.
+Lee2019_MI comes as about 61 GB of MAT files. Each subject is therefore preprocessed once into `openbmi_SXX.npz` (about 20 MB, both sessions). Every file records the preprocessing it was built with, and a file built with other settings is never used.
+
+The 54 files with the paper's preprocessing (CAR, 4-38 Hz, 100 Hz, 0-4 s) are kept in this repository, on the data-only branch [`openbmi-data`](../../tree/openbmi-data) (about 1 GB), so `main` stays small. `python -m ssm_dan.launch` and `notebooks/openbmi.ipynb` take care of the data before training:
+
+1. files already present are used as they are (attached Kaggle inputs, earlier outputs, an earlier fetch);
+2. with CAR, the `openbmi-data` branch is fetched (`git clone --depth 1`);
+3. subjects still missing, e.g. for the `no_car` variant, are downloaded from the original source and preprocessed into `openbmi/` or `openbmi_nocar/` (`--workers` subjects at a time).
 
 ```bash
-python -m ssm_dan.launch --build-openbmi-cache --workers 3          # -> openbmi_cache/ (paper, with CAR)
-python -m ssm_dan.launch --build-openbmi-cache --no-car --workers 3 # -> openbmi_cache_nocar/
-export OPENBMI_CACHE_INPUT=$PWD/openbmi_cache:$PWD/openbmi_cache_nocar
+python -m ssm_dan.launch --openbmi-data                       # only get the files (with CAR)
+python -m ssm_dan.launch --openbmi-data --no-car --workers 3  # build them without CAR
 ```
 
-Or use `notebooks/openbmi_download.ipynb` (Kaggle, Colab). On Kaggle, attach the cache Dataset (`openbmi-dataset-cuong` with CAR, `openbmi-nocar-cuong` without). `ssm_dan.launch` checks that all 54 subjects are present before training.
+To call `python -m ssm_dan.run` directly, put the files in `./openbmi` first; it is searched recursively:
+
+```bash
+git clone --depth 1 --branch openbmi-data https://github.com/CuongDM1806/ssm-dan.git openbmi
+```
 
 ## Reproducibility
 
