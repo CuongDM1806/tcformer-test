@@ -11,7 +11,9 @@ before training (step 4 of the notebooks), in this order:
 2. files with the expected names found in the input directories are linked into `data/`.
    These are attached Kaggle Datasets or notebook outputs (`/kaggle/input`), a mounted
    Google Drive (`/content/drive/MyDrive`), the directories in `$SSM_DAN_INPUT`, and `~/mne_data`;
-3. OpenBMI with CAR only: the data branch `openbmi-data` of this repository (~1 GB);
+3. the data branch `<dataset>-data` of this repository, which holds the files in this same layout.
+   It exists for `zhou2016` (177 MB) and `openbmi` (CAR only, ~1 GB). BCI IV-2a and 2b will be added
+   when their server can be reached again;
 4. the original servers: MOABB download for BCI IV-2a/2b and Zhou2016, retried up to 10 times.
    OpenBMI is downloaded and preprocessed.
 

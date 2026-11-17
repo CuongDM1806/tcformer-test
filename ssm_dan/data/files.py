@@ -14,7 +14,7 @@ files without contacting any server (see data/README.md):
 Missing files are taken, in this order, from
 1. other directories given to ``link_from`` (e.g. attached Kaggle inputs): files with the
    expected names are linked into data/;
-2. OpenBMI with CAR only: the repository's data branch ``openbmi-data``;
+2. the repository's data branch ``<dataset>-data`` (same layout as data/; OpenBMI: CAR only);
 3. the original servers (MOABB download, retried; OpenBMI is preprocessed from raw).
 
 Command line (``--check`` lists what is missing; ``--download`` fetches it):
@@ -139,28 +139,39 @@ def link_from(dataset, directories, no_car=False):
     return linked
 
 
-def fetch_openbmi_branch(urls, scratch):
-    """Clone the data branch openbmi-data and move its files into data/openbmi; returns the count."""
+def data_branch(dataset):
+    """Data-only branch of this repository that holds the dataset's files, in the data/ layout."""
+    return f"{dataset}-data"
+
+
+def fetch_branch(dataset, urls, scratch, no_car=False):
+    """Clone the dataset's data branch and move the files that are still missing into data/.
+
+    Returns the number of files moved (0 if the branch does not exist or cannot be reached).
+    """
     import subprocess
 
-    clone = Path(scratch) / "openbmi-data"
+    if dataset == "openbmi" and no_car:
+        return 0                      # the branch holds the paper's preprocessing (CAR) only
+    branch = data_branch(dataset)
+    clone = Path(scratch) / branch
     if not (clone / ".git").exists():
         for url in urls:
-            print(f"OpenBMI: fetching branch openbmi-data of {url} (~1 GB)", flush=True)
-            done = subprocess.run(["git", "clone", "--depth", "1", "--single-branch", "--branch", "openbmi-data",
+            print(f"{dataset}: fetching branch {branch} of {url}", flush=True)
+            done = subprocess.run(["git", "clone", "--depth", "1", "--single-branch", "--branch", branch,
                                    url, str(clone)], env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
             if done.returncode == 0:
                 break
     if not clone.is_dir():
         return 0
-    target, moved = openbmi_dir(False), 0
-    target.mkdir(parents=True, exist_ok=True)
-    for path in sorted(clone.rglob("openbmi_S*.npz")):
-        destination = target / path.name
-        if not _usable("openbmi", destination, False) and _openbmi_car(path) is True:
+    moved = 0
+    for rel in missing(dataset, no_car):
+        source, destination = clone / rel, data_dir() / rel
+        if _usable(dataset, source, no_car):
+            destination.parent.mkdir(parents=True, exist_ok=True)
             if destination.exists() or destination.is_symlink():
                 destination.unlink()
-            shutil.move(str(path), destination)
+            shutil.move(str(source), destination)
             moved += 1
     shutil.rmtree(clone, ignore_errors=True)
     return moved

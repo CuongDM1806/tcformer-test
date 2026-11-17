@@ -12,7 +12,7 @@ launcher adds what long runs need on shared or hosted machines:
 * the data: every dataset is read from ``data/`` in the repository (see
   data/README.md). Files already there are used as they are; missing ones are
   linked from the input directories (e.g. an attached Kaggle Dataset), then
-  fetched (OpenBMI with CAR: the data branch ``openbmi-data``) or downloaded.
+  fetched from the data branch ``<dataset>-data`` of this repository, or downloaded.
 
 Paths follow the platform (detected automatically, or ``--platform``):
 
@@ -42,7 +42,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OPENBMI_BRANCH = "openbmi-data"     # data-only branch of this repository: openbmi/openbmi_SXX.npz
 REPOSITORY_URLS = ["https://github.com/CuongDM1806/ssm-dan.git",
                    "https://github.com/CuongDM1806/tcformer-test.git"]   # former name
 TORCH = ["torch==2.7.1", "torchvision==0.22.1", "--index-url", "https://download.pytorch.org/whl/cu126"]
@@ -176,7 +175,7 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     1. files in data/ are used;
     2. missing files with the expected names are linked from the input directories
        (attached Kaggle Datasets or outputs, a mounted Drive, $SSM_DAN_INPUT, ~/mne_data);
-    3. OpenBMI with CAR: the data branch ``openbmi-data`` of this repository (~1 GB);
+    3. the data branch ``<dataset>-data`` of this repository, if it exists (OpenBMI: CAR only);
     4. what is still missing is downloaded from the original servers (OpenBMI: downloaded
        and preprocessed, ``workers`` subjects at a time).
     """
@@ -191,9 +190,10 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     linked = files.link_from(dataset, search_directories(platform), no_car)
     if linked:
         print(f"{label}: linked {linked} files found in the inputs into {files.data_dir()}", flush=True)
-    if dataset == "openbmi" and not no_car and files.missing(dataset):
-        moved = files.fetch_openbmi_branch(_repository_urls(), platform.scratch)
-        print(f"{label}: {moved} files from branch {OPENBMI_BRANCH}", flush=True)
+    if files.missing(dataset, no_car):
+        moved = files.fetch_branch(dataset, _repository_urls(), platform.scratch, no_car)
+        if moved:
+            print(f"{label}: {moved} files from branch {files.data_branch(dataset)}", flush=True)
     if files.missing(dataset, no_car):
         print(f"{label}: downloading the missing files", flush=True)
         if dataset == "openbmi":
