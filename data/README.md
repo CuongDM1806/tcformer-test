@@ -11,12 +11,10 @@ before training (step 4 of the notebooks), in this order:
 2. files with the expected names found in the input directories are linked into `data/`.
    These are attached Kaggle Datasets or notebook outputs (`/kaggle/input`), a mounted
    Google Drive (`/content/drive/MyDrive`), the directories in `$SSM_DAN_INPUT`, and `~/mne_data`;
-3. BCI IV-2a/2b only: the competition GDF files, if they are in `data/` or an input directory, are
-   converted into the MAT files (see [below](#bci-iv-2a2b-from-the-competition-gdf-files));
-4. the data branch `<dataset>-data` of this repository, which holds the files in this same layout.
+3. the data branch `<dataset>-data` of this repository, which holds the files in this same layout.
    It exists for every dataset: `bcic2a` (0.78 GB), `bcic2b` (0.32 GB), `zhou2016` (177 MB) and
-   `openbmi` (CAR only, ~1 GB);
-5. the original servers: MOABB download for BCI IV-2a/2b and Zhou2016, retried up to 10 times.
+   `openbmi` (CAR only, ~1 GB); see [Download links](#download-links);
+4. the original servers: MOABB download for BCI IV-2a/2b and Zhou2016, retried up to 10 times.
    OpenBMI is downloaded and preprocessed.
 
 The contents of `data/` are not tracked by git; only this file is.
@@ -74,34 +72,6 @@ data/
 - These are the BNCI Horizon 2020 files of data set 004-2014, at
   `http://bnci-horizon-2020.eu/database/data-sets/004-2014/B01T.mat`.
 
-### BCI IV-2a/2b from the competition GDF files
-
-The same recordings are distributed by the BCI Competition IV as GDF files
-(`BCICIV_2a_gdf.zip`, `BCICIV_2b_gdf.zip`, https://www.bbci.de/competition/iv/download/).
-MOABB does not read GDF, so they are converted into the BNCI MAT files above. This happens
-automatically. Put the zip, or the unzipped `.gdf` files in any subfolder, in `data/` (or attach
-it as an input) and run as usual. For example:
-
-```
-data/BCICIV_2b_gdf.zip                  # the zip as downloaded, or
-data/anything/A01T.gdf ... A09E.gdf     # the unzipped files (2a: 18, 2b: 45 files)
-```
-
-The GDF files hide the labels of the evaluation sessions. The labels of all sessions are
-downloaded from the competition results page (`ds2a/true_labels.zip`, `ds2b/true_labels.zip`,
-https://www.bbci.de/competition/iv/results/). The same conversion by hand:
-
-```bash
-python -m ssm_dan.data.bnci_from_gdf --dataset bcic2b --gdf BCICIV_2b_gdf.zip
-# compare with existing original MAT files instead of writing
-python -m ssm_dan.data.bnci_from_gdf --dataset bcic2a \
-    --gdf BCICIV_2a_gdf.zip --check-against data
-```
-
-On BCI IV-2a, the converter reproduces all 18 original BNCI files. Every field MOABB reads is
-identical, and the signal is identical bit for bit. The files on the branch `bcic2b-data` were
-made this way.
-
 ### Zhou2016 (`zhou2016`)
 
 - Files: `data/MNE-zhou-2016/subject_{1..4}/{session}{run}.cnt` with session `1`-`3` and
@@ -136,6 +106,27 @@ Training does not read the 61 GB of raw MAT files. It reads one preprocessed fil
 - To build the files from the raw recordings (raw MAT files are deleted after each subject):
   `python -m ssm_dan.data.openbmi_cache [--no-car] [--subjects 1-54]`, or
   `python -m ssm_dan.launch --data --dataset openbmi [--no-car] --workers 3`.
+
+## Download links
+
+To get the files by hand, take them from one of these places and put them into the layout above.
+
+| Dataset | Files | Where |
+|---|---|---|
+| BCI IV-2a | `A01T.mat` ... `A09E.mat` | BNCI Horizon 2020, data set 001-2014: https://bnci-horizon-2020.eu/database/data-sets (direct: `http://bnci-horizon-2020.eu/database/data-sets/001-2014/A01T.mat`) |
+| | | mirror with the same files (SHA-256 listed): https://huggingface.co/datasets/raei/Brunner-2008-BCICompetition2008GrazDataSetA |
+| | | this repository, branch [`bcic2a-data`](../../../tree/bcic2a-data) |
+| BCI IV-2b | `B01T.mat` ... `B09E.mat` | BNCI Horizon 2020, data set 004-2014 (direct: `http://bnci-horizon-2020.eu/database/data-sets/004-2014/B01T.mat`) |
+| | | this repository, branch [`bcic2b-data`](../../../tree/bcic2b-data) |
+| Zhou2016 | `subject_k/{1,2,3}{A,B}.cnt` | figshare archive, as MOABB downloads it: https://ndownloader.figshare.com/files/3662952 (its `data/S{k}_{session}{run}.cnt` become `subject_k/{session}{run}.cnt`) |
+| | | this repository, branch [`zhou2016-data`](../../../tree/zhou2016-data) |
+| OpenBMI | `openbmi_S01.npz` ... `openbmi_S54.npz` | this repository, branch [`openbmi-data`](../../../tree/openbmi-data) (the paper's preprocessed files) |
+| | raw recordings (~61 GB) | GigaDB, doi:10.5524/100542: http://gigadb.org/dataset/100542; turned into the `.npz` files by `python -m ssm_dan.data.openbmi_cache` |
+
+The BNCI server (it redirects to `lampx.tugraz.at`) is sometimes unreachable; the mirror and the
+data branches hold the same files. A data branch can also be cloned directly, e.g.
+`git clone --depth 1 --branch bcic2a-data https://github.com/CuongDM1806/ssm-dan.git`; its folders are
+those of `data/`.
 
 ## Bringing your own copy
 

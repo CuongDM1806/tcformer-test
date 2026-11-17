@@ -14,10 +14,8 @@ files without contacting any server (see data/README.md):
 Missing files are taken, in this order, from
 1. other directories given to ``link_from`` (e.g. attached Kaggle inputs): files with the
    expected names are linked into data/;
-2. BCI IV-2a/2b only: the competition GDF files (BCICIV_2a_gdf.zip, BCICIV_2b_gdf.zip or the
-   unzipped .gdf files) found in data/ or those directories, converted by ssm_dan.data.bnci_from_gdf;
-3. the repository's data branch ``<dataset>-data`` (same layout as data/; OpenBMI: CAR only);
-4. the original servers (MOABB download, retried; OpenBMI is preprocessed from raw).
+2. the repository's data branch ``<dataset>-data`` (same layout as data/; OpenBMI: CAR only);
+3. the original servers (MOABB download, retried; OpenBMI is preprocessed from raw).
 
 Command line (``--check`` lists what is missing; ``--download`` fetches it):
 
@@ -42,9 +40,6 @@ ZHOU = Path("MNE-zhou-2016")
 MOABB_NAMES = {"bcic2a": ("BNCI2014_001", "BNCI2014001"), "bcic2b": ("BNCI2014_004", "BNCI2014004"),
                "zhou2016": ("Zhou2016",)}
 SUBJECTS = {"bcic2a": range(1, 10), "bcic2b": range(1, 10), "zhou2016": range(1, 5), "openbmi": range(1, 55)}
-GDF_ARCHIVES = {"bcic2a": "BCICIV_2a_gdf.zip", "bcic2b": "BCICIV_2b_gdf.zip"}
-MIN_RAW_BYTES = 1_000_000   # every BNCI/Zhou recording is > 5 MB; the competition label files share
-                            # the BNCI names (A01T.mat, ...) but are a few kB
 
 
 def data_dir() -> Path:
@@ -98,7 +93,7 @@ def _usable(dataset, path, no_car):
         return False
     if dataset == "openbmi":
         return _openbmi_car(path) is (not no_car)
-    return path.stat().st_size > MIN_RAW_BYTES
+    return path.stat().st_size > 0
 
 
 def missing(dataset, no_car=False):
@@ -149,37 +144,6 @@ def link_from(dataset, directories, no_car=False):
 def data_branch(dataset):
     """Data-only branch of this repository that holds the dataset's files, in the data/ layout."""
     return f"{dataset}-data"
-
-
-def gdf_names(dataset):
-    """Competition GDF files a BCI IV dataset is rebuilt from (see ssm_dan.data.bnci_from_gdf)."""
-    if dataset == "bcic2a":
-        return [f"A{s:02d}{r}.gdf" for s in SUBJECTS[dataset] for r in "TE"]
-    return [f"B{s:02d}0{k}{'T' if k <= 3 else 'E'}.gdf" for s in SUBJECTS[dataset] for k in range(1, 6)]
-
-
-def find_gdf(dataset, directories):
-    """A zip archive or a directory with all competition GDF files of the dataset, or None."""
-    import zipfile
-
-    if dataset not in GDF_ARCHIVES:
-        return None
-    names = set(gdf_names(dataset))
-    for directory in directories:
-        directory = Path(directory)
-        if not directory.is_dir():
-            continue
-        for archive in directory.rglob("*.zip"):
-            try:
-                with zipfile.ZipFile(archive) as z:
-                    if names <= {Path(n).name for n in z.namelist()}:
-                        return archive
-            except (zipfile.BadZipFile, OSError):
-                continue
-        found = {path.name for path in directory.rglob("*.gdf") if path.name in names}
-        if found == names:
-            return directory
-    return None
 
 
 def fetch_branch(dataset, urls, scratch, no_car=False):
