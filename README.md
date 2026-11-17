@@ -192,7 +192,7 @@ Every dataset is read from one place, `data/` at the repository root (`$SSM_DAN_
 A file that is already there is never downloaded again. `python -m ssm_dan.launch` and the notebooks obtain only the missing files, in this order:
 
 1. files with the expected names in the input directories (attached Kaggle Datasets or outputs, a mounted Drive, `$SSM_DAN_INPUT`, `~/mne_data`) are linked into `data/`;
-2. the data-only branch `<dataset>-data` of this repository, with the files in the same layout: [`zhou2016-data`](../../tree/zhou2016-data) (177 MB) and [`openbmi-data`](../../tree/openbmi-data) (about 1 GB, the paper's preprocessed files, CAR only);
+2. the data-only branch `<dataset>-data` of this repository, with the files in the same layout: [`bcic2a-data`](../../tree/bcic2a-data) (0.78 GB), [`zhou2016-data`](../../tree/zhou2016-data) (177 MB) and [`openbmi-data`](../../tree/openbmi-data) (about 1 GB, the paper's preprocessed files, CAR only);
 3. the original servers: a MOABB download, retried, for BCI IV and Zhou2016. OpenBMI is downloaded (about 61 GB of MAT files, one subject at a time) and preprocessed, and the raw files are deleted.
 
 ```bash
