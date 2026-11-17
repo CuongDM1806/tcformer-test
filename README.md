@@ -188,11 +188,11 @@ All data are read from `data/` at the repository root. To run on your own machin
 | [BCICIV_2b_gdf.zip](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) (BCI IV-2b, 216 MB) | `data/BCICIV_2b/gdf/` |
 | [2b true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) | `data/BCICIV_2b/true_labels/` |
 | Zhou2016: nothing | downloaded automatically from figshare into `data/MNE-zhou-2016/` |
-| OpenBMI: nothing | fetched automatically from the branch [`openbmi-data`](../../tree/openbmi-data) of this repository (the paper's preprocessed files) into `data/openbmi/` |
+| OpenBMI: nothing | already in the repository: `data/openbmi/` holds the paper's preprocessed files (54 subjects, ~1 GB) |
 
 BCI IV-2a/2b are the official BCI Competition IV files. The GDF files hold the recordings, and the true-label files hold the labels of all sessions. Before training, the code builds `data/BCICIV_2x/mat/` from them, the MAT files MOABB reads (`ssm_dan/data/bciciv.py`, 1-2 minutes). `mat/` is never stored or downloaded. On BCI IV-2a these built files are identical to the BNCI Horizon 2020 files used for the paper, the signal bit for bit. Removing the EOG channels, cutting the trials and normalising are done by the training code, as for every dataset.
 
-**On Kaggle**, upload BCI IV-2a, BCI IV-2b and Zhou2016 as Kaggle Datasets and attach them with *Add Input*. Upload the zips above; the two `true_labels.zip` should be renamed or kept in separate Datasets. See [Kaggle and Colab](data/README.md#kaggle-and-colab) for the exact files. OpenBMI needs nothing. Step 4 of the notebooks finds the files under `/kaggle/input` by their names. If an input is missing, it downloads the files from the original source (bbci.de, figshare); OpenBMI comes from the branch `openbmi-data`.
+**On Kaggle**, upload BCI IV-2a, BCI IV-2b and Zhou2016 as Kaggle Datasets and attach them with *Add Input*. Upload the zips above; the two `true_labels.zip` should be renamed or kept in separate Datasets. See [Kaggle and Colab](data/README.md#kaggle-and-colab) for the exact files. OpenBMI needs nothing. Step 4 of the notebooks finds the files under `/kaggle/input` by their names. If an input is missing, it downloads the files from the original source (bbci.de, figshare). OpenBMI is cloned with the code.
 
 ```bash
 # what is there, what is missing

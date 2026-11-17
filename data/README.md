@@ -1,7 +1,8 @@
 # Data
 
 Every experiment reads its EEG data from this directory, `data/` at the repository root.
-Set `SSM_DAN_DATA=/some/other/dir` to use another directory with the same layout.
+Only `data/openbmi/` is stored in git (the paper's preprocessed OpenBMI files); everything else in
+`data/` is downloaded or built and is not tracked. Set `SSM_DAN_DATA=/some/other/dir` to use another directory with the same layout.
 
 ## Quick start: download, unzip, run
 
@@ -15,7 +16,7 @@ from them and never downloads them again.
 | [BCICIV_2b_gdf.zip](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) (216 MB) | `data/BCICIV_2b/gdf/` |
 | [2b true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) (`true_labels.zip`) | `data/BCICIV_2b/true_labels/` |
 | Zhou2016: nothing to download | downloaded automatically by MOABB from figshare into `data/MNE-zhou-2016/` |
-| OpenBMI: nothing to download | fetched automatically from the branch `openbmi-data` of this repository ([zip](../../../archive/refs/heads/openbmi-data.zip), ~1 GB, unzips to `openbmi/` for `data/`) |
+| OpenBMI: nothing to download | already in `data/openbmi/` (in git, ~1 GB) |
 
 ```bash
 cd data
@@ -34,11 +35,11 @@ unzip 2b_true_labels.zip -d BCICIV_2b/true_labels    # the 2b true_labels.zip, r
 |---|---|
 | BCI IV-2a, 2b | input directories (zipped or unzipped), then bbci.de. `mat/` is always built from `gdf/` + `true_labels/` and never stored |
 | Zhou2016 | input directories, then the original figshare archive (MOABB) |
-| OpenBMI | input directories, then the data branch `openbmi-data` of this repository (CAR), then the raw recordings, preprocessed |
+| OpenBMI | in git with CAR (`data/openbmi/`); `no_car`: input directories, then the raw recordings, preprocessed |
 
 Input directories are attached Kaggle Datasets or outputs (`/kaggle/input`), a mounted Google
 Drive (`/content/drive/MyDrive`), `$SSM_DAN_INPUT`, and `~/mne_data`. A file already in `data/` is
-used as it is. The contents of `data/` are not tracked by git; only this file is.
+used as it is. Apart from `data/openbmi/` and this file, the contents of `data/` are not tracked by git.
 
 ```bash
 # what is there, what is missing (all datasets, or one)
@@ -132,9 +133,11 @@ data/openbmi_nocar/   openbmi_S01.npz ... openbmi_S54.npz    (no_car variant)
   The `no_car` variant needs `"common_average_reference": false` with the other values unchanged.
   A file is used only if its signature matches the configuration (`openbmi` block of
   `configs/datasets.yaml`).
-- Sources: the data branch [`openbmi-data`](../../../tree/openbmi-data) of this repository (the paper's
-  files; its `openbmi/` folder is `data/openbmi/`), or the raw recordings (GigaDB, doi:10.5524/100542,
-  http://gigadb.org/dataset/100542), turned into these files by
+- Sources: `data/openbmi/` is part of the repository (the paper's files; a copy is kept in the
+  branch [`openbmi-data`](../../../tree/openbmi-data)). `data/openbmi_nocar/`, or `data/openbmi/` again
+  if deleted, is built from the raw recordings (GigaDB, doi:10.5524/100542,
+  http://gigadb.org/dataset/100542; 108 MAT files, ~61 GB, downloaded a few subjects at a time and
+  deleted once preprocessed) by
   `python -m ssm_dan.data.openbmi_cache [--no-car] [--subjects 1-54]` or
   `python -m ssm_dan.launch --data --dataset openbmi [--no-car] --workers 3`.
 
@@ -151,7 +154,7 @@ data/openbmi_nocar/   openbmi_S01.npz ... openbmi_S54.npz    (no_car variant)
 
   The files are found under `/kaggle/input` by their names. Both label archives are called
   `true_labels.zip` on bbci.de; rename them, or keep them in different Datasets. OpenBMI needs no
-  Dataset (branch `openbmi-data`). Without an input, the notebook downloads the files from bbci.de
+  Dataset (it is cloned with the code). Without an input, the notebook downloads the files from bbci.de
   and figshare itself. The OpenBMI files a notebook built are saved in its output under
   `data/openbmi*`; attach that output next time.
 - **Colab.** Put the files in Google Drive and mount it; `/content/drive/MyDrive` is searched.

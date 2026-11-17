@@ -8,16 +8,16 @@ files without contacting any server (see data/README.md):
     data/BCICIV_2a/{gdf,true_labels,mat}/                                 BCI IV-2a
     data/BCICIV_2b/{gdf,true_labels,mat}/                                 BCI IV-2b
     data/MNE-zhou-2016/subject_1/1A.cnt ... subject_4/3B.cnt               Zhou2016
-    data/openbmi/openbmi_S01.npz ... openbmi_S54.npz                       OpenBMI (CAR)
+    data/openbmi/openbmi_S01.npz ... openbmi_S54.npz                       OpenBMI (CAR, in git)
     data/openbmi_nocar/openbmi_S01.npz ...                                 OpenBMI without CAR
 
 BCI IV-2a/2b are built from the official competition files (GDF recordings + true labels)
-by ssm_dan.data.bciciv; the BNCI Horizon 2020 server is never used. For the other datasets,
-missing files are taken, in this order, from
+by ssm_dan.data.bciciv; the BNCI Horizon 2020 server is never used. The OpenBMI files of the
+paper (CAR) are part of the repository (data/openbmi/). For the other datasets, missing files
+are taken, in this order, from
 1. other directories given to ``link_from`` (e.g. attached Kaggle inputs): files with the
    expected names are linked into data/;
-2. OpenBMI with CAR: the repository's data branch ``openbmi-data`` (same layout as data/);
-3. the original source (Zhou2016: MOABB download from figshare, retried; OpenBMI: raw
+2. the original source (Zhou2016: MOABB download from figshare, retried; OpenBMI: raw
    recordings, preprocessed).
 
 Command line (``--check`` lists what is missing; ``--download`` fetches it):
@@ -153,57 +153,6 @@ def link_from(dataset, directories, no_car=False):
                 _place(path, destination)
                 linked += 1
     return linked
-
-
-REPOSITORY_URLS = ["https://github.com/CuongDM1806/ssm-dan.git",
-                   "https://github.com/CuongDM1806/tcformer-test.git"]   # former name
-
-
-def repository_urls():
-    """This repository's clone URL (origin first), to fetch its data branches."""
-    import subprocess
-
-    origin = subprocess.run(["git", "-C", str(ROOT), "remote", "get-url", "origin"],
-                            capture_output=True, text=True).stdout.strip()
-    return list(dict.fromkeys(([origin] if origin.startswith("https://") else []) + REPOSITORY_URLS))
-
-
-def data_branch(dataset):
-    """Data-only branch of this repository that holds the dataset's files, in the data/ layout."""
-    return f"{dataset}-data"
-
-
-def fetch_branch(dataset, urls, scratch, no_car=False):
-    """Clone the dataset's data branch and move the files that are still missing into data/.
-
-    Returns the number of files moved (0 if the branch does not exist or cannot be reached).
-    """
-    import subprocess
-
-    if dataset == "openbmi" and no_car:
-        return 0                      # the branch holds the paper's preprocessing (CAR) only
-    branch = data_branch(dataset)
-    clone = Path(scratch) / branch
-    if not (clone / ".git").exists():
-        for url in urls:
-            print(f"{dataset}: fetching branch {branch} of {url}", flush=True)
-            done = subprocess.run(["git", "clone", "--depth", "1", "--single-branch", "--branch", branch,
-                                   url, str(clone)], env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-            if done.returncode == 0:
-                break
-    if not clone.is_dir():
-        return 0
-    moved = 0
-    for rel in missing(dataset, no_car):
-        source, destination = clone / rel, data_dir() / rel
-        if _usable(dataset, source, no_car):
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            if destination.exists() or destination.is_symlink():
-                destination.unlink()
-            shutil.move(str(source), destination)
-            moved += 1
-    shutil.rmtree(clone, ignore_errors=True)
-    return moved
 
 
 def download(dataset, retries=10):

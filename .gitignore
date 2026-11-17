@@ -7,5 +7,6 @@ results/
 mne_data/
 data/*
 !data/README.md
+!data/openbmi/
 *.ckpt
 sample/
