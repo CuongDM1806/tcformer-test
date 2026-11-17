@@ -183,12 +183,12 @@ Every dataset is read from one place, `data/` at the repository root (`$SSM_DAN_
 
 | Dataset | Source | What the code reads |
 |---|---|---|
-| BCI IV-2a | official competition files: [`BCICIV_2a_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2a_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip) | MAT files built from them in `data/MNE-bnci-data/.../001-2014/` |
-| BCI IV-2b | [`BCICIV_2b_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) | MAT files built from them in `data/MNE-bnci-data/.../004-2014/` |
+| BCI IV-2a | official competition files: [`BCICIV_2a_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2a_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip) | `data/BCICIV_2a/mat/`, built from `gdf/` + `true_labels/` |
+| BCI IV-2b | [`BCICIV_2b_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) | `data/BCICIV_2b/mat/`, built from `gdf/` + `true_labels/` |
 | Zhou2016 | branch [`zhou2016-data`](../../tree/zhou2016-data), or figshare | `data/MNE-zhou-2016/subject_k/*.cnt` |
 | OpenBMI | branch [`openbmi-data`](../../tree/openbmi-data) (the paper's preprocessed files), or GigaDB | `data/openbmi/openbmi_SXX.npz` (`openbmi_nocar/` without CAR) |
 
-**BCI IV-2a/2b.** Unzip the GDF zip and the true-label zip into `data/`, or leave them zipped. Before training, the code builds the MAT files that MOABB reads (`ssm_dan/data/bciciv.py`, 1-2 minutes). If the zips are not there, it downloads them from bbci.de. On BCI IV-2a, the built files are identical to the BNCI Horizon 2020 files used for the paper, the signal bit for bit. The EOG channels, the trial windows and the normalisation are handled by the training code, as for any dataset.
+**BCI IV-2a/2b.** Unzip `BCICIV_2a_gdf.zip` into `data/BCICIV_2a/gdf/` and the true-label zip into `data/BCICIV_2a/true_labels/` (2b: `data/BCICIV_2b/...`). Before training, the code builds `data/BCICIV_2a/mat/`, the MAT files that MOABB reads (`ssm_dan/data/bciciv.py`, 1-2 minutes). If the files are not there, it downloads both zips from bbci.de and extracts them into these folders. On BCI IV-2a, the built files are identical to the BNCI Horizon 2020 files used for the paper, the signal bit for bit. The EOG channels, the trial windows and the normalisation are handled by the training code, as for any dataset.
 
 **Zhou2016 and OpenBMI.** The launcher and the notebooks link files found in the input directories (attached Kaggle Datasets or outputs, a mounted Drive, `$SSM_DAN_INPUT`, `~/mne_data`). Otherwise they fetch the data branch of this repository, and otherwise they download the original data.
 

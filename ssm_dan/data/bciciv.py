@@ -9,15 +9,22 @@ Source (BCI Competition IV, https://www.bbci.de/competition/iv/), nothing else:
 
 The GDF files hold the recordings; the labels of the evaluation sessions are only in the
 true-label files (published after the competition; they also cover the training sessions).
-Put the four zips, or what they contain, anywhere in data/ (see data/README.md). When the
-MAT files that training reads are missing, ``prepare`` builds them from these files; if the
-files are not found, they are downloaded from the addresses above into data/.
+Each data set has one folder in data/ (see data/README.md):
 
-Training reads the recordings with MOABB, in its BNCI MAT format (one cell array of runs
-with X in uV, trial onsets, labels, sampling rate, class names). ``prepare`` writes them to
+    data/BCICIV_2a/gdf/           A01T.gdf ... A09E.gdf        (BCICIV_2a_gdf.zip, unzipped)
+    data/BCICIV_2a/true_labels/   A01T.mat ... A09E.mat        (ds2a/true_labels.zip, unzipped)
+    data/BCICIV_2a/mat/           A01T.mat ... A09E.mat        (built here; read by training)
+    data/BCICIV_2b/gdf/           B0101T.gdf ... B0905E.gdf
+    data/BCICIV_2b/true_labels/   B0101T.mat ... B0905E.mat
+    data/BCICIV_2b/mat/           B01T.mat ... B09E.mat        (T = sessions 1-3, E = 4-5)
 
-    data/MNE-bnci-data/database/data-sets/001-2014/A{01..09}{T,E}.mat     (2a)
-    data/MNE-bnci-data/database/data-sets/004-2014/B{01..09}{T,E}.mat     (2b)
+(the zips themselves, unextracted, are also recognised, there or in an input directory).
+When the files in mat/ are missing, ``prepare`` builds them from gdf/ and true_labels/; if
+those are not found, both zips are downloaded from the addresses above and extracted there.
+
+Training reads mat/ with MOABB, whose BNCI loader expects this MAT format (one cell array
+of runs with X in uV, trial onsets, labels, sampling rate, class names); ``use_local_files``
+points that loader at mat/ instead of its download location.
 
 The conversion is the one used for the BNCI Horizon 2020 files. For BCI IV-2a, it reproduces
 the 18 BNCI files: every field MOABB reads is identical, the signal bit for bit.
@@ -50,10 +57,8 @@ GDF_URL = {"bcic2a": "https://www.bbci.de/competition/download/competition_iv/BC
            "bcic2b": "https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip"}
 LABELS_URL = {"bcic2a": "https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip",
               "bcic2b": "https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip"}
-ZIP_NAME = {"bcic2a": ("BCICIV_2a_gdf.zip", "BCICIV_2a_true_labels.zip"),
-            "bcic2b": ("BCICIV_2b_gdf.zip", "BCICIV_2b_true_labels.zip")}
 CLASSES = {"bcic2a": ["left hand", "right hand", "feet", "tongue"], "bcic2b": ["left hand", "right hand"]}
-FOLDER = {"bcic2a": "001-2014", "bcic2b": "004-2014"}
+BNCI_CODE = {"bcic2a": "001-2014", "bcic2b": "004-2014"}   # data-set codes in MOABB's download URLs
 NEW_RUN, TRIAL_START, REJECTED = "32766", "768", "1023"
 CUE_CODES = {"769": 1, "770": 2, "771": 3, "772": 4}
 RUN_CUT = 100   # samples dropped at the start of every run but the first
@@ -75,10 +80,15 @@ def _sessions(dataset, subject):
             (f"B{subject:02d}E", [f"B{subject:02d}0{k}E" for k in (4, 5)])]
 
 
+def folder(dataset, part):
+    """data/BCICIV_2a/<part> (part: gdf, true_labels or mat)."""
+    return files.data_dir() / files.BCI_IV[dataset] / part
+
+
 def _is_label_file(path):
-    # The 2a label files share the names of the MAT files training reads (A01T.mat, ...);
-    # they are a few kB and never inside data/MNE-bnci-data.
-    return path.stat().st_size < 100_000 and files.BNCI.parts[0] not in path.parts
+    # The 2a label files share the names of the built MAT files (A01T.mat, ...);
+    # they are a few kB and never inside a mat/ folder.
+    return path.stat().st_size < 100_000 and path.parent.name != "mat"
 
 
 def find(names, directories, label_files=False):
@@ -105,22 +115,28 @@ def find(names, directories, label_files=False):
     return None
 
 
-def _download(url, destination, retries=5):
+def _download_into(url, folder, retries=5):
+    """Download a zip and extract its files (without sub-folders) into ``folder``."""
     import urllib.request
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.part")
+    folder.mkdir(parents=True, exist_ok=True)
+    temporary = folder / f".download.{os.getpid()}.zip"
     for attempt in range(1, retries + 1):
         try:
             print(f"Downloading {url}", flush=True)
             urllib.request.urlretrieve(url, temporary)
-            temporary.replace(destination)
-            return destination
+            break
         except OSError as error:
             if attempt == retries:
                 raise
             print(f"  {type(error).__name__}: {error}; retry {attempt}/{retries - 1} in {30 * attempt} s", flush=True)
             time.sleep(30 * attempt)
+    with zipfile.ZipFile(temporary) as z:
+        for member in z.namelist():
+            if not member.endswith("/"):
+                (folder / Path(member).name).write_bytes(z.read(member))
+    temporary.unlink()
+    return folder
 
 
 # --------------------------------------------------------------------------- conversion
@@ -216,31 +232,30 @@ def write_mat(path, runs):
 
 # --------------------------------------------------------------------------- entry point
 def prepare(dataset, directories=(), download=True):
-    """Write the missing MAT files of ``dataset`` into data/ from the official competition files.
+    """Build the missing files of data/BCICIV_2x/mat from the official competition files.
 
-    The GDF and true-label files are looked for (as zips or unzipped) in data/ and
-    ``directories``; if not found and ``download``, they are downloaded into data/.
+    The GDF and true-label files are looked for (unzipped or as zips) in data/ and
+    ``directories``; if not found and ``download``, both zips are downloaded and extracted
+    into data/BCICIV_2x/gdf and data/BCICIV_2x/true_labels.
     """
     if not files.missing(dataset):
         return
     search = [files.data_dir(), *directories]
-    gdf_names = [f"{stem}.gdf" for stem in recordings(dataset)]
-    label_names = [f"{stem}.mat" for stem in recordings(dataset)]
-    gdf = find(gdf_names, search)
-    labels = find(label_names, search, label_files=True)
-    for kind, found, url, zip_name in (("GDF", gdf, GDF_URL[dataset], ZIP_NAME[dataset][0]),
-                                       ("true-label", labels, LABELS_URL[dataset], ZIP_NAME[dataset][1])):
+    gdf = find([f"{stem}.gdf" for stem in recordings(dataset)], search)
+    labels = find([f"{stem}.mat" for stem in recordings(dataset)], search, label_files=True)
+    for kind, found, url, part in (("GDF", gdf, GDF_URL[dataset], "gdf"),
+                                   ("true-label", labels, LABELS_URL[dataset], "true_labels")):
         if found is None and not download:
             raise FileNotFoundError(
-                f"{dataset}: the competition {kind} files were not found in {search}. Put {zip_name} "
-                f"({url}) in {files.data_dir()} (see data/README.md).")
-    gdf = gdf or _download(GDF_URL[dataset], files.data_dir() / ZIP_NAME[dataset][0])
-    labels = labels or _download(LABELS_URL[dataset], files.data_dir() / ZIP_NAME[dataset][1])
-    print(f"{dataset}: building the MAT files from {gdf} and {labels}", flush=True)
+                f"{dataset}: the competition {kind} files were not found in {search}. Unzip {url} "
+                f"into {folder(dataset, part)} (see data/README.md).")
+    gdf = gdf or _download_into(GDF_URL[dataset], folder(dataset, "gdf"))
+    labels = labels or _download_into(LABELS_URL[dataset], folder(dataset, "true_labels"))
+    print(f"{dataset}: building {folder(dataset, 'mat')} from {gdf} and {labels}", flush=True)
     with tempfile.TemporaryDirectory() as workdir:
         for subject in range(1, 10):
             for mat_name, stems in _sessions(dataset, subject):
-                target = files.data_dir() / files.BNCI / FOLDER[dataset] / f"{mat_name}.mat"
+                target = folder(dataset, "mat") / f"{mat_name}.mat"
                 if target.is_file():
                     continue
                 runs = convert_session(dataset, [_member(gdf, f"{s}.gdf", workdir) for s in stems],
@@ -248,6 +263,31 @@ def prepare(dataset, directories=(), download=True):
                 write_mat(target, runs)
                 print(f"  {mat_name}.mat: trials per run {[len(r['trial']) for r in runs if len(r['trial'])]}",
                       flush=True)
+
+
+def use_local_files():
+    """Make MOABB's BNCI loader read data/BCICIV_2x/mat instead of downloading.
+
+    MOABB 0.5 resolves every BNCI file through ``moabb.datasets.bnci.data_path(url, ...)``
+    (e.g. url = .../001-2014/A01T.mat); this replaces that function so that the URL is
+    mapped to the built file. The files and the way MOABB reads them are unchanged, and
+    MOABB can no longer download from the BNCI server.
+    """
+    import moabb.datasets.bnci as bnci
+
+    by_code = {code: dataset for dataset, code in BNCI_CODE.items()}
+
+    def data_path(url, path=None, force_update=False, update_path=None, verbose=None):
+        code, name = url.rstrip("/").split("/")[-2:]
+        if code not in by_code:
+            raise ValueError(f"{url}: only BCI IV-2a/2b are available locally")
+        local = folder(by_code[code], "mat") / name
+        if not local.is_file():
+            raise FileNotFoundError(f"{local} is missing; run python -m ssm_dan.data.bciciv "
+                                    f"--dataset {by_code[code]}")
+        return [str(local)]
+
+    bnci.data_path = data_path
 
 
 def main(argv=None):

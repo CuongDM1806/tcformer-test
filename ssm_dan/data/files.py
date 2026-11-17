@@ -5,8 +5,8 @@ All datasets are read from one fixed directory, ``data/`` at the repository root
 missing files are obtained. The expected layout is MOABB's own, so MOABB reads the
 files without contacting any server (see data/README.md):
 
-    data/MNE-bnci-data/database/data-sets/001-2014/A01T.mat ... A09E.mat   BCI IV-2a (built)
-    data/MNE-bnci-data/database/data-sets/004-2014/B01T.mat ... B09E.mat   BCI IV-2b (built)
+    data/BCICIV_2a/{gdf,true_labels,mat}/                                 BCI IV-2a
+    data/BCICIV_2b/{gdf,true_labels,mat}/                                 BCI IV-2b
     data/MNE-zhou-2016/subject_1/1A.cnt ... subject_4/3B.cnt               Zhou2016
     data/openbmi/openbmi_S01.npz ... openbmi_S54.npz                       OpenBMI (CAR)
     data/openbmi_nocar/openbmi_S01.npz ...                                 OpenBMI without CAR
@@ -37,7 +37,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 DATASETS = ("bcic2a", "bcic2b", "zhou2016", "openbmi")
-BNCI = Path("MNE-bnci-data/database/data-sets")
+BCI_IV = {"bcic2a": "BCICIV_2a", "bcic2b": "BCICIV_2b"}   # gdf/, true_labels/ and the built mat/
 ZHOU = Path("MNE-zhou-2016")
 MOABB_NAMES = {"zhou2016": ("Zhou2016",)}
 SUBJECTS = {"bcic2a": range(1, 10), "bcic2b": range(1, 10), "zhou2016": range(1, 5), "openbmi": range(1, 55)}
@@ -57,7 +57,6 @@ def configure(env=None):
     root = str(data_dir())
     env["SSM_DAN_DATA"] = root
     env["MNE_DATA"] = root
-    env["MNE_DATASETS_BNCI_PATH"] = root
     env["MNE_DATASETS_ZHOU_PATH"] = root
     # Raw OpenBMI MAT files are only needed while building data/openbmi*; they are deleted afterwards.
     env.setdefault("MNE_DATASETS_LEE2019_MI_PATH", str(data_dir() / "openbmi_raw"))
@@ -67,9 +66,9 @@ def configure(env=None):
 def expected(dataset, no_car=False):
     """Paths (relative to data/) of every file the dataset needs."""
     if dataset == "bcic2a":
-        return [BNCI / "001-2014" / f"A{s:02d}{r}.mat" for s in SUBJECTS[dataset] for r in "TE"]
+        return [Path(BCI_IV[dataset], "mat", f"A{s:02d}{r}.mat") for s in SUBJECTS[dataset] for r in "TE"]
     if dataset == "bcic2b":
-        return [BNCI / "004-2014" / f"B{s:02d}{r}.mat" for s in SUBJECTS[dataset] for r in "TE"]
+        return [Path(BCI_IV[dataset], "mat", f"B{s:02d}{r}.mat") for s in SUBJECTS[dataset] for r in "TE"]
     if dataset == "zhou2016":
         return [ZHOU / f"subject_{s}" / f"{session}{run}.cnt"
                 for s in SUBJECTS[dataset] for session in "123" for run in "AB"]

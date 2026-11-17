@@ -9,7 +9,7 @@ before training (step 4 of the notebooks). `python -m ssm_dan.run` does it for B
 
 | Dataset | What you provide | What the code does when files are missing |
 |---|---|---|
-| BCI IV-2a, 2b | the official competition zips: GDF recordings + true labels (unzipped or not) | builds the MAT files it reads; downloads the zips from bbci.de if they are not here |
+| BCI IV-2a, 2b | the official competition files: GDF recordings + true labels, in `data/BCICIV_2x/gdf/` and `true_labels/` | builds `data/BCICIV_2x/mat/`, which training reads; downloads the zips from bbci.de if they are not here |
 | Zhou2016 | nothing (or the files) | data branch `zhou2016-data`, then the original figshare archive |
 | OpenBMI | nothing (or the files) | data branch `openbmi-data` (CAR), then the raw recordings, preprocessed |
 
@@ -42,37 +42,38 @@ Only the official files of the BCI Competition IV are used
 The GDF files hide the labels of the evaluation sessions; the true-label files hold the labels of
 all sessions (in the training sessions they are checked against the GDF cue events).
 
-**What to do.** Put the zips in `data/`, as downloaded or unzipped, for example:
+**Layout.** Each data set has one folder with three subfolders:
 
 ```
-data/BCICIV_2a_gdf/            A01T.gdf ... A09E.gdf       (unzipped BCICIV_2a_gdf.zip)
-data/BCICIV_2a_true_labels/    A01T.mat ... A09E.mat       (unzipped ds2a/true_labels.zip)
-data/BCICIV_2b_gdf.zip                                     (or left zipped)
-data/BCICIV_2b_true_labels.zip
+data/BCICIV_2a/
+├── gdf/            A01T.gdf ... A09E.gdf        unzipped BCICIV_2a_gdf.zip (18 files)
+├── true_labels/    A01T.mat ... A09E.mat        unzipped ds2a/true_labels.zip (18 files)
+└── mat/            A01T.mat ... A09E.mat        built by the code; training reads these
+data/BCICIV_2b/
+├── gdf/            B0101T.gdf ... B0905E.gdf    unzipped BCICIV_2b_gdf.zip (45 files)
+├── true_labels/    B0101T.mat ... B0905E.mat    unzipped ds2b/true_labels.zip (45 files)
+└── mat/            B01T.mat ... B09E.mat        built by the code (T: sessions 1-3, E: 4-5)
 ```
 
-Folder and zip names do not matter: the files are recognised by their names. Both label
-archives are called `true_labels.zip` when downloaded, so keep them in different folders
-or rename them. If they are not found, the code downloads them into `data/`.
+**What to do.** Unzip the two archives into `gdf/` and `true_labels/`. The files are recognised by
+their names, so the zips can also be left unextracted, there or in an attached input. If they are
+not found, the code downloads both zips from bbci.de and extracts them into these two folders.
 
-**What the code builds.** Training reads the recordings with MOABB, which needs them in the
-BNCI MAT format. `ssm_dan/data/bciciv.py` writes these files once, from the GDF files and the true
-labels (about 1-2 minutes per dataset). Do not edit them:
+**What the code builds.** Training reads the recordings with MOABB, which needs them in the BNCI
+MAT format. When `mat/` is incomplete, `ssm_dan/data/bciciv.py` builds it from `gdf/` and
+`true_labels/` (about 1-2 minutes per data set); MOABB is then pointed at `mat/` and never
+downloads anything. Do not edit these files. Delete `mat/` to build it again.
 
-```
-data/MNE-bnci-data/database/data-sets/001-2014/   A01T.mat ... A09E.mat    (2a)
-data/MNE-bnci-data/database/data-sets/004-2014/   B01T.mat ... B09E.mat    (2b)
-```
-
-Every file holds the subject's continuous signal of a day (2a) or of its sessions 1-3 / 4-5 (2b) in uV,
-EEG and EOG channels at 250 Hz, with trial onsets and labels. Training then keeps the EEG channels,
-cuts the trials and normalises them (`ssm_dan/data/loaders.py`, `configs/datasets.yaml`). On BCI
-IV-2a, these files are identical to the BNCI Horizon 2020 files of data set 001-2014 used for the
-paper: every field MOABB reads is the same, and the signal is the same bit for bit.
+Every built file holds the subject's continuous signal of a day (2a) or of its sessions 1-3 / 4-5
+(2b) in uV, EEG and EOG channels at 250 Hz, with trial onsets and labels. Training then keeps the
+EEG channels, cuts the trials and normalises them (`ssm_dan/data/loaders.py`,
+`configs/datasets.yaml`). On BCI IV-2a, the built files are identical to the BNCI Horizon 2020
+files of data set 001-2014 used for the paper: every field MOABB reads is the same, and the signal
+is the same bit for bit.
 
 ```bash
 python -m ssm_dan.data.bciciv --dataset bcic2a        # build now (find the zips or download them)
-python -m ssm_dan.data.bciciv --dataset bcic2b --no-download --search /path/with/zips
+python -m ssm_dan.data.bciciv --dataset bcic2b --no-download --search /path/with/files
 ```
 
 ## Zhou2016 (`zhou2016`)
