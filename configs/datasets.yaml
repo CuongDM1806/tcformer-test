@@ -71,12 +71,9 @@ openbmi:
     interaug: false
     num_workers: 2
     test_num_workers: 0
-    # Per-subject preprocessed arrays (openbmi_SXX.npz, ~20 MB each) are read from cache_dir
-    # ($OPENBMI_CACHE_DIR overrides it) and from the read-only directories in $OPENBMI_CACHE_INPUT.
-    # python -m ssm_dan.launch provides them: files already present are used, otherwise the
-    # repository's data branch openbmi-data is fetched (with CAR), and anything still missing is
-    # built from the raw recordings (python -m ssm_dan.data.openbmi_cache).
-    cache_dir: openbmi
+    # Training reads one preprocessed file per subject, data/openbmi/openbmi_SXX.npz
+    # (data/openbmi_nocar/ without CAR); see data/README.md. The raw-data settings below are
+    # only used when such a file has to be built from the original recordings.
     delete_raw_after_cache: true
     download_retries: 8
     download_retry_delay_seconds: 5

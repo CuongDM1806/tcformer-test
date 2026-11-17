@@ -4,9 +4,9 @@ MOABB's ``Lee2019_MI`` exposes the labeled offline MI run of each of the two
 recording sessions (100 trials each, left vs. right hand); the online feedback
 runs are excluded. The raw MAT files total about 61 GB for 54 subjects, so each
 subject is downloaded, preprocessed and written to a small ``.npz`` file, after
-which its raw files can be deleted. Later runs (and other Kaggle notebooks)
-read the cache only; the files carry the preprocessing they were built with
-and are rebuilt when it differs.
+which its raw files can be deleted. Training reads only these files, from
+data/openbmi (CAR) or data/openbmi_nocar (see ssm_dan.data.files); they carry
+the preprocessing they were built with and are rebuilt when it differs.
 """
 import json
 import os
@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Dict
 
 import numpy as np
+
+from . import files
 
 OPENBMI_MI_MAPPING = {
     "left_hand": 0,
@@ -45,14 +47,9 @@ def _cache_name(subject_id: int) -> str:
 
 
 def _cache_dirs(preprocessing_dict: Dict):
-    """Writable cache directory followed by read-only search directories."""
-    write_dir = Path(os.environ.get(
-        "OPENBMI_CACHE_DIR", preprocessing_dict.get("cache_dir", "openbmi")))
-    read_dirs = [write_dir]
-    for entry in os.environ.get("OPENBMI_CACHE_INPUT", "").split(os.pathsep):
-        if entry:
-            read_dirs.append(Path(entry))
-    return write_dir, read_dirs
+    """data/openbmi or data/openbmi_nocar, as a (write, [read]) pair."""
+    write_dir = files.openbmi_dir(no_car=not preprocessing_dict.get("common_average_reference", True))
+    return write_dir, [write_dir]
 
 
 def _find_cached(subject_id: int, signature: str, read_dirs):
@@ -186,6 +183,7 @@ def load_openbmi_subject(subject_id: int, preprocessing_dict: Dict,
     """
     from .base import BaseDataModule
 
+    files.configure()
     signature = cache_signature(preprocessing_dict)
     timepoints = int(round(preprocessing_dict["sfreq"]
                            * float(preprocessing_dict.get("trial_duration", 4.0))))
@@ -218,45 +216,36 @@ def load_openbmi_subject(subject_id: int, preprocessing_dict: Dict,
 
 
 # --------------------------------------------------------------------------- download
-def download(subjects, out, no_car=False):
-    """Download, preprocess and cache the given subjects into ``out`` (skips cached ones).
+def download(subjects, no_car=False):
+    """Download, preprocess and save the given subjects into data/openbmi[_nocar] (skips existing ones).
 
     The preprocessing is the ``openbmi`` block of configs/datasets.yaml (with the
-    ``no_car`` variant when ``no_car``). Matching cache files found under
-    $OPENBMI_CACHE_INPUT (e.g. an earlier, interrupted output) are copied into ``out``.
+    ``no_car`` variant when ``no_car``).
     """
     import shutil
     from .. import config as cfg
 
-    out = Path(out).resolve()
-    out.mkdir(parents=True, exist_ok=True)
-    os.environ["OPENBMI_CACHE_DIR"] = str(out)
     settings = cfg.resolve("ssm_dan", "openbmi", ["no_car"] if no_car else [])["preprocessing"]
-    signature = cache_signature(settings)
-    _, read_dirs = _cache_dirs(settings)
+    out, _ = _cache_dirs(settings)
+    out.mkdir(parents=True, exist_ok=True)
     started = time.time()
     for index, subject in enumerate(subjects, start=1):
-        found = _find_cached(subject, signature, read_dirs)
-        if found is not None and found.parent != out:
-            shutil.copy2(found, out / _cache_name(subject))
-            print(f"  copied S{subject:02d} from {found}", flush=True)
         load_openbmi_subject(subject, settings)
         print(f"[{index}/{len(subjects)}] S{subject:02d} cached | {(time.time() - started) / 60:.1f} min | "
               f"free disk {shutil.disk_usage(out).free / 1e9:.1f} GB", flush=True)
 
 
 def main(argv=None):
-    """python -m ssm_dan.data.openbmi_cache --out DIR [--no-car] [--subjects 1-54]"""
+    """python -m ssm_dan.data.openbmi_cache [--no-car] [--subjects 1-54]"""
     import argparse
     from ..config import parse_subjects
 
     parser = argparse.ArgumentParser(prog="python -m ssm_dan.data.openbmi_cache",
                                      description="Download and cache OpenBMI (Lee2019_MI).")
-    parser.add_argument("--out", default="openbmi")
     parser.add_argument("--subjects", default="1-54")
     parser.add_argument("--no-car", action="store_true", help="skip the common average reference")
     args = parser.parse_args(argv)
-    download(parse_subjects(args.subjects, list(range(1, 55))), args.out, args.no_car)
+    download(parse_subjects(args.subjects, list(range(1, 55))), args.no_car)
 
 
 if __name__ == "__main__":

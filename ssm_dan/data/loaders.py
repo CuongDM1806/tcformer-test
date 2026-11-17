@@ -4,6 +4,10 @@ from typing import Dict
 from braindecode.datasets import MOABBDataset
 from braindecode.preprocessing import Preprocessor, create_windows_from_events, preprocess
 
+from . import files
+
+files.configure()   # MOABB reads (and, if missing, downloads) the recordings in data/
+
 
 def scale(data, factor):
     return data * factor
