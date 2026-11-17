@@ -179,18 +179,20 @@ Edit the settings cell (in `run.ipynb`: `METHOD`, `VARIANT`, `DATASET`, `SUBJECT
 
 ## Data
 
-Every dataset is read from one place, `data/` at the repository root (`$SSM_DAN_DATA` moves it). A file that is already there is used as it is and never downloaded again. [`data/README.md`](data/README.md) gives the exact files, folders and download links of every dataset.
+All data are read from `data/` at the repository root. To run on your own machine, download these files and unzip each into the folder shown. That is all: the code builds what it needs from them and never downloads them again. Details and file formats: [`data/README.md`](data/README.md).
 
-| Dataset | Source | What the code reads |
-|---|---|---|
-| BCI IV-2a | official competition files: [`BCICIV_2a_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2a_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip) | `data/BCICIV_2a/mat/`, built from `gdf/` + `true_labels/` |
-| BCI IV-2b | [`BCICIV_2b_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) | `data/BCICIV_2b/mat/`, built from `gdf/` + `true_labels/` |
-| Zhou2016 | branch [`zhou2016-data`](../../tree/zhou2016-data), or figshare | `data/MNE-zhou-2016/subject_k/*.cnt` |
-| OpenBMI | branch [`openbmi-data`](../../tree/openbmi-data) (the paper's preprocessed files), or GigaDB | `data/openbmi/openbmi_SXX.npz` (`openbmi_nocar/` without CAR) |
+| Download | Unzip into |
+|---|---|
+| [BCICIV_2a_gdf.zip](https://www.bbci.de/competition/download/competition_iv/BCICIV_2a_gdf.zip) (BCI IV-2a, 420 MB) | `data/BCICIV_2a/gdf/` |
+| [2a true labels](https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip) | `data/BCICIV_2a/true_labels/` |
+| [BCICIV_2b_gdf.zip](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) (BCI IV-2b, 216 MB) | `data/BCICIV_2b/gdf/` |
+| [2b true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) | `data/BCICIV_2b/true_labels/` |
+| [zhou2016-data](../../archive/refs/heads/zhou2016-data.zip) (Zhou2016, 177 MB) | `data/` (contains `MNE-zhou-2016/`) |
+| [openbmi-data](../../archive/refs/heads/openbmi-data.zip) (OpenBMI, preprocessed as in the paper, ~1 GB) | `data/` (contains `openbmi/`) |
 
-**BCI IV-2a/2b.** Unzip `BCICIV_2a_gdf.zip` into `data/BCICIV_2a/gdf/` and the true-label zip into `data/BCICIV_2a/true_labels/` (2b: `data/BCICIV_2b/...`). Before training, the code builds `data/BCICIV_2a/mat/`, the MAT files that MOABB reads (`ssm_dan/data/bciciv.py`, 1-2 minutes). If the files are not there, it downloads both zips from bbci.de and extracts them into these folders. On BCI IV-2a, the built files are identical to the BNCI Horizon 2020 files used for the paper, the signal bit for bit. The EOG channels, the trial windows and the normalisation are handled by the training code, as for any dataset.
+BCI IV-2a/2b are the official BCI Competition IV files. The GDF files hold the recordings, and the true-label files hold the labels of all sessions. Before training, the code builds `data/BCICIV_2x/mat/` from them, the MAT files MOABB reads (`ssm_dan/data/bciciv.py`, 1-2 minutes). `mat/` is never stored or downloaded. On BCI IV-2a these built files are identical to the BNCI Horizon 2020 files used for the paper, the signal bit for bit. Removing the EOG channels, cutting the trials and normalising are done by the training code, as for every dataset.
 
-**Zhou2016 and OpenBMI.** The launcher and the notebooks link files found in the input directories (attached Kaggle Datasets or outputs, a mounted Drive, `$SSM_DAN_INPUT`, `~/mne_data`). Otherwise they fetch the data branch of this repository, and otherwise they download the original data.
+**Kaggle and Colab need nothing.** If files are missing, the notebooks (step 4) and `python -m ssm_dan.launch` get them by themselves: first from attached inputs, then from the data branches of this repository ([`bcic2a-data`](../../tree/bcic2a-data), [`bcic2b-data`](../../tree/bcic2b-data), [`zhou2016-data`](../../tree/zhou2016-data), [`openbmi-data`](../../tree/openbmi-data)), and last from the original sources.
 
 ```bash
 # what is there, what is missing

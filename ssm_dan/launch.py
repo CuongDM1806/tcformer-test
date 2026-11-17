@@ -42,8 +42,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-REPOSITORY_URLS = ["https://github.com/CuongDM1806/ssm-dan.git",
-                   "https://github.com/CuongDM1806/tcformer-test.git"]   # former name
 TORCH = ["torch==2.7.1", "torchvision==0.22.1", "--index-url", "https://download.pytorch.org/whl/cu126"]
 
 
@@ -158,12 +156,6 @@ def resume(platform: Platform, dataset, name, seed):
     return target
 
 
-def _repository_urls():
-    origin = subprocess.run(["git", "-C", str(ROOT), "remote", "get-url", "origin"],
-                            capture_output=True, text=True).stdout.strip()
-    return list(dict.fromkeys(([origin] if origin.startswith("https://") else []) + REPOSITORY_URLS))
-
-
 def search_directories(platform: Platform):
     """Where existing data files are looked for before anything is downloaded."""
     return [*platform.inputs, platform.work, Path.home() / "mne_data"]
@@ -172,9 +164,9 @@ def search_directories(platform: Platform):
 def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, python=None):
     """Make every file of ``dataset`` available in data/; files already there are used as they are.
 
-    BCI IV-2a/2b: the MAT files are built from the official competition files (GDF + true
-    labels) found in data/ or the input directories, or downloaded from bbci.de into data/
-    (ssm_dan.data.bciciv). Zhou2016 and OpenBMI:
+    BCI IV-2a/2b: data/BCICIV_2x/mat is built from the official competition files (GDF + true
+    labels) in data/BCICIV_2x/{gdf,true_labels} or the input directories, else fetched from the
+    data branch bcic2x-data, else downloaded from bbci.de (ssm_dan.data.bciciv). Zhou2016 and OpenBMI:
     1. files in data/ are used;
     2. missing files with the expected names are linked from the input directories
        (attached Kaggle Datasets or outputs, a mounted Drive, $SSM_DAN_INPUT, ~/mne_data);
@@ -203,7 +195,7 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     if linked:
         print(f"{label}: linked {linked} files found in the inputs into {files.data_dir()}", flush=True)
     if files.missing(dataset, no_car):
-        moved = files.fetch_branch(dataset, _repository_urls(), platform.scratch, no_car)
+        moved = files.fetch_branch(dataset, files.repository_urls(), platform.scratch, no_car)
         if moved:
             print(f"{label}: {moved} files from branch {files.data_branch(dataset)}", flush=True)
     if files.missing(dataset, no_car):

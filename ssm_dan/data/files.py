@@ -141,6 +141,19 @@ def link_from(dataset, directories, no_car=False):
     return linked
 
 
+REPOSITORY_URLS = ["https://github.com/CuongDM1806/ssm-dan.git",
+                   "https://github.com/CuongDM1806/tcformer-test.git"]   # former name
+
+
+def repository_urls():
+    """This repository's clone URL (origin first), to fetch its data branches."""
+    import subprocess
+
+    origin = subprocess.run(["git", "-C", str(ROOT), "remote", "get-url", "origin"],
+                            capture_output=True, text=True).stdout.strip()
+    return list(dict.fromkeys(([origin] if origin.startswith("https://") else []) + REPOSITORY_URLS))
+
+
 def data_branch(dataset):
     """Data-only branch of this repository that holds the dataset's files, in the data/ layout."""
     return f"{dataset}-data"

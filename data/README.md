@@ -3,21 +3,44 @@
 Every experiment reads its EEG data from this directory, `data/` at the repository root.
 Set `SSM_DAN_DATA=/some/other/dir` to use another directory with the same layout.
 
-**Rule.** A file that is already here is used as it is and is never downloaded again.
-Only missing files are obtained. `python -m ssm_dan.launch` and the notebooks do this
-before training (step 4 of the notebooks). `python -m ssm_dan.run` does it for BCI IV-2a/2b too.
+## Quick start: download, unzip, run
 
-| Dataset | What you provide | What the code does when files are missing |
-|---|---|---|
-| BCI IV-2a, 2b | the official competition files: GDF recordings + true labels, in `data/BCICIV_2x/gdf/` and `true_labels/` | builds `data/BCICIV_2x/mat/`, which training reads; downloads the zips from bbci.de if they are not here |
-| Zhou2016 | nothing (or the files) | data branch `zhou2016-data`, then the original figshare archive |
-| OpenBMI | nothing (or the files) | data branch `openbmi-data` (CAR), then the raw recordings, preprocessed |
+Download these files and unzip each into the folder shown, then run. The code builds what it needs
+from them and never downloads them again.
 
-For Zhou2016 and OpenBMI, files with the expected names in the input directories are linked into
-`data/` first. These are attached Kaggle Datasets or outputs (`/kaggle/input`), a mounted Google
-Drive (`/content/drive/MyDrive`), `$SSM_DAN_INPUT`, and `~/mne_data`.
-The BCI IV zips are also looked for there. The contents of `data/` are not tracked by git; only this
-file is.
+| Download | Unzip into |
+|---|---|
+| [BCICIV_2a_gdf.zip](https://www.bbci.de/competition/download/competition_iv/BCICIV_2a_gdf.zip) (420 MB) | `data/BCICIV_2a/gdf/` |
+| [2a true labels](https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip) (`true_labels.zip`) | `data/BCICIV_2a/true_labels/` |
+| [BCICIV_2b_gdf.zip](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) (216 MB) | `data/BCICIV_2b/gdf/` |
+| [2b true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) (`true_labels.zip`) | `data/BCICIV_2b/true_labels/` |
+| [zhou2016-data](../../../archive/refs/heads/zhou2016-data.zip) (this repository, 177 MB) | `data/` (it contains `MNE-zhou-2016/`) |
+| [openbmi-data](../../../archive/refs/heads/openbmi-data.zip) (this repository, ~1 GB) | `data/` (it contains `openbmi/`) |
+
+```bash
+cd data
+mkdir -p BCICIV_2a/gdf BCICIV_2a/true_labels BCICIV_2b/gdf BCICIV_2b/true_labels
+unzip BCICIV_2a_gdf.zip -d BCICIV_2a/gdf
+unzip 2a_true_labels.zip -d BCICIV_2a/true_labels    # the 2a true_labels.zip, renamed
+unzip BCICIV_2b_gdf.zip -d BCICIV_2b/gdf
+unzip 2b_true_labels.zip -d BCICIV_2b/true_labels    # the 2b true_labels.zip, renamed
+```
+
+The GitHub archives of the data branches unzip into a folder named after the branch
+(e.g. `ssm-dan-zhou2016-data/`); move its content into `data/`.
+
+**Nothing to do on Kaggle or Colab.** If the files are missing, the notebooks and
+`python -m ssm_dan.launch` get them by themselves (step 4 of the notebooks), in this order:
+
+| Dataset | Missing files are taken from |
+|---|---|
+| BCI IV-2a, 2b | input directories, then the data branch `bcic2a-data` / `bcic2b-data` of this repository (the official files, already unzipped), then bbci.de. `mat/` is always built from `gdf/` + `true_labels/` and never stored |
+| Zhou2016 | input directories, then the data branch `zhou2016-data`, then the original figshare archive |
+| OpenBMI | input directories, then the data branch `openbmi-data` (CAR), then the raw recordings, preprocessed |
+
+Input directories are attached Kaggle Datasets or outputs (`/kaggle/input`), a mounted Google
+Drive (`/content/drive/MyDrive`), `$SSM_DAN_INPUT`, and `~/mne_data`. A file already in `data/` is
+used as it is. The contents of `data/` are not tracked by git; only this file is.
 
 ```bash
 # what is there, what is missing (all datasets, or one)
@@ -55,9 +78,10 @@ data/BCICIV_2b/
 └── mat/            B01T.mat ... B09E.mat        built by the code (T: sessions 1-3, E: 4-5)
 ```
 
-**What to do.** Unzip the two archives into `gdf/` and `true_labels/`. The files are recognised by
-their names, so the zips can also be left unextracted, there or in an attached input. If they are
-not found, the code downloads both zips from bbci.de and extracts them into these two folders.
+**What to do.** Unzip the two archives into `gdf/` and `true_labels/` (see [Quick start](#quick-start-download-unzip-run)).
+The files are recognised by their names, so the zips can also be left unextracted, there or in an
+attached input. If they are missing, the code copies them from the data branch `bcic2a-data` /
+`bcic2b-data` of this repository (the same two folders), or downloads both zips from bbci.de.
 
 **What the code builds.** Training reads the recordings with MOABB, which needs them in the BNCI
 MAT format. When `mat/` is incomplete, `ssm_dan/data/bciciv.py` builds it from `gdf/` and
