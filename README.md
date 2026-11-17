@@ -19,16 +19,16 @@ configs/
   methods/*.yaml         one file per method; SSM-DAN ablations are "variants"
 ssm_dan/
   run.py                 command-line entry point (python -m ssm_dan.run)
-  config.py              dataset + method + variants + overrides -> run configuration
-  pipeline.py            one LOSO fold: Stage 1, checkpoint selection, Stage 2, scoring
+  config.py              dataset + method + variants + overrides -> config
+  pipeline.py            one LOSO fold: Stage 1, selection, Stage 2, scoring
   results.py             output layout and summaries
-  tables.py              paper-style tables and statistics (python -m ssm_dan.tables)
-  data/                  data location (files.py), LOSO data modules, loaders, RA, S&R augmentation
-  models/                SSM backbone, SSM-DAN, Lightning wrapper, re-implemented baselines
+  tables.py              paper-style tables and statistics
+  data/                  data location, LOSO data modules, loaders, RA, S&R
+  models/                SSM backbone, SSM-DAN, Lightning wrapper, baselines
   baselines/             RMETNet, T-TIME and BFT (their own training loops)
-  launch.py              launcher: several GPUs, resume, time budget, any platform
+  launch.py              launcher: GPUs, resume, time budget, any platform
 notebooks/               Kaggle/Colab: one notebook per dataset, any single run
-data/                    the EEG data of all datasets (not tracked; layout in data/README.md)
+data/                    EEG data of all datasets (see data/README.md)
 ```
 
 ## Installation
@@ -47,12 +47,15 @@ All datasets are read from `data/` in the repository. Files already there are us
 ## Running experiments
 
 ```bash
-python -m ssm_dan.run --method ssm_dan --dataset bcic2a                 # SSM-DAN, all 9 folds
+# SSM-DAN, all 9 folds
+python -m ssm_dan.run --method ssm_dan --dataset bcic2a
 python -m ssm_dan.run --method ssm_dan --dataset zhou2016 --variant no_ra
 python -m ssm_dan.run --method ssm_dan --dataset openbmi --subjects 1-18 --gpu 1
 python -m ssm_dan.run --method eegconformer --dataset bcic2b
-python -m ssm_dan.run --method ssm_dan --dataset bcic2a --subjects 1 --set max_epochs=2   # quick check
-python -m ssm_dan.run --list                                            # methods and variants
+# quick check: one fold, two epochs
+python -m ssm_dan.run --method ssm_dan --dataset bcic2a --subjects 1 --set max_epochs=2
+# list methods and variants
+python -m ssm_dan.run --list
 ```
 
 | Option | Meaning |
@@ -89,7 +92,7 @@ Every SSM-DAN run also scores the same trained weights without IM-TTA (`no_tta_a
 All methods, variants and datasets write to the same place:
 
 ```
-results/<dataset>/<run>/seed<seed>/        <run> = method[-variant...], e.g. ssm_dan-no_ra
+results/<dataset>/<run>/seed<seed>/     <run> = method[-variant...]
     config.yaml               resolved configuration of the run
     subjects/S01.json         one record per target subject
     checkpoints/S01.ckpt      best source-validation checkpoint
@@ -153,9 +156,11 @@ It runs on a workstation or GPU server and in Kaggle or Colab notebooks. The pla
 | Colab | `/content` | `/content/drive/MyDrive` (if Google Drive is mounted) |
 
 ```bash
-python -m ssm_dan.launch --method ssm_dan --dataset openbmi --gpus 0,1             # two folds at a time
+# two folds at a time
+python -m ssm_dan.launch --method ssm_dan --dataset openbmi --gpus 0,1
 python -m ssm_dan.launch --method ssm_dan --dataset bcic2a --variant no_ra --gpus 0
-python -m ssm_dan.launch --data --dataset bcic2a                                # only get the data
+# only get the data
+python -m ssm_dan.launch --data --dataset bcic2a
 ```
 
 `--mode paper` (the default) launches the folds the way the reported run did. For BCI IV and Zhou2016 that is all folds in one process on the first GPU; for OpenBMI and `per_session_ra` it is one process per fold, spread over the GPUs. `--mode per_fold` always spreads folds over the GPUs, which is faster.
@@ -176,13 +181,13 @@ Edit the settings cell (in `run.ipynb`: `METHOD`, `VARIANT`, `DATASET`, `SUBJECT
 
 Every dataset is read from one place, `data/` at the repository root (`$SSM_DAN_DATA` moves it). [`data/README.md`](data/README.md) lists every file each dataset needs, in which folder, and the format of the OpenBMI files.
 
-```
-data/MNE-bnci-data/database/data-sets/001-2014/   BCI IV-2a   A01T.mat ... A09E.mat
-data/MNE-bnci-data/database/data-sets/004-2014/   BCI IV-2b   B01T.mat ... B09E.mat
-data/MNE-zhou-2016/subject_1 ... subject_4/       Zhou2016    1A.cnt ... 3B.cnt
-data/openbmi/                                     OpenBMI     openbmi_S01.npz ... openbmi_S54.npz (CAR)
-data/openbmi_nocar/                               OpenBMI     the same without CAR (no_car variant)
-```
+| Dataset | Folder in `data/` | Files |
+|---|---|---|
+| BCI IV-2a | `MNE-bnci-data/database/data-sets/001-2014/` | `A01T.mat` ... `A09E.mat` |
+| BCI IV-2b | `MNE-bnci-data/database/data-sets/004-2014/` | `B01T.mat` ... `B09E.mat` |
+| Zhou2016 | `MNE-zhou-2016/subject_1/` ... `subject_4/` | `1A.cnt` ... `3B.cnt` |
+| OpenBMI (CAR) | `openbmi/` | `openbmi_S01.npz` ... `openbmi_S54.npz` |
+| OpenBMI without CAR | `openbmi_nocar/` | the same names |
 
 A file that is already there is never downloaded again. `python -m ssm_dan.launch` and the notebooks obtain only the missing files, in this order:
 
@@ -191,8 +196,10 @@ A file that is already there is never downloaded again. `python -m ssm_dan.launc
 3. the original servers: a MOABB download, retried, for BCI IV and Zhou2016. OpenBMI is downloaded (about 61 GB of MAT files, one subject at a time) and preprocessed, and the raw files are deleted.
 
 ```bash
-python -m ssm_dan.data.files --check                       # what is there, what is missing
-python -m ssm_dan.launch --data --dataset openbmi          # obtain what is missing
+# what is there, what is missing
+python -m ssm_dan.data.files --check
+# obtain what is missing
+python -m ssm_dan.launch --data --dataset openbmi
 python -m ssm_dan.launch --data --dataset openbmi --no-car --workers 3
 ```
 

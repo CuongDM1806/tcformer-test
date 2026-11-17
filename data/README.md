@@ -20,9 +20,11 @@ The contents of `data/` are not tracked by git; only this file is.
 Check what is there and what is missing:
 
 ```bash
-python -m ssm_dan.data.files --check                      # all datasets
+# what is there, what is missing (all datasets, or one)
+python -m ssm_dan.data.files --check
 python -m ssm_dan.data.files --dataset bcic2a --check
-python -m ssm_dan.launch --data --dataset bcic2a          # obtain what is missing (steps 2-4)
+# obtain what is missing (steps 2-4)
+python -m ssm_dan.launch --data --dataset bcic2a
 ```
 
 ## Layout
@@ -33,16 +35,23 @@ server. Names and folders must match exactly (case included).
 ```
 data/
 ├── MNE-bnci-data/database/data-sets/
-│   ├── 001-2014/          BCI IV-2a: A01T.mat A01E.mat ... A09T.mat A09E.mat   (18 files)
-│   └── 004-2014/          BCI IV-2b: B01T.mat B01E.mat ... B09T.mat B09E.mat   (18 files)
+│   ├── 001-2014/        A01T.mat ... A09E.mat
+│   └── 004-2014/        B01T.mat ... B09E.mat
 ├── MNE-zhou-2016/
-│   ├── subject_1/         Zhou2016: 1A.cnt 1B.cnt 2A.cnt 2B.cnt 3A.cnt 3B.cnt
-│   ├── subject_2/         (same six files)
-│   ├── subject_3/
-│   └── subject_4/                                                            (24 files)
-├── openbmi/               OpenBMI, paper preprocessing (CAR): openbmi_S01.npz ... openbmi_S54.npz
-└── openbmi_nocar/         OpenBMI without CAR (no_car variant): same names
+│   ├── subject_1/       1A.cnt ... 3B.cnt
+│   ├── ...
+│   └── subject_4/
+├── openbmi/             openbmi_S01.npz ... openbmi_S54.npz
+└── openbmi_nocar/       openbmi_S01.npz ... openbmi_S54.npz
 ```
+
+| Folder | Dataset | Files |
+|---|---|---|
+| `001-2014/` | BCI IV-2a | `A01T.mat`, `A01E.mat`, ..., `A09T.mat`, `A09E.mat` (18) |
+| `004-2014/` | BCI IV-2b | `B01T.mat`, `B01E.mat`, ..., `B09T.mat`, `B09E.mat` (18) |
+| `subject_1/` ... `subject_4/` | Zhou2016 | `1A.cnt`, `1B.cnt`, `2A.cnt`, `2B.cnt`, `3A.cnt`, `3B.cnt` in each (24) |
+| `openbmi/` | OpenBMI, paper preprocessing (CAR) | `openbmi_S01.npz` ... `openbmi_S54.npz` (54) |
+| `openbmi_nocar/` | OpenBMI without CAR (`no_car` variant) | same names (54) |
 
 ### BCI Competition IV-2a (`bcic2a`)
 
