@@ -31,3 +31,4 @@ datasets:
   zhou2016:
     preprocessing: {batch_size: 32}
     model_kwargs: {lr: 0.001, weight_decay: 0.0001}
+  openbmi: {}

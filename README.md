@@ -173,7 +173,7 @@ The notebooks clone this repository and call the launcher; they run on Kaggle an
 | `notebooks/bcic2a.ipynb` | BCI IV-2a end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2a.ipynb) |
 | `notebooks/bcic2b.ipynb` | BCI IV-2b end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2b.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/bcic2b.ipynb) |
 | `notebooks/zhou2016.ipynb` | Zhou2016 end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/zhou2016.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/zhou2016.ipynb) |
-| `notebooks/openbmi.ipynb` | OpenBMI end to end: SSM-DAN and its ablations; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) |
+| `notebooks/openbmi.ipynb` | OpenBMI end to end: SSM-DAN, its ablations and the baselines; then the per-subject results of the runs, a comparison table (Wilcoxon + Holm) and figures. | [Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) · [Colab](https://colab.research.google.com/github/CuongDM1806/ssm-dan/blob/main/notebooks/openbmi.ipynb) |
 
 Edit the settings cell (in `run.ipynb`: `METHOD`, `VARIANT`, `DATASET`, `SUBJECTS`, `GPUS`, `MODE`; in the dataset notebooks: the `EXPERIMENTS` list) and run it, with a GPU and Internet enabled. On Kaggle, use *Save Version → Save & Run All*. If the session ends before all folds are done, run again with the earlier results visible and finished folds are skipped. On Kaggle, attach the previous output (*Add Input → Your Work → Notebook Output*); on Colab, keep the results in the mounted Drive.
 
@@ -219,6 +219,13 @@ Each baseline is the authors' released network, re-trained under the protocol ab
 - SATrans-Net (Miao et al., 2025).
 - RMETNet (Zhao et al., 2026).
 - T-TIME (Li et al., 2024) and BFT (2026), from DeepTransferEEG.
+
+The paper reports the baselines on BCI IV-2a, BCI IV-2b and Zhou2016. They can also be run on
+OpenBMI (`--dataset openbmi`; not in the paper). There they get the same input as SSM-DAN
+(62 channels, 4 s at 100 Hz, 400 samples) and the settings they use on BCI IV; only the input
+size of EEG Conformer (`input_size_cls: 840`) and SATrans-Net (`n_samples: 400`) changes.
+Kernel and pooling lengths are in samples, as released, so at 100 Hz they span 2.5 times longer
+than at 250 Hz.
 
 Third-party code keeps its original notices in the file headers. The training framework and the convolution/TCN components derive from [TCFormer](https://github.com/altaheri/TCFormer) (MIT license; see `LICENSE`).
 

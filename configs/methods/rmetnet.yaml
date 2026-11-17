@@ -19,3 +19,4 @@ datasets:
   bcic2a: {method_settings: {epochs: 500}}     # as reported for BCI IV-2a
   bcic2b: {}
   zhou2016: {method_settings: {cov_reg: 0.001}}  # Zhou2016 trials can be rank-deficient
+  openbmi: {}

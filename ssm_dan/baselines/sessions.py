@@ -2,7 +2,7 @@
 
 Same windows and chronological session split as the LOSO data modules:
 (source training sessions / source validation sessions = target evaluation
-sessions) BCI IV-2a 1 / 2, BCI IV-2b 1-3 / 4-5, Zhou2016 1-2 / 3.
+sessions) BCI IV-2a 1 / 2, BCI IV-2b 1-3 / 4-5, Zhou2016 1-2 / 3, OpenBMI 1 / 2.
 """
 import numpy as np
 
@@ -17,6 +17,7 @@ SPLITS = {
     "bcic2a": dict(train=[0], test=[1]),
     "bcic2b": dict(train=[0, 1, 2], test=[3, 4]),
     "zhou2016": dict(train=[0, 1], test=[2]),
+    "openbmi": dict(train=[0], test=[1]),
 }
 
 
@@ -35,6 +36,13 @@ def load_sessions(dataset, preprocessing):
     if dataset not in SPLITS:
         raise ValueError(f"{dataset} is not supported by this baseline runner.")
     subject_ids = get_datamodule_cls(dataset).all_subject_ids
+    if dataset == "openbmi":
+        from ..data.openbmi_cache import load_openbmi_subject
+
+        # One preprocessed file per subject (data/openbmi*/openbmi_SXX.npz): sessions 1 and 2.
+        return {subject: [(X.astype(np.float64), y.astype(np.int64))
+                          for X, y in load_openbmi_subject(subject, preprocessing)]
+                for subject in subject_ids}
     if dataset == "zhou2016":
         windows = load_zhou2016(subject_ids, preprocessing)
     else:

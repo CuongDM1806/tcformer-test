@@ -16,3 +16,4 @@ datasets:
   bcic2a: {model_kwargs: {input_size_cls: 2440}}
   bcic2b: {model_kwargs: {input_size_cls: 2440}}
   zhou2016: {model_kwargs: {input_size_cls: 2760}}
+  openbmi: {model_kwargs: {input_size_cls: 840}}
