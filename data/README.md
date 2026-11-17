@@ -12,8 +12,8 @@ before training (step 4 of the notebooks), in this order:
    These are attached Kaggle Datasets or notebook outputs (`/kaggle/input`), a mounted
    Google Drive (`/content/drive/MyDrive`), the directories in `$SSM_DAN_INPUT`, and `~/mne_data`;
 3. the data branch `<dataset>-data` of this repository, which holds the files in this same layout.
-   It exists for `bcic2a` (0.78 GB), `zhou2016` (177 MB) and `openbmi` (CAR only, ~1 GB); `bcic2b` will be
-   added when its server can be reached again;
+   It exists for every dataset: `bcic2a` (0.78 GB), `bcic2b` (0.32 GB), `zhou2016` (177 MB) and
+   `openbmi` (CAR only, ~1 GB);
 4. the original servers: MOABB download for BCI IV-2a/2b and Zhou2016, retried up to 10 times.
    OpenBMI is downloaded and preprocessed.
 
@@ -71,6 +71,25 @@ data/
 - `T` holds sessions 1-3 and `E` sessions 4-5.
 - These are the BNCI Horizon 2020 files of data set 004-2014, at
   `http://bnci-horizon-2020.eu/database/data-sets/004-2014/B01T.mat`.
+
+### BCI IV-2a/2b from the competition GDF files
+
+When the BNCI server is down, the same MAT files can be rebuilt from the BCI Competition IV
+archives. You need the GDF files (`BCICIV_2a_gdf.zip`, `BCICIV_2b_gdf.zip`,
+https://www.bbci.de/competition/iv/download/) and the published labels of all sessions
+(`ds2a/true_labels.zip`, `ds2b/true_labels.zip`, https://www.bbci.de/competition/iv/results/):
+
+```bash
+python -m ssm_dan.data.bnci_from_gdf --dataset bcic2b \
+    --gdf BCICIV_2b_gdf.zip --labels true_labels.zip
+# compare with existing original MAT files instead of writing
+python -m ssm_dan.data.bnci_from_gdf --dataset bcic2a \
+    --gdf BCICIV_2a_gdf.zip --labels true_labels.zip --check-against data
+```
+
+On BCI IV-2a, the converter reproduces all 18 original BNCI files. Every field MOABB reads is
+identical, and the signal is identical bit for bit. The files on the branch `bcic2b-data` were
+made this way.
 
 ### Zhou2016 (`zhou2016`)
 
