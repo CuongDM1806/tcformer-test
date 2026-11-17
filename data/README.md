@@ -14,8 +14,8 @@ from them and never downloads them again.
 | [2a true labels](https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip) (`true_labels.zip`) | `data/BCICIV_2a/true_labels/` |
 | [BCICIV_2b_gdf.zip](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) (216 MB) | `data/BCICIV_2b/gdf/` |
 | [2b true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) (`true_labels.zip`) | `data/BCICIV_2b/true_labels/` |
-| [zhou2016-data](../../../archive/refs/heads/zhou2016-data.zip) (this repository, 177 MB) | `data/` (it contains `MNE-zhou-2016/`) |
-| [openbmi-data](../../../archive/refs/heads/openbmi-data.zip) (this repository, ~1 GB) | `data/` (it contains `openbmi/`) |
+| Zhou2016: nothing to download | downloaded automatically by MOABB from figshare into `data/MNE-zhou-2016/` |
+| OpenBMI: nothing to download | fetched automatically from the branch `openbmi-data` of this repository ([zip](../../../archive/refs/heads/openbmi-data.zip), ~1 GB, unzips to `openbmi/` for `data/`) |
 
 ```bash
 cd data
@@ -26,17 +26,15 @@ unzip BCICIV_2b_gdf.zip -d BCICIV_2b/gdf
 unzip 2b_true_labels.zip -d BCICIV_2b/true_labels    # the 2b true_labels.zip, renamed
 ```
 
-The GitHub archives of the data branches unzip into a folder named after the branch
-(e.g. `ssm-dan-zhou2016-data/`); move its content into `data/`.
-
-**Nothing to do on Kaggle or Colab.** If the files are missing, the notebooks and
+**On Kaggle**, attach BCI IV and Zhou2016 as Kaggle Datasets (*Add Input*, see
+[Kaggle and Colab](#kaggle-and-colab)); OpenBMI needs nothing. If files are missing, the notebooks and
 `python -m ssm_dan.launch` get them by themselves (step 4 of the notebooks), in this order:
 
 | Dataset | Missing files are taken from |
 |---|---|
-| BCI IV-2a, 2b | input directories, then the data branch `bcic2a-data` / `bcic2b-data` of this repository (the official files, already unzipped), then bbci.de. `mat/` is always built from `gdf/` + `true_labels/` and never stored |
-| Zhou2016 | input directories, then the data branch `zhou2016-data`, then the original figshare archive |
-| OpenBMI | input directories, then the data branch `openbmi-data` (CAR), then the raw recordings, preprocessed |
+| BCI IV-2a, 2b | input directories (zipped or unzipped), then bbci.de. `mat/` is always built from `gdf/` + `true_labels/` and never stored |
+| Zhou2016 | input directories, then the original figshare archive (MOABB) |
+| OpenBMI | input directories, then the data branch `openbmi-data` of this repository (CAR), then the raw recordings, preprocessed |
 
 Input directories are attached Kaggle Datasets or outputs (`/kaggle/input`), a mounted Google
 Drive (`/content/drive/MyDrive`), `$SSM_DAN_INPUT`, and `~/mne_data`. A file already in `data/` is
@@ -80,8 +78,8 @@ data/BCICIV_2b/
 
 **What to do.** Unzip the two archives into `gdf/` and `true_labels/` (see [Quick start](#quick-start-download-unzip-run)).
 The files are recognised by their names, so the zips can also be left unextracted, there or in an
-attached input. If they are missing, the code copies them from the data branch `bcic2a-data` /
-`bcic2b-data` of this repository (the same two folders), or downloads both zips from bbci.de.
+attached input (on Kaggle: a Dataset added with *Add Input*). If they are missing, the code
+downloads both zips from bbci.de and extracts them into these folders.
 
 **What the code builds.** Training reads the recordings with MOABB, which needs them in the BNCI
 MAT format. When `mat/` is incomplete, `ssm_dan/data/bciciv.py` builds it from `gdf/` and
@@ -107,9 +105,8 @@ data/MNE-zhou-2016/subject_1/   1A.cnt 1B.cnt 2A.cnt 2B.cnt 3A.cnt 3B.cnt
 ...                 subject_4/  (24 files, Neuroscan CNT)
 ```
 
-- Sources: the data branch [`zhou2016-data`](../../../tree/zhou2016-data) of this repository (its
-  folders are those of `data/`), or the original archive https://ndownloader.figshare.com/files/3662952
-  as MOABB downloads it. Its `data/S{k}_{session}{run}.cnt` become `subject_k/{session}{run}.cnt`.
+- Source: the original archive https://ndownloader.figshare.com/files/3662952, downloaded by MOABB
+  when the files are missing. Its `data/S{k}_{session}{run}.cnt` become `subject_k/{session}{run}.cnt`.
 - A subject counts as present only when its folder holds all six files.
 
 ## OpenBMI / Lee2019_MI (`openbmi`)
@@ -143,10 +140,20 @@ data/openbmi_nocar/   openbmi_S01.npz ... openbmi_S54.npz    (no_car variant)
 
 ## Kaggle and Colab
 
-- **Kaggle.** Nothing to attach: the notebooks download the BCI IV zips from bbci.de and fetch the
-  data branches. To avoid the download, upload the files as a Kaggle Dataset and attach it with
-  *Add Input*. Kaggle unzips the archives, which works. The OpenBMI files a notebook built are saved
-  in its output under `data/openbmi*`; attach that output next time.
+- **Kaggle.** Make one Kaggle Dataset per data set (*Datasets -> New Dataset*, upload the files;
+  Kaggle unzips them, which works) and attach it to the notebook with *Add Input -> Your Datasets*:
+
+  | Kaggle Dataset | Files to upload |
+  |---|---|
+  | BCI IV-2a | `BCICIV_2a_gdf.zip` and the 2a `true_labels.zip`, renamed e.g. `2a_true_labels.zip` |
+  | BCI IV-2b | `BCICIV_2b_gdf.zip` and the 2b `true_labels.zip`, renamed e.g. `2b_true_labels.zip` |
+  | Zhou2016 | a zip of `data/MNE-zhou-2016/` (keep the `subject_1` ... `subject_4` folders) |
+
+  The files are found under `/kaggle/input` by their names. Both label archives are called
+  `true_labels.zip` on bbci.de; rename them, or keep them in different Datasets. OpenBMI needs no
+  Dataset (branch `openbmi-data`). Without an input, the notebook downloads the files from bbci.de
+  and figshare itself. The OpenBMI files a notebook built are saved in its output under
+  `data/openbmi*`; attach that output next time.
 - **Colab.** Put the files in Google Drive and mount it; `/content/drive/MyDrive` is searched.
 
 Files found in the inputs are linked, not copied, when the file system allows it. Delete `data/`

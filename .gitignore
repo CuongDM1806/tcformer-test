@@ -8,3 +8,4 @@ mne_data/
 data/*
 !data/README.md
 *.ckpt
+sample/

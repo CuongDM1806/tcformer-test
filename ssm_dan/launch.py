@@ -165,14 +165,14 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     """Make every file of ``dataset`` available in data/; files already there are used as they are.
 
     BCI IV-2a/2b: data/BCICIV_2x/mat is built from the official competition files (GDF + true
-    labels) in data/BCICIV_2x/{gdf,true_labels} or the input directories, else fetched from the
-    data branch bcic2x-data, else downloaded from bbci.de (ssm_dan.data.bciciv). Zhou2016 and OpenBMI:
+    labels) in data/BCICIV_2x/{gdf,true_labels} or the input directories (e.g. a Kaggle Dataset
+    added with Add Input), else downloaded from bbci.de (ssm_dan.data.bciciv). Zhou2016, OpenBMI:
     1. files in data/ are used;
     2. missing files with the expected names are linked from the input directories
        (attached Kaggle Datasets or outputs, a mounted Drive, $SSM_DAN_INPUT, ~/mne_data);
-    3. the data branch ``<dataset>-data`` of this repository (OpenBMI: CAR only);
-    4. what is still missing is downloaded from the original servers (OpenBMI: downloaded
-       and preprocessed, ``workers`` subjects at a time).
+    3. OpenBMI with CAR: the data branch ``openbmi-data`` of this repository;
+    4. what is still missing is downloaded from the original source (Zhou2016: figshare;
+       OpenBMI: raw recordings, preprocessed, ``workers`` subjects at a time).
     """
     from ssm_dan.data import files
 
@@ -194,7 +194,7 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     linked = files.link_from(dataset, search_directories(platform), no_car)
     if linked:
         print(f"{label}: linked {linked} files found in the inputs into {files.data_dir()}", flush=True)
-    if files.missing(dataset, no_car):
+    if dataset == "openbmi" and files.missing(dataset, no_car):
         moved = files.fetch_branch(dataset, files.repository_urls(), platform.scratch, no_car)
         if moved:
             print(f"{label}: {moved} files from branch {files.data_branch(dataset)}", flush=True)

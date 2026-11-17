@@ -19,10 +19,10 @@ Each data set has one folder in data/ (see data/README.md):
     data/BCICIV_2b/mat/           B01T.mat ... B09E.mat        (T = sessions 1-3, E = 4-5)
 
 (the zips themselves, unextracted, are also recognised, there or in an input directory).
-When the files in mat/ are missing, ``prepare`` builds them from gdf/ and true_labels/. If
-those are not found, they are fetched from this repository's data branch (bcic2a-data,
-bcic2b-data: the same two folders), else both zips are downloaded from the addresses above
-and extracted there. mat/ is never stored: it is always built from gdf/ and true_labels/.
+When the files in mat/ are missing, ``prepare`` builds them from gdf/ and true_labels/, or
+from these files found in an input directory (e.g. a Kaggle Dataset attached with Add Input).
+If they are not found, both zips are downloaded from the addresses above and extracted there.
+mat/ is never stored: it is always built from gdf/ and true_labels/.
 
 Training reads mat/ with MOABB, whose BNCI loader expects this MAT format (one cell array
 of runs with X in uV, trial onsets, labels, sampling rate, class names); ``use_local_files``
@@ -100,7 +100,8 @@ def find(names, directories, label_files=False):
         directory = Path(directory)
         if not directory.is_dir():
             continue
-        for archive in sorted(directory.rglob("*.zip")):
+        paths = list(files.walk(directory))
+        for archive in sorted(p for p in paths if p.suffix == ".zip"):
             try:
                 with zipfile.ZipFile(archive) as z:
                     if names <= {Path(n).name for n in z.namelist()}:
@@ -108,7 +109,7 @@ def find(names, directories, label_files=False):
             except (zipfile.BadZipFile, OSError):
                 continue
         by_folder = {}
-        for path in directory.rglob("*"):
+        for path in paths:
             if path.name in names and path.is_file() and (not label_files or _is_label_file(path)):
                 by_folder.setdefault(path.parent, set()).add(path.name)
         for folder, found in by_folder.items():
@@ -233,49 +234,18 @@ def write_mat(path, runs):
 
 
 # --------------------------------------------------------------------------- entry point
-def fetch_branch(dataset):
-    """Copy gdf/ and true_labels/ from the data branch bcic2x-data into data/; True if it worked."""
-    import shutil
-    import subprocess
-
-    branch = files.data_branch(dataset)
-    with tempfile.TemporaryDirectory() as workdir:
-        clone = Path(workdir) / branch
-        for url in files.repository_urls():
-            print(f"{dataset}: fetching branch {branch} of {url}", flush=True)
-            done = subprocess.run(["git", "clone", "--depth", "1", "--single-branch", "--branch", branch,
-                                   url, str(clone)], env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-            if done.returncode == 0:
-                break
-        if not clone.is_dir():
-            return False
-        for part in ("gdf", "true_labels"):
-            source = clone / files.BCI_IV[dataset] / part
-            if source.is_dir():
-                folder(dataset, part).mkdir(parents=True, exist_ok=True)
-                for path in source.iterdir():
-                    if not (folder(dataset, part) / path.name).exists():
-                        shutil.move(str(path), folder(dataset, part) / path.name)
-    return True
-
-
 def prepare(dataset, directories=(), download=True):
     """Build the missing files of data/BCICIV_2x/mat from the official competition files.
 
     The GDF and true-label files are looked for (unzipped or as zips) in data/ and
-    ``directories``; if not found and ``download``, they are fetched from the data branch
-    bcic2x-data, else both zips are downloaded from bbci.de and extracted into
-    data/BCICIV_2x/gdf and data/BCICIV_2x/true_labels.
+    ``directories``; if not found and ``download``, both zips are downloaded from bbci.de and
+    extracted into data/BCICIV_2x/gdf and data/BCICIV_2x/true_labels.
     """
     if not files.missing(dataset):
         return
     search = [files.data_dir(), *directories]
     gdf = find([f"{stem}.gdf" for stem in recordings(dataset)], search)
     labels = find([f"{stem}.mat" for stem in recordings(dataset)], search, label_files=True)
-    if (gdf is None or labels is None) and download and fetch_branch(dataset):
-        gdf = gdf or find([f"{stem}.gdf" for stem in recordings(dataset)], [folder(dataset, "gdf")])
-        labels = labels or find([f"{stem}.mat" for stem in recordings(dataset)], [folder(dataset, "true_labels")],
-                                label_files=True)
     for kind, found, url, part in (("GDF", gdf, GDF_URL[dataset], "gdf"),
                                    ("true-label", labels, LABELS_URL[dataset], "true_labels")):
         if found is None and not download:

@@ -16,8 +16,9 @@ by ssm_dan.data.bciciv; the BNCI Horizon 2020 server is never used. For the othe
 missing files are taken, in this order, from
 1. other directories given to ``link_from`` (e.g. attached Kaggle inputs): files with the
    expected names are linked into data/;
-2. the repository's data branch ``<dataset>-data`` (same layout as data/; OpenBMI: CAR only);
-3. the original servers (MOABB download of Zhou2016, retried; OpenBMI is preprocessed from raw).
+2. OpenBMI with CAR: the repository's data branch ``openbmi-data`` (same layout as data/);
+3. the original source (Zhou2016: MOABB download from figshare, retried; OpenBMI: raw
+   recordings, preprocessed).
 
 Command line (``--check`` lists what is missing; ``--download`` fetches it):
 
@@ -111,6 +112,19 @@ def _place(source, destination):
         shutil.copy2(source, destination)
 
 
+def walk(directory):
+    """Every file under ``directory``, following symbolic links (inputs are often linked)."""
+    seen = set()
+    for root, dirs, names in os.walk(directory, followlinks=True):
+        real = os.path.realpath(root)
+        if real in seen:            # a link back up the tree
+            dirs[:] = []
+            continue
+        seen.add(real)
+        for name in names:
+            yield Path(root) / name
+
+
 def link_from(dataset, directories, no_car=False):
     """Link files with the expected names found under ``directories`` into data/; returns the count."""
     wanted = missing(dataset, no_car)
@@ -124,7 +138,7 @@ def link_from(dataset, directories, no_car=False):
         directory = Path(directory)
         if not directory.is_dir() or directory.resolve() == root or root in directory.resolve().parents:
             continue
-        for path in directory.rglob("*"):
+        for path in walk(directory):
             if path.name not in by_name or root in path.parents:
                 continue
             for rel in by_name[path.name]:
