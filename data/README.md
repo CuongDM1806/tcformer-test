@@ -11,10 +11,12 @@ before training (step 4 of the notebooks), in this order:
 2. files with the expected names found in the input directories are linked into `data/`.
    These are attached Kaggle Datasets or notebook outputs (`/kaggle/input`), a mounted
    Google Drive (`/content/drive/MyDrive`), the directories in `$SSM_DAN_INPUT`, and `~/mne_data`;
-3. the data branch `<dataset>-data` of this repository, which holds the files in this same layout.
+3. BCI IV-2a/2b only: the competition GDF files, if they are in `data/` or an input directory, are
+   converted into the MAT files (see [below](#bci-iv-2a2b-from-the-competition-gdf-files));
+4. the data branch `<dataset>-data` of this repository, which holds the files in this same layout.
    It exists for every dataset: `bcic2a` (0.78 GB), `bcic2b` (0.32 GB), `zhou2016` (177 MB) and
    `openbmi` (CAR only, ~1 GB);
-4. the original servers: MOABB download for BCI IV-2a/2b and Zhou2016, retried up to 10 times.
+5. the original servers: MOABB download for BCI IV-2a/2b and Zhou2016, retried up to 10 times.
    OpenBMI is downloaded and preprocessed.
 
 The contents of `data/` are not tracked by git; only this file is.
@@ -74,17 +76,26 @@ data/
 
 ### BCI IV-2a/2b from the competition GDF files
 
-When the BNCI server is down, the same MAT files can be rebuilt from the BCI Competition IV
-archives. You need the GDF files (`BCICIV_2a_gdf.zip`, `BCICIV_2b_gdf.zip`,
-https://www.bbci.de/competition/iv/download/) and the published labels of all sessions
-(`ds2a/true_labels.zip`, `ds2b/true_labels.zip`, https://www.bbci.de/competition/iv/results/):
+The same recordings are distributed by the BCI Competition IV as GDF files
+(`BCICIV_2a_gdf.zip`, `BCICIV_2b_gdf.zip`, https://www.bbci.de/competition/iv/download/).
+MOABB does not read GDF, so they are converted into the BNCI MAT files above. This happens
+automatically. Put the zip, or the unzipped `.gdf` files in any subfolder, in `data/` (or attach
+it as an input) and run as usual. For example:
+
+```
+data/BCICIV_2b_gdf.zip                  # the zip as downloaded, or
+data/anything/A01T.gdf ... A09E.gdf     # the unzipped files (2a: 18, 2b: 45 files)
+```
+
+The GDF files hide the labels of the evaluation sessions. The labels of all sessions are
+downloaded from the competition results page (`ds2a/true_labels.zip`, `ds2b/true_labels.zip`,
+https://www.bbci.de/competition/iv/results/). The same conversion by hand:
 
 ```bash
-python -m ssm_dan.data.bnci_from_gdf --dataset bcic2b \
-    --gdf BCICIV_2b_gdf.zip --labels true_labels.zip
+python -m ssm_dan.data.bnci_from_gdf --dataset bcic2b --gdf BCICIV_2b_gdf.zip
 # compare with existing original MAT files instead of writing
 python -m ssm_dan.data.bnci_from_gdf --dataset bcic2a \
-    --gdf BCICIV_2a_gdf.zip --labels true_labels.zip --check-against data
+    --gdf BCICIV_2a_gdf.zip --check-against data
 ```
 
 On BCI IV-2a, the converter reproduces all 18 original BNCI files. Every field MOABB reads is

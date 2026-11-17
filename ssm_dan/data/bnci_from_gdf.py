@@ -27,12 +27,13 @@ X bit for bit):
   run (its segments joined, with the same 100-sample cut); T = sessions 1-3 and
   E = sessions 4-5 of a subject.
 
-    python -m ssm_dan.data.bnci_from_gdf --dataset bcic2b --gdf BCICIV_2b_gdf.zip \\
-        --labels true_labels_2b.zip
+    python -m ssm_dan.data.bnci_from_gdf --dataset bcic2b --gdf BCICIV_2b_gdf.zip   # labels from bbci.de
     python -m ssm_dan.data.bnci_from_gdf --dataset bcic2a --gdf BCICIV_2a_gdf.zip \\
         --labels true_labels_2a.zip --check-against data/   # compare with existing MAT files
 
-``--gdf`` and ``--labels`` accept a zip archive or a directory.
+``--gdf`` and ``--labels`` accept a zip archive or a directory; without ``--labels`` the published
+labels are downloaded. ``python -m ssm_dan.launch`` (and the notebooks) run this conversion by
+themselves when the MAT files are missing and the GDF files are in data/ or an attached input.
 """
 import argparse
 import sys
@@ -46,6 +47,8 @@ from . import files
 
 CLASSES = {"bcic2a": ["left hand", "right hand", "feet", "tongue"], "bcic2b": ["left hand", "right hand"]}
 FOLDER = {"bcic2a": "001-2014", "bcic2b": "004-2014"}
+LABELS_URL = {"bcic2a": "https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip",
+              "bcic2b": "https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip"}
 NEW_RUN, TRIAL_START, REJECTED = "32766", "768", "1023"
 CUE_CODES = {"769": 1, "770": 2, "771": 3, "772": 4}
 RUN_CUT = 100   # samples dropped at the start of every run but the first
@@ -178,7 +181,8 @@ def main(argv=None):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dataset", required=True, choices=sorted(CLASSES))
     parser.add_argument("--gdf", required=True, help="BCICIV_2a_gdf.zip / BCICIV_2b_gdf.zip or a directory")
-    parser.add_argument("--labels", required=True, help="true_labels.zip of the data set or a directory")
+    parser.add_argument("--labels", default=None,
+                        help="true_labels.zip of the data set or a directory (default: downloaded from bbci.de)")
     parser.add_argument("--out", default=None, help="data directory (default: data/)")
     parser.add_argument("--check-against", default=None,
                         help="data directory with original BNCI MAT files: compare instead of writing")
@@ -189,7 +193,13 @@ def main(argv=None):
     failures = 0
     with tempfile.TemporaryDirectory() as workdir:
         gdf_dir = _directory(args.gdf, workdir, "gdf")
-        label_dir = _directory(args.labels, workdir, "labels")
+        labels = args.labels
+        if labels is None:
+            import urllib.request
+            labels = Path(workdir) / "true_labels.zip"
+            print(f"Downloading the labels of all sessions from {LABELS_URL[args.dataset]}", flush=True)
+            urllib.request.urlretrieve(LABELS_URL[args.dataset], labels)
+        label_dir = _directory(labels, workdir, "labels")
         for subject in range(1, 10):
             for mat_name, gdf_names in _sessions(args.dataset, subject):
                 runs = convert_session(args.dataset, [_find(gdf_dir, f"{g}.gdf") for g in gdf_names],

@@ -175,6 +175,8 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     1. files in data/ are used;
     2. missing files with the expected names are linked from the input directories
        (attached Kaggle Datasets or outputs, a mounted Drive, $SSM_DAN_INPUT, ~/mne_data);
+    2b. BCI IV-2a/2b: the competition GDF files (BCICIV_2a_gdf.zip / BCICIV_2b_gdf.zip, or the
+       unzipped .gdf files) in data/ or those directories are converted (ssm_dan.data.bnci_from_gdf);
     3. the data branch ``<dataset>-data`` of this repository, if it exists (OpenBMI: CAR only);
     4. what is still missing is downloaded from the original servers (OpenBMI: downloaded
        and preprocessed, ``workers`` subjects at a time).
@@ -190,6 +192,13 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     linked = files.link_from(dataset, search_directories(platform), no_car)
     if linked:
         print(f"{label}: linked {linked} files found in the inputs into {files.data_dir()}", flush=True)
+    gdf = files.find_gdf(dataset, [files.data_dir(), *search_directories(platform)]) \
+        if files.missing(dataset, no_car) else None
+    if gdf is not None:
+        print(f"{label}: converting the competition GDF files in {gdf}", flush=True)
+        python = python or python_for_training(platform)
+        _stream([python, "-u", "-m", "ssm_dan.data.bnci_from_gdf", "--dataset", dataset, "--gdf", gdf],
+                platform.scratch / f"{dataset}_from_gdf.log", f"[{dataset}]", env)
     if files.missing(dataset, no_car):
         moved = files.fetch_branch(dataset, _repository_urls(), platform.scratch, no_car)
         if moved:
