@@ -179,33 +179,26 @@ Edit the settings cell (in `run.ipynb`: `METHOD`, `VARIANT`, `DATASET`, `SUBJECT
 
 ## Data
 
-Every dataset is read from one place, `data/` at the repository root (`$SSM_DAN_DATA` moves it). [`data/README.md`](data/README.md) lists every file each dataset needs, in which folder, and the format of the OpenBMI files.
+Every dataset is read from one place, `data/` at the repository root (`$SSM_DAN_DATA` moves it). A file that is already there is used as it is and never downloaded again. [`data/README.md`](data/README.md) gives the exact files, folders and download links of every dataset.
 
-| Dataset | Folder in `data/` | Files |
+| Dataset | Source | What the code reads |
 |---|---|---|
-| BCI IV-2a | `MNE-bnci-data/database/data-sets/001-2014/` | `A01T.mat` ... `A09E.mat` |
-| BCI IV-2b | `MNE-bnci-data/database/data-sets/004-2014/` | `B01T.mat` ... `B09E.mat` |
-| Zhou2016 | `MNE-zhou-2016/subject_1/` ... `subject_4/` | `1A.cnt` ... `3B.cnt` |
-| OpenBMI (CAR) | `openbmi/` | `openbmi_S01.npz` ... `openbmi_S54.npz` |
-| OpenBMI without CAR | `openbmi_nocar/` | the same names |
+| BCI IV-2a | official competition files: [`BCICIV_2a_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2a_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2a/true_labels.zip) | MAT files built from them in `data/MNE-bnci-data/.../001-2014/` |
+| BCI IV-2b | [`BCICIV_2b_gdf.zip`](https://www.bbci.de/competition/download/competition_iv/BCICIV_2b_gdf.zip) + [true labels](https://www.bbci.de/competition/iv/results/ds2b/true_labels.zip) | MAT files built from them in `data/MNE-bnci-data/.../004-2014/` |
+| Zhou2016 | branch [`zhou2016-data`](../../tree/zhou2016-data), or figshare | `data/MNE-zhou-2016/subject_k/*.cnt` |
+| OpenBMI | branch [`openbmi-data`](../../tree/openbmi-data) (the paper's preprocessed files), or GigaDB | `data/openbmi/openbmi_SXX.npz` (`openbmi_nocar/` without CAR) |
 
-A file that is already there is never downloaded again. `python -m ssm_dan.launch` and the notebooks obtain only the missing files, in this order:
+**BCI IV-2a/2b.** Unzip the GDF zip and the true-label zip into `data/`, or leave them zipped. Before training, the code builds the MAT files that MOABB reads (`ssm_dan/data/bciciv.py`, 1-2 minutes). If the zips are not there, it downloads them from bbci.de. On BCI IV-2a, the built files are identical to the BNCI Horizon 2020 files used for the paper, the signal bit for bit. The EOG channels, the trial windows and the normalisation are handled by the training code, as for any dataset.
 
-1. files with the expected names in the input directories (attached Kaggle Datasets or outputs, a mounted Drive, `$SSM_DAN_INPUT`, `~/mne_data`) are linked into `data/`;
-2. the data-only branch `<dataset>-data` of this repository, with the files in the same layout: [`bcic2a-data`](../../tree/bcic2a-data) (0.78 GB), [`bcic2b-data`](../../tree/bcic2b-data) (0.32 GB), [`zhou2016-data`](../../tree/zhou2016-data) (177 MB) and [`openbmi-data`](../../tree/openbmi-data) (about 1 GB, the paper's preprocessed files, CAR only);
-3. the original servers: a MOABB download, retried, for BCI IV and Zhou2016. OpenBMI is downloaded (about 61 GB of MAT files, one subject at a time) and preprocessed, and the raw files are deleted.
+**Zhou2016 and OpenBMI.** The launcher and the notebooks link files found in the input directories (attached Kaggle Datasets or outputs, a mounted Drive, `$SSM_DAN_INPUT`, `~/mne_data`). Otherwise they fetch the data branch of this repository, and otherwise they download the original data.
 
 ```bash
 # what is there, what is missing
 python -m ssm_dan.data.files --check
 # obtain what is missing
-python -m ssm_dan.launch --data --dataset openbmi
+python -m ssm_dan.launch --data --dataset bcic2a
 python -m ssm_dan.launch --data --dataset openbmi --no-car --workers 3
 ```
-
-To download the files by hand, the official sources, a mirror and the data branches of every dataset are listed under [Download links](data/README.md#download-links) in `data/README.md`.
-
-`python -m ssm_dan.run` reads the same `data/`, but it does not link or fetch files. If a BCI IV or Zhou2016 file is missing, MOABB downloads it; if an OpenBMI file is missing, it is built from the raw recordings.
 
 ## Reproducibility
 

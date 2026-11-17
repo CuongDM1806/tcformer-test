@@ -172,10 +172,13 @@ def search_directories(platform: Platform):
 def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, python=None):
     """Make every file of ``dataset`` available in data/; files already there are used as they are.
 
+    BCI IV-2a/2b: the MAT files are built from the official competition files (GDF + true
+    labels) found in data/ or the input directories, or downloaded from bbci.de into data/
+    (ssm_dan.data.bciciv). Zhou2016 and OpenBMI:
     1. files in data/ are used;
     2. missing files with the expected names are linked from the input directories
        (attached Kaggle Datasets or outputs, a mounted Drive, $SSM_DAN_INPUT, ~/mne_data);
-    3. the data branch ``<dataset>-data`` of this repository, if it exists (OpenBMI: CAR only);
+    3. the data branch ``<dataset>-data`` of this repository (OpenBMI: CAR only);
     4. what is still missing is downloaded from the original servers (OpenBMI: downloaded
        and preprocessed, ``workers`` subjects at a time).
     """
@@ -187,6 +190,15 @@ def ensure_data(dataset, no_car=False, workers=3, platform=None, env=None, pytho
     if not files.missing(dataset, no_car):
         files.report(dataset, no_car)
         return
+    if dataset in ("bcic2a", "bcic2b"):
+        python = python or python_for_training(platform)
+        _stream([python, "-u", "-m", "ssm_dan.data.bciciv", "--dataset", dataset,
+                 "--search", os.pathsep.join(str(d) for d in search_directories(platform))],
+                platform.scratch / f"{dataset}_data.log", f"[{dataset}]", env)
+        if not files.report(dataset):
+            return
+        raise FileNotFoundError(f"{dataset}: the MAT files could not be built; see the messages above "
+                                "and data/README.md.")
     linked = files.link_from(dataset, search_directories(platform), no_car)
     if linked:
         print(f"{label}: linked {linked} files found in the inputs into {files.data_dir()}", flush=True)

@@ -5,17 +5,19 @@ All datasets are read from one fixed directory, ``data/`` at the repository root
 missing files are obtained. The expected layout is MOABB's own, so MOABB reads the
 files without contacting any server (see data/README.md):
 
-    data/MNE-bnci-data/database/data-sets/001-2014/A01T.mat ... A09E.mat   BCI IV-2a
-    data/MNE-bnci-data/database/data-sets/004-2014/B01T.mat ... B09E.mat   BCI IV-2b
+    data/MNE-bnci-data/database/data-sets/001-2014/A01T.mat ... A09E.mat   BCI IV-2a (built)
+    data/MNE-bnci-data/database/data-sets/004-2014/B01T.mat ... B09E.mat   BCI IV-2b (built)
     data/MNE-zhou-2016/subject_1/1A.cnt ... subject_4/3B.cnt               Zhou2016
     data/openbmi/openbmi_S01.npz ... openbmi_S54.npz                       OpenBMI (CAR)
     data/openbmi_nocar/openbmi_S01.npz ...                                 OpenBMI without CAR
 
-Missing files are taken, in this order, from
+BCI IV-2a/2b are built from the official competition files (GDF recordings + true labels)
+by ssm_dan.data.bciciv; the BNCI Horizon 2020 server is never used. For the other datasets,
+missing files are taken, in this order, from
 1. other directories given to ``link_from`` (e.g. attached Kaggle inputs): files with the
    expected names are linked into data/;
 2. the repository's data branch ``<dataset>-data`` (same layout as data/; OpenBMI: CAR only);
-3. the original servers (MOABB download, retried; OpenBMI is preprocessed from raw).
+3. the original servers (MOABB download of Zhou2016, retried; OpenBMI is preprocessed from raw).
 
 Command line (``--check`` lists what is missing; ``--download`` fetches it):
 
@@ -37,8 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 DATASETS = ("bcic2a", "bcic2b", "zhou2016", "openbmi")
 BNCI = Path("MNE-bnci-data/database/data-sets")
 ZHOU = Path("MNE-zhou-2016")
-MOABB_NAMES = {"bcic2a": ("BNCI2014_001", "BNCI2014001"), "bcic2b": ("BNCI2014_004", "BNCI2014004"),
-               "zhou2016": ("Zhou2016",)}
+MOABB_NAMES = {"zhou2016": ("Zhou2016",)}
 SUBJECTS = {"bcic2a": range(1, 10), "bcic2b": range(1, 10), "zhou2016": range(1, 5), "openbmi": range(1, 55)}
 
 
@@ -230,8 +231,12 @@ def main(argv=None):
             linked = link_from(dataset, [d for d in args.link_from.split(os.pathsep) if d], args.no_car)
             if linked:
                 print(f"{dataset}: linked {linked} files", flush=True)
-        if args.download and dataset != "openbmi" and missing(dataset):
-            download(dataset)
+        if args.download and missing(dataset):
+            if dataset in ("bcic2a", "bcic2b"):
+                from .bciciv import prepare
+                prepare(dataset)
+            elif dataset == "zhou2016":
+                download(dataset)
         report(dataset, args.no_car)
     return 0
 

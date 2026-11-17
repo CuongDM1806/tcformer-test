@@ -31,6 +31,10 @@ def _band_pass(preprocessing: Dict, verbose: str):
 
 def load_bcic4(subject_ids: list, dataset: str, preprocessing: Dict, verbose: str = "WARNING"):
     """BCI IV-2a (``dataset="2a"``) or 2b (``"2b"``) windows over the MOABB event interval."""
+    from .bciciv import prepare
+
+    # Built from the official competition files; MOABB then reads them without any download.
+    prepare("bcic2a" if dataset == "2a" else "bcic2b")
     names = ("BNCI2014_001", "BNCI2014001") if dataset == "2a" else ("BNCI2014_004", "BNCI2014004")
     last_error = None
     for name in names:               # MOABB renamed the datasets across versions
