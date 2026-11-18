@@ -90,6 +90,12 @@ variants:
     adaptation_kwargs: {feature_alignment: none, target_im_weight: 0.0, adversarial_weight: 0.0,
                         mmd_weight: 0.0, temporal_mmd_weight: 0.0, im_tta_steps: 0,
                         recalibrate_target_statistics: false}
+  with_ra:
+    description: >-
+      turn Riemannian alignment back on; list it after source_only / source_only_head
+      (e.g. 'source_only,with_ra' or 'source_only,with_ra,per_session_ra') to measure
+      the RA gain of the network without domain adaptation
+    preprocessing: {riemannian_alignment: true}
   no_car:
     description: OpenBMI without the common average reference (needs a cache built without CAR)
     datasets_only: [openbmi]
