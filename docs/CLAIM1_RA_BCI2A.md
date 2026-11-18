@@ -119,19 +119,34 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 | 1 | Bảng Δ_RA trên 4 dataset, cả 2 kiểu RA (gồm Zhou PS-RA, OpenBMI PS-RA đủ 54) | — | ✅ Xong 2026-11-13 (đã cập nhật `tab:ablation` EN + VI) |
 | 2 | MDM trước/sau RA frozen trên 2a, 2b, Zhou, kèm đối chứng 3 kênh và 2 lớp | Không | ✅ Đã có (`analysis/ra_mechanism_outputs/`) |
 | 3 | Xác minh các ô "(kiểm tra)" ở mục 4: tham chiếu của Zhou, số trial fit tham chiếu của 2b và Zhou | Không | ✅ Xong 2026-11-13: Zhou tham chiếu mastoid trái; 2b 400 trial; Zhou ~300 trial |
-| 4 | **Đo đặc trưng H1–H4** trên đủ 4 dataset, theo subject | Không | ✅ Xong 2026-11-18 cho 2a, 2b, Zhou (mục 6c); **OpenBMI chưa có** (không gắn cache) |
-| 5 | **Can thiệp proxy** cho H1–H3 (MDM + TS-LR, RA và không RA, frozen và per-session) | Không | ✅ Xong 2026-11-18 (mục 6b): H1–H3 **không** giải thích được Δ_RA của 2a |
-| 6 | Thêm OpenBMI và RA per-session vào phân tích MDM có sẵn, thêm TS-LR | Không | ⚠ RA per-session + TS-LR xong; **OpenBMI chưa có** (lần chạy không gắn cache) |
-| 7 | *(Đang cân nhắc, xem 6b)* **Xác nhận bằng mạng:** lấy đặc trưng có tác động lớn nhất ở mục 5, chạy SSM-DAN trên 2a đã tắt đặc trưng đó, có RA và không RA | Có (2 run × 9 subject) | ❌ |
+| 4 | **Đo đặc trưng H1–H4** trên đủ 4 dataset, theo subject | Không | ✅ 2a, 2b, Zhou xong 2026-11-18 (mục 6c). ⏳ OpenBMI: notebook đã push (`DATASETS = ['OpenBMI']`), chờ chạy với cache gắn vào |
+| 5 | **Can thiệp proxy** cho H1–H3 (MDM + TS-LR, RA và không RA, frozen và per-session) | Không | ✅ 2a, 2b, Zhou xong 2026-11-18 (mục 6b): H1–H3 **không** giải thích được Δ_RA của 2a. ⏳ OpenBMI: bỏ CAR, tham chiếu 50 trial, 31/20/10 kênh ngẫu nhiên; notebook đã push, chờ chạy |
+| 6 | Thêm OpenBMI và RA per-session vào phân tích proxy, thêm TS-LR | Không | ⚠ RA per-session + TS-LR xong; OpenBMI chạy chung với mục 4–5 ở trên |
+| 7 | ~~Xác nhận bằng mạng: SSM-DAN trên 2a lọc 8–30 Hz, có RA và không RA~~ | Có | ⏸ **Hoãn**: mục 5 cho thấy lọc 8–30 Hz không làm Δ_RA giảm. Notebook vẫn có: nhánh `feature/ssm-dan-claim1-bandpass`, `notebooks/claim1_bandpass_bcic2a.ipynb` |
 | 8 | *(Nên có)* H5: OpenBMI với 8 subject source, có RA và không RA | Có | ❌ |
+| 9 | **2a source-only, hoisted scan, không RA, có số theo subject** (thay số 64.35 sequential trong bài; ghép với RA on 63.31 hoisted để so sạch) | Có (1 run × 9 subject) | ⏳ Notebook: nhánh `feature/full-mamba-source-only`, `kaggle_train_full_mamba_source_only_bcic2a_loso.ipynb`. Hiện chỉ có trung bình 62.27, không có số theo subject |
+| 10 | **Bảng RA × DA:** source-only không RA / RA cố định / RA theo session trên 2b, Zhou, OpenBMI (ghép với `ssm_dan` và `ssm_dan-no_ra` để có 2×2) | Có (3 run × mỗi bộ) | ⏳ Notebook đã push: nhánh `feature/ssm-dan-source-only-ra`, `notebooks/source_only_ra_{bcic2b,zhou2016,openbmi}.ipynb` (variant `with_ra`) |
+| 11 | Ô "chỉ DA, không IM-TTA" của 2a: đọc `no_tta_acc` từ output của run `ssm_dan-no_ra` đã có | Không | ❌ Cần output cũ của run đó |
+| 12 | **Giả thuyết phép quay (proxy):** sau RA, đo độ lệch quay giữa subject theo số kênh (3 / 8 / 14 / 22); thêm căn chỉnh quay kiểu Procrustes (bước cuối của RPA, nhãn giả cho đích) sau RA, xem Δ_RA của MDM/TS-LR có tăng không | Không | ❌ Chưa có notebook |
+| 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (1–2 run) | ❌ Chỉ làm nếu mục 12 ủng hộ |
+| 14 | *(Tùy chọn)* Thêm seed cho các run chính (full, no_ra, source-only ± RA) | Có | ❌ |
 
-**Thứ tự ưu tiên:**
-1. **4:** biết các bộ khác nhau ở đâu. Rẻ, chỉ tính hiệp phương sai.
-2. **5 (+6):** tìm đặc trưng nào thật sự điều khiển Δ_RA.
-3. **7:** khẳng định kết quả trên chính mô hình của bài.
-4. **8:** chỉ cần nếu muốn chặn trước câu hỏi của reviewer.
+**Thứ tự ưu tiên (cập nhật 2026-11-18):**
+1. **9:** vừa sửa số 2a trong bài vừa cho phép so source-only ± RA sạch.
+2. **4–5 OpenBMI** (CPU) và **10** (GPU): chạy song song.
+3. **12:** rẻ, kiểm tra trực tiếp giả thuyết phép quay; **13** chỉ khi 12 ủng hộ.
+4. **11, 8, 14:** khi cần chặn câu hỏi của reviewer.
 
-Mục 3–6 có thể gom chung một notebook Kaggle, đọc dữ liệu từ cache có sẵn.
+## 6a. Giả thuyết làm việc: RA khử phép trộn kênh nhưng để lại phép quay
+
+Mô hình x = A_s z (z: nguồn não chung, A_s: phép trộn kênh của subject s). RA làm trắng nên A_s → R_s^(-1/2) A_s = U_s, một **phép quay** (xem `docs/RA_GIAI_THICH.md` mục 3.4). Lợi ích của RA cho mạng phụ thuộc vào:
+1. **RA khử được bao nhiêu:** lớn khi nhiều kênh đơn cực, tương quan mạnh, hiệp phương sai lệch xa đẳng hướng (2a); nhỏ với 3 kênh lưỡng cực gần đẳng hướng (2b, log10 số điều kiện 0.79).
+2. **Phép quay còn lại lớn đến đâu:** C(C−1)/2 bậc tự do, tức 3 với 3 kênh, 231 với 22 kênh.
+3. **Tham chiếu có chính xác và ổn định qua session không:** kém ở OpenBMI (62×62 từ 100 trial, năng lượng trôi giữa session).
+
+Khớp với: 2a 22 kênh source-only RA ≈ +1 (hoisted, 62.27 → 63.31) nhưng có DA thì +5.83 (DA sửa phần quay ở tầng đặc trưng); 2a 3 kênh source-only RA +6.87 (p = 0.02; ít bậc quay); 2b ≈ 0; OpenBMI RA cố định −2.89, theo session +0.50; RA theo session ≥ cố định ở mọi bộ.
+Chưa khớp: Zhou (proxy lợi nhiều, mạng không; n = 4); 2a 22 kênh trái/phải source-only −2.55 (đang lệch scan).
+**Đây là giả thuyết, chưa được chứng minh;** mục 9, 10, 12, 13 dùng để kiểm tra.
 
 ## 6b. Kết quả mục 5 (2026-11-18, `ra_interventions.ipynb`, Kaggle CPU)
 
