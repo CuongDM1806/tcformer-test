@@ -96,6 +96,13 @@ variants:
       (e.g. 'source_only,with_ra' or 'source_only,with_ra,per_session_ra') to measure
       the RA gain of the network without domain adaptation
     preprocessing: {riemannian_alignment: true}
+  ra_rotation:
+    description: >-
+      Claim 1, item 13: after the calibration RA, rotate each subject onto the template of the
+      labelled sources (Procrustes; the target with pseudo-labels, no target labels); needs RA,
+      e.g. 'source_only,with_ra,ra_rotation'
+    datasets_only: [bcic2a]
+    preprocessing: {ra_rotation: true}
   no_car:
     description: OpenBMI without the common average reference (needs a cache built without CAR)
     datasets_only: [openbmi]

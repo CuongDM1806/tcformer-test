@@ -7,7 +7,7 @@ from typing import Optional
 
 import numpy as np
 
-from . import alignment
+from . import alignment, rotation
 from .base import BaseDataModule, ordered_sessions
 from .loaders import load_bcic4
 
@@ -77,6 +77,15 @@ class BCICIV2aLOSO(BaseDataModule):
                     aligned_val.append((X_val, y_val))
                 train_arrays, val_arrays = aligned_train, aligned_val
                 X_target, X_test = alignment.align(X_target, X_test)
+
+        if self.preprocessing.get("ra_rotation", False):
+            # Claim 1, item 13: rotation (Procrustes) alignment after the calibration RA.
+            if not self.preprocessing.get("riemannian_alignment", False) or alignment.per_session(self.preprocessing):
+                raise ValueError("ra_rotation needs riemannian_alignment with ra_reference: calibration.")
+            print(f"Rotation alignment for LOSO target {self.subject_id} "
+                  "(sources: labelled template; target: pseudo-labels on session T)", flush=True)
+            train_arrays, val_arrays, X_target, X_test = rotation.align_rotations(
+                train_arrays, val_arrays, X_target, X_test)
 
         X = np.concatenate([arr[0] for arr in train_arrays], axis=0)
         y = np.concatenate([arr[1] for arr in train_arrays], axis=0)
