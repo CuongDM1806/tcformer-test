@@ -173,3 +173,33 @@ def summarise(results: pd.DataFrame, baseline: dict[str, str]) -> pd.DataFrame:
                 row[f"p_change_{kind}"] = _p(change)
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------- H3 on OpenBMI: fewer channels
+def subset_channels(subjects: list[SubjectCovs], channels: np.ndarray) -> list[SubjectCovs]:
+    """The covariance of a channel subset is the corresponding sub-matrix."""
+    ix = np.ix_(channels, channels)
+    return [SubjectCovs(sc.subject, [(c[:, ix[0], ix[1]], y) for c, y in sc.sessions], sc.fit_sessions)
+            for sc in subjects]
+
+
+def ra_gain_random_channels(dataset: str, intervention: str, subjects: list[SubjectCovs], n_channels: int,
+                            draws: int = 5, seed: int = 0, log=print) -> pd.DataFrame:
+    """RA gains on `draws` random subsets of `n_channels` channels (same subset for every subject), averaged.
+
+    Fewer channels means more reference trials per channel (H3) without changing the trials.
+    """
+    rng = np.random.default_rng(seed)
+    n_all = subjects[0].sessions[0][0].shape[1]
+    tables = []
+    for d in range(draws):
+        channels = np.sort(rng.choice(n_all, n_channels, replace=False))
+        tables.append(ra_gain_table(dataset, intervention, subset_channels(subjects, channels), log=lambda m: None))
+        log(f"  {dataset} | {intervention}: draw {d + 1}/{draws} done")
+    table = (pd.concat(tables).groupby(["dataset", "intervention", "subject", "classifier"], as_index=False)
+             .mean(numeric_only=True))
+    for name, g in table.groupby("classifier"):
+        log(f"  {dataset} | {intervention:<22} | {name:<5}: none {g.acc_none.mean():5.2f}  "
+            f"frozen {g.acc_frozen.mean():5.2f} ({g.gain_frozen.mean():+5.2f})  "
+            f"per-session {g.acc_per_session.mean():5.2f} ({g.gain_per_session.mean():+5.2f})")
+    return table

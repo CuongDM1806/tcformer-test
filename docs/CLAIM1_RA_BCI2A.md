@@ -119,10 +119,10 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 | 1 | Bảng Δ_RA trên 4 dataset, cả 2 kiểu RA (gồm Zhou PS-RA, OpenBMI PS-RA đủ 54) | — | ✅ Xong 2026-11-13 (đã cập nhật `tab:ablation` EN + VI) |
 | 2 | MDM trước/sau RA frozen trên 2a, 2b, Zhou, kèm đối chứng 3 kênh và 2 lớp | Không | ✅ Đã có (`analysis/ra_mechanism_outputs/`) |
 | 3 | Xác minh các ô "(kiểm tra)" ở mục 4: tham chiếu của Zhou, số trial fit tham chiếu của 2b và Zhou | Không | ✅ Xong 2026-11-13: Zhou tham chiếu mastoid trái; 2b 400 trial; Zhou ~300 trial |
-| 4 | **Đo đặc trưng H1–H4** trên đủ 4 dataset, theo subject | Không | ⏳ Notebook sẵn sàng: `analysis/ra_data_characteristics.ipynb` (Kaggle CPU), chờ kết quả |
-| 5 | **Can thiệp proxy** cho H1–H3 (MDM + TS-LR, RA và không RA, frozen và per-session) | Không | ❌ |
-| 6 | Thêm OpenBMI và RA per-session vào phân tích MDM có sẵn, thêm TS-LR | Không | ❌ |
-| 7 | **Xác nhận bằng mạng:** lấy đặc trưng có tác động lớn nhất ở mục 5, chạy SSM-DAN trên 2a đã tắt đặc trưng đó, có RA và không RA | Có (2 run × 9 subject) | ❌ |
+| 4 | **Đo đặc trưng H1–H4** trên đủ 4 dataset, theo subject | Không | ✅ Xong 2026-11-18 cho 2a, 2b, Zhou (mục 6c); **OpenBMI chưa có** (không gắn cache) |
+| 5 | **Can thiệp proxy** cho H1–H3 (MDM + TS-LR, RA và không RA, frozen và per-session) | Không | ✅ Xong 2026-11-18 (mục 6b): H1–H3 **không** giải thích được Δ_RA của 2a |
+| 6 | Thêm OpenBMI và RA per-session vào phân tích MDM có sẵn, thêm TS-LR | Không | ⚠ RA per-session + TS-LR xong; **OpenBMI chưa có** (lần chạy không gắn cache) |
+| 7 | *(Đang cân nhắc, xem 6b)* **Xác nhận bằng mạng:** lấy đặc trưng có tác động lớn nhất ở mục 5, chạy SSM-DAN trên 2a đã tắt đặc trưng đó, có RA và không RA | Có (2 run × 9 subject) | ❌ |
 | 8 | *(Nên có)* H5: OpenBMI với 8 subject source, có RA và không RA | Có | ❌ |
 
 **Thứ tự ưu tiên:**
@@ -132,6 +132,61 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 4. **8:** chỉ cần nếu muốn chặn trước câu hỏi của reviewer.
 
 Mục 3–6 có thể gom chung một notebook Kaggle, đọc dữ liệu từ cache có sẵn.
+
+## 6b. Kết quả mục 5 (2026-11-18, `ra_interventions.ipynb`, Kaggle CPU)
+
+Δ_RA (điểm %) = Acc(có RA) − Acc(không RA). "Đổi" = Δ_RA sau can thiệp − Δ_RA gốc, Wilcoxon ghép cặp theo subject.
+MDM ở đây dùng khoảng cách log-Euclid (khác AIRM ở mục 3, nên số tuyệt đối hơi khác).
+
+| Bộ | Can thiệp | MDM Δ frozen | MDM Δ per-session | TS-LR Δ frozen | TS-LR Δ per-session | Đổi so với gốc (MDM / TS-LR, frozen) |
+|---|---|---|---|---|---|---|
+| 2a | gốc | +12.11 (p=0.004) | +15.28 (p=0.008) | +8.33 (p=0.078) | +12.27 (p=0.008) | — |
+| 2a | H3: tham chiếu 100 trial | +12.06 | +15.28 | +7.95 | +12.27 | −0.05 (p=1.0) / −0.39 (p=0.43) |
+| 2a | H3: tham chiếu 36 trial | +11.99 | +15.28 | +7.52 | +12.27 | −0.12 (p=0.94) / −0.82 (p=0.20) |
+| 2a | H1: CAR | +10.61 | +14.16 | +7.21 | +12.85 | −1.50 (p=0.36) / −1.12 (p=0.82) |
+| 2a | H2: lọc 8–30 Hz | +13.66 | +17.25 | +8.18 | +13.16 | +1.54 (p=0.91) / −0.15 (p=0.91) |
+| 2b | gốc | +1.42 | +5.95 (p=0.012) | +2.20 | +4.64 | — |
+| Zhou | gốc (8–30 Hz) | +15.50 | +23.67 | **−7.33** | +6.17 | — |
+| Zhou | H2 ngược: không lọc | +2.33 | +4.67 | +0.83 | +2.17 | −13.17 (p=0.125) / +8.17 (p=0.25) |
+| Zhou | H1: CAR | +17.67 | +24.50 | −5.67 | +2.67 | +2.17 / +1.67 |
+
+**Đọc kết quả:**
+- **Không can thiệp nào làm Δ_RA của 2a giảm đáng kể.** CAR (H1) giảm nhiều nhất nhưng chỉ khoảng 1–1.5 điểm và không có ý nghĩa; lọc 8–30 Hz (H2) không giảm; ít trial cho tham chiếu (H3) gần như không đổi. Ở mức proxy, **H1, H2, H3 đều bị bác** như lời giải thích cho Δ_RA của 2a.
+- **H2 bị bác cả ở chiều ngược:** Zhou không lọc không làm Δ_RA tăng; với MDM còn giảm mạnh (+15.50 → +2.33), vì bỏ lọc làm cả độ chính xác chung của Zhou sụt.
+- **Zhou: hai proxy mâu thuẫn nhau** (MDM +15.50, TS-LR −7.33 với RA cố định), n = 4 nên p nhỏ nhất có thể là 0.125. Proxy không dùng được để kết luận gì về Zhou.
+- **RA theo session luôn ≥ RA cố định** ở mọi bộ và mọi proxy, khớp với kết quả của mạng.
+- **Hệ quả cho mục 7:** chạy SSM-DAN trên 2a đã lọc 8–30 Hz nhiều khả năng không làm Δ_RA giảm, nên không phân biệt được giả thuyết nào. Ứng viên còn lại: H4 (kiểu khác biệt giữa subject, cần kết quả mục 4) và H5 (số subject source).
+
+## 6c. Kết quả mục 4 (2026-11-18, `ra_data_characteristics.ipynb`, Kaggle CPU)
+
+Trung vị theo subject [IQR]. OpenBMI chưa có.
+
+| Đặc trưng | 2a | 2b | Zhou (8–30 Hz) | Zhou (không lọc) |
+|---|---|---|---|---|
+| H1: \|r\| trung bình giữa kênh | **0.82** | 0.52 | 0.56 | 0.65 |
+| H1: tỉ lệ năng lượng common-mode (vượt mức độc lập) | **0.82** | 0.51 | 0.54 | 0.53 |
+| H2: tỉ lệ năng lượng ngoài 8–30 Hz | 0.61 | 0.64 | 0.13 | 0.90 |
+| H3: trial / kênh | **13.1** | 133 | 20.9 | 20.9 |
+| H3: log10 số điều kiện của tham chiếu | **3.49** | 0.79 | 2.66 | 2.37 |
+| H3: độ lệch tham chiếu nửa–nửa / √C | 0.055 | 0.044 | 0.076 | 0.127 |
+| H3: lệch tham chiếu session fit và session đánh giá / √C | 0.41 | 0.17 | 0.47 | 0.58 |
+| H4: lệch subject / tương tác subject × lớp (theo subject) | 5.8 | 13.5 | 6.5 | 6.4 |
+
+Phân rã phương sai tangent space (η²):
+
+| Bộ | η² subject trước RA | η² subject sau RA cố định | subject / tương tác (trước RA) | lớp / tương tác (trước RA) |
+|---|---|---|---|---|
+| 2a | 0.507 | **0.190** | 42.5 | 0.74 |
+| 2b | 0.571 | 0.038 | 63.0 | 0.45 |
+| Zhou (8–30 Hz) | 0.409 | 0.038 | 37.9 | 3.89 |
+| Zhou (không lọc) | 0.149 | 0.019 | 45.5 | 1.31 |
+
+**Đọc kết quả:**
+- **2a khác các bộ còn lại ở H1** (tương quan giữa kênh và thành phần chung cao nhất rõ rệt) **và ở số điều kiện của tham chiếu** (H3). Nhưng mục 5 cho thấy áp CAR lên 2a chỉ làm Δ_RA của proxy giảm 1–1.5 điểm (không có ý nghĩa), nên đặc trưng H1 **đi kèm** 2a nhưng không phải nguyên nhân chính.
+- **H2 không phân biệt 2a với 2b:** cả hai đều không lọc, năng lượng ngoài 8–30 Hz tương đương (0.61 và 0.64).
+- **H4 bị bác:** dự đoán là 2a có tỉ lệ subject / tương tác cao nhất, nhưng 2b cao hơn (63.0 so với 42.5), Zhou xấp xỉ (37.9).
+- **Điểm khác lạ nhất của 2a: RA khử phần khác biệt giữa subject kém nhất.** Sau RA cố định, η² subject của 2a còn 0.190, trong khi 2b và Zhou chỉ còn khoảng 0.04. Nghĩa là trên 2a, RA chỉ khử được một phần khác biệt giữa subject, còn trên các bộ khác RA khử gần hết. Điều này **không giải thích được** vì sao RA giúp mạng nhiều nhất trên 2a.
+- **Kết luận chung của mục 4 + 5:** không đặc trưng dữ liệu nào trong H1–H4 vừa riêng có ở 2a vừa điều khiển được Δ_RA. Ngoài ra, ở mức proxy RA giúp rõ cả trên Zhou (MDM +15.50) và 2b (RA theo session, MDM +5.95), trong khi mạng chỉ được lợi trên 2a. Như vậy **sự khác biệt nằm ở mức mạng**, không nằm ở dữ liệu: nhiều khả năng các lớp chuẩn hóa của mạng (z-score, AutoDIAL) đã tự làm phần việc của RA trên 2b và Zhou.
 
 ## 7. Câu kết luận dự kiến (điền khi có kết quả)
 

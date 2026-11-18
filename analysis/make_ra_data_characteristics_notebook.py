@@ -29,7 +29,7 @@ INTRO = """# Claim 1 – mục 4: đo đặc trưng dữ liệu (không cần GP
 - `openbmi-dataset-cuong`: OpenBMI có CAR (bắt buộc nếu muốn có OpenBMI).
 - `openbmi-nocar-cuong`: OpenBMI không CAR (tùy chọn, khi đã tạo xong).
 
-Không gắn dataset nào thì notebook vẫn chạy cho 2a, 2b, Zhou.
+**Mặc định chỉ chạy OpenBMI** (`DATASETS` ở đầu ô chạy), vì 2a, 2b, Zhou đã có kết quả; muốn chạy lại hết thì sửa `DATASETS`.
 
 Kết quả lưu ở `/kaggle/working/ra_data_characteristics/` và file zip cùng tên.
 """
@@ -148,12 +148,21 @@ def load_openbmi_views():
     return views
 '''
 
-RUN = r'''views = []
-views += load_moabb_views('BCI IV-2a', SPECS['BCI IV-2a'], {'BCI IV-2a': None})
-views += load_moabb_views('BCI IV-2b', SPECS['BCI IV-2b'], {'BCI IV-2b': None})
-views += load_moabb_views('Zhou2016', SPECS['Zhou2016'],
-                          {'Zhou2016 (pipeline, 8-30 Hz)': (8.0, 30.0), 'Zhou2016 (unfiltered)': None})
-views += load_openbmi_views()
+RUN = r'''# Datasets to run. OpenBMI needs openbmi-dataset-cuong (and openbmi-nocar-cuong for the no-CAR view).
+DATASETS = ['OpenBMI']   # all: ['BCI IV-2a', 'BCI IV-2b', 'Zhou2016', 'OpenBMI']
+
+views = []
+if 'BCI IV-2a' in DATASETS:
+    views += load_moabb_views('BCI IV-2a', SPECS['BCI IV-2a'], {'BCI IV-2a': None})
+if 'BCI IV-2b' in DATASETS:
+    views += load_moabb_views('BCI IV-2b', SPECS['BCI IV-2b'], {'BCI IV-2b': None})
+if 'Zhou2016' in DATASETS:
+    views += load_moabb_views('Zhou2016', SPECS['Zhou2016'],
+                              {'Zhou2016 (pipeline, 8-30 Hz)': (8.0, 30.0), 'Zhou2016 (unfiltered)': None})
+if 'OpenBMI' in DATASETS:
+    views += load_openbmi_views()
+if not views:
+    raise RuntimeError('Nothing to analyse: check DATASETS and, for OpenBMI, the attached caches.')
 
 metrics, decomposition, psd = [], [], []
 for view in views:

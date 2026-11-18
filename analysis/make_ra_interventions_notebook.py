@@ -30,13 +30,13 @@ Không train mạng nào.
 |---|---|---|
 | H1 tham chiếu chung | 2a + CAR; Zhou + CAR; OpenBMI bỏ CAR (nếu gắn cache no-CAR) | Δ_RA của 2a/Zhou giảm; OpenBMI bỏ CAR thì Δ_RA tăng |
 | H2 không lọc tần số | 2a lọc 8–30 Hz; Zhou không lọc | Δ_RA của 2a giảm; Zhou không lọc thì Δ_RA tăng |
-| H3 ít trial để ước lượng tham chiếu | 2a: tham chiếu RA cố định chỉ từ 100 / 36 trial (5 lần rút ngẫu nhiên) | Δ_RA (cố định) của 2a giảm |
+| H3 ít trial để ước lượng tham chiếu | 2a: tham chiếu RA cố định chỉ từ 100 / 36 trial (5 lần rút ngẫu nhiên). OpenBMI: tham chiếu từ 50 trial; giữ 31 / 20 / 10 kênh ngẫu nhiên (nhiều trial/kênh hơn) | 2a, OpenBMI-50 trial: Δ_RA giảm; OpenBMI ít kênh: Δ_RA tăng |
 
 Mục 6: OpenBMI và RA theo session có sẵn trong cùng bảng.
-Chưa làm: OpenBMI chỉ giữ ~20 kênh vận động (cache không lưu tên kênh).
+**Mặc định chỉ chạy OpenBMI** (`DATASETS` ở đầu ô chạy); 2a, 2b, Zhou đã có kết quả. Ô kênh vận động không làm được vì cache không lưu tên kênh; thay bằng tập kênh ngẫu nhiên.
 
 **Thiết lập Kaggle:** Accelerator = **None (CPU)**, Internet = **On**.
-**Add Input** (tùy chọn): `openbmi-dataset-cuong` (OpenBMI có CAR), `openbmi-nocar-cuong` (không CAR).
+**Add Input:** `openbmi-dataset-cuong` (OpenBMI có CAR, **bắt buộc**), `openbmi-nocar-cuong` (không CAR, nên có).
 
 Kết quả lưu ở `/kaggle/working/ra_interventions/` và file zip cùng tên.
 """
@@ -48,7 +48,10 @@ LOADERS = item4.LOADERS.replace(
     "OUT = Path('/kaggle/working/ra_interventions')",
 ) + "\nimport ra_interventions as rai\n"
 
-RUN = r'''results = []
+RUN = r'''# Datasets to run. OpenBMI needs openbmi-dataset-cuong (and openbmi-nocar-cuong for the no-CAR view).
+DATASETS = ['OpenBMI']   # all: ['BCI IV-2a', 'BCI IV-2b', 'Zhou2016', 'OpenBMI']
+
+results = []
 log = lambda msg: print(msg, flush=True)
 
 def run(dataset, intervention, covs, **kwargs):
@@ -58,31 +61,47 @@ def run(dataset, intervention, covs, **kwargs):
     pd.concat(results, ignore_index=True).to_csv(OUT / 'subject_results.csv', index=False)
 
 # ---- BCI IV-2a: H1 (CAR), H2 (8-30 Hz), H3 (fewer reference trials)
-a_raw, a_filt = load_moabb_views('BCI IV-2a', SPECS['BCI IV-2a'], {'raw': None, '8-30': (8.0, 30.0)})
-covs = rai.to_covariances(a_raw, log=log)
-run('BCI IV-2a', 'original', covs)
-run('BCI IV-2a', 'ref 100 trials', covs, ref_trials=100, repeats=5)
-run('BCI IV-2a', 'ref 36 trials', covs, ref_trials=36, repeats=5)
-run('BCI IV-2a', 'CAR', rai.to_covariances(a_raw, rai.common_average_reference, log=log))
-run('BCI IV-2a', '8-30 Hz', rai.to_covariances(a_filt, log=log))
-del a_raw, a_filt, covs
+if 'BCI IV-2a' in DATASETS:
+  a_raw, a_filt = load_moabb_views('BCI IV-2a', SPECS['BCI IV-2a'], {'raw': None, '8-30': (8.0, 30.0)})
+  covs = rai.to_covariances(a_raw, log=log)
+  run('BCI IV-2a', 'original', covs)
+  run('BCI IV-2a', 'ref 100 trials', covs, ref_trials=100, repeats=5)
+  run('BCI IV-2a', 'ref 36 trials', covs, ref_trials=36, repeats=5)
+  run('BCI IV-2a', 'CAR', rai.to_covariances(a_raw, rai.common_average_reference, log=log))
+  run('BCI IV-2a', '8-30 Hz', rai.to_covariances(a_filt, log=log))
+  del a_raw, a_filt, covs
 
 # ---- BCI IV-2b: reference only (bipolar, unfiltered)
-b_raw, = load_moabb_views('BCI IV-2b', SPECS['BCI IV-2b'], {'raw': None})
-run('BCI IV-2b', 'original', rai.to_covariances(b_raw, log=log))
-del b_raw
+if 'BCI IV-2b' in DATASETS:
+  b_raw, = load_moabb_views('BCI IV-2b', SPECS['BCI IV-2b'], {'raw': None})
+  run('BCI IV-2b', 'original', rai.to_covariances(b_raw, log=log))
+  del b_raw
 
 # ---- Zhou2016: pipeline is 8-30 Hz; reverse H2 (unfiltered) and H1 (CAR)
-z_pipe, z_raw = load_moabb_views('Zhou2016', SPECS['Zhou2016'], {'8-30': (8.0, 30.0), 'raw': None})
-run('Zhou2016', 'original (8-30 Hz)', rai.to_covariances(z_pipe, log=log))
-run('Zhou2016', 'unfiltered', rai.to_covariances(z_raw, log=log))
-run('Zhou2016', 'CAR', rai.to_covariances(z_pipe, rai.common_average_reference, log=log))
-del z_pipe, z_raw
+if 'Zhou2016' in DATASETS:
+  z_pipe, z_raw = load_moabb_views('Zhou2016', SPECS['Zhou2016'], {'8-30': (8.0, 30.0), 'raw': None})
+  run('Zhou2016', 'original (8-30 Hz)', rai.to_covariances(z_pipe, log=log))
+  run('Zhou2016', 'unfiltered', rai.to_covariances(z_raw, log=log))
+  run('Zhou2016', 'CAR', rai.to_covariances(z_pipe, rai.common_average_reference, log=log))
+  del z_pipe, z_raw
 
-# ---- OpenBMI (item 6): CAR cache is the pipeline; no-CAR cache reverses H1
-for view in load_openbmi_views():
-    name = 'original (CAR)' if 'no CAR' not in view.name else 'no CAR'
-    run('OpenBMI', name, rai.to_covariances(view, log=log))
+# ---- OpenBMI (item 6): CAR cache is the pipeline; no-CAR cache reverses H1.
+# H3 (reference quality: 62x62 reference from 100 session-1 trials, 1.6 trials/channel):
+#   fewer reference trials (50) should lower the gain; fewer channels (random 31 / 20 / 10,
+#   5 draws, same subset for all subjects) give more trials per channel and should raise it.
+if 'OpenBMI' in DATASETS:
+    for view in load_openbmi_views():
+        car = 'no CAR' not in view.name
+        covs = rai.to_covariances(view, log=log)
+        run('OpenBMI', 'original (CAR)' if car else 'no CAR', covs)
+        if car:
+            run('OpenBMI', 'ref 50 trials', covs, ref_trials=50, repeats=5)
+            for n in (31, 20, 10):
+                started = time.time()
+                results.append(rai.ra_gain_random_channels('OpenBMI', f'{n} random channels', covs, n, log=log))
+                log(f'    ({(time.time() - started) / 60:.1f} min)')
+                pd.concat(results, ignore_index=True).to_csv(OUT / 'subject_results.csv', index=False)
+        del covs
 
 results = pd.concat(results, ignore_index=True)
 results.to_csv(OUT / 'subject_results.csv', index=False)
