@@ -170,12 +170,7 @@ decomposition.to_csv(OUT / 'variance_decomposition.csv', index=False)
 psd.to_csv(OUT / 'relative_psd.csv', index=False)
 '''
 
-SUMMARY = r'''# RA gain of the network (tab:ablation, fixed RA / per-session RA) for reference.
-RA_GAIN = {'BCI IV-2a': '+5.83 / +7.45', 'BCI IV-2b': '+0.51 / +0.52',
-           'Zhou2016 (pipeline, 8-30 Hz)': '+0.33 / +1.33', 'Zhou2016 (unfiltered)': 'not run',
-           'OpenBMI (CAR, 4-38 Hz)': '-2.89 / +0.50', 'OpenBMI (no CAR, 4-38 Hz)': 'running'}
-summary = rdc.summarise(metrics)
-summary.loc['network RA gain (fixed / per-session)'] = [RA_GAIN.get(v, '') for v in summary.columns]
+SUMMARY = r'''summary = rdc.summarise(metrics)
 summary.to_csv(OUT / 'summary.csv')
 pd.set_option('display.max_colwidth', 40, 'display.width', 250)
 display(summary)
