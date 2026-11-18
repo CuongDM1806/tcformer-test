@@ -90,6 +90,12 @@ variants:
     adaptation_kwargs: {feature_alignment: none, target_im_weight: 0.0, adversarial_weight: 0.0,
                         mmd_weight: 0.0, temporal_mmd_weight: 0.0, im_tta_steps: 0,
                         recalibrate_target_statistics: false}
+  bandpass_8_30:
+    description: >-
+      Claim 1, item 7: BCI IV-2a band-passed to 8-30 Hz before RA (the band of Zhou2016);
+      run with and without no_ra to measure the RA gain on filtered data
+    datasets_only: [bcic2a]
+    preprocessing: {low_cut: 8.0, high_cut: 30.0}
   no_car:
     description: OpenBMI without the common average reference (needs a cache built without CAR)
     datasets_only: [openbmi]
