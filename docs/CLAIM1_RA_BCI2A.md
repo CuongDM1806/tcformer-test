@@ -127,15 +127,14 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 | 9 | **2a source-only, hoisted scan, không RA, có số theo subject** (thay số 64.35 sequential trong bài; ghép với RA on 63.31 hoisted để so sạch) | Có (1 run × 9 subject) | ⏳ Notebook: nhánh `feature/full-mamba-source-only`, `kaggle_train_full_mamba_source_only_bcic2a_loso.ipynb`. Hiện chỉ có trung bình 62.27, không có số theo subject |
 | 10 | **Bảng RA × DA:** source-only không RA / RA cố định / RA theo session trên 2b, Zhou, OpenBMI (ghép với `ssm_dan` và `ssm_dan-no_ra` để có 2×2) | Có (3 run × mỗi bộ) | ⏳ Notebook đã push: nhánh `feature/ssm-dan-source-only-ra`, `notebooks/source_only_ra_{bcic2b,zhou2016,openbmi}.ipynb` (variant `with_ra`) |
 | 11 | Ô "chỉ DA, không IM-TTA" của 2a: đọc `no_tta_acc` từ output của run `ssm_dan-no_ra` đã có | Không | ❌ Cần output cũ của run đó |
-| 12 | **Giả thuyết phép quay (proxy):** sau RA, đo độ lệch quay giữa subject theo số kênh (3 / 8 / 14 / 22); thêm căn chỉnh quay kiểu Procrustes (bước cuối của RPA, nhãn giả cho đích) sau RA, xem Δ_RA của MDM/TS-LR có tăng không | Không | ❌ Chưa có notebook |
-| 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (1–2 run) | ❌ Chỉ làm nếu mục 12 ủng hộ |
-| 14 | *(Tùy chọn)* Thêm seed cho các run chính (full, no_ra, source-only ± RA) | Có | ❌ |
+| 12 | **Giả thuyết phép quay (proxy):** sau RA, đo độ lệch quay giữa subject theo số kênh (3 / 8 / 14 / 22); thêm căn chỉnh quay kiểu Procrustes (bước cuối của RPA, nhãn giả cho đích) sau RA, xem Δ_RA của MDM/TS-LR có tăng không | Không | ⏳ Notebook: `analysis/ra_rotation.ipynb` (2a 3/8/14/22 kênh, 2b, Zhou; code `analysis/ra_rotation.py`, `ra_rotation_proxy.py`). Đã thử trên dữ liệu giả lập: khôi phục đúng phép quay |
+| 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (3 run: không RA / RA / RA + quay) | ⏳ Notebook: nhánh `feature/ssm-dan-ra-rotation`, `notebooks/ra_rotation_bcic2a.ipynb` (variant `ra_rotation`). Run không RA trong đó cũng là mục 9 |
 
 **Thứ tự ưu tiên (cập nhật 2026-11-18):**
 1. **9:** vừa sửa số 2a trong bài vừa cho phép so source-only ± RA sạch.
 2. **4–5 OpenBMI** (CPU) và **10** (GPU): chạy song song.
 3. **12:** rẻ, kiểm tra trực tiếp giả thuyết phép quay; **13** chỉ khi 12 ủng hộ.
-4. **11, 8, 14:** khi cần chặn câu hỏi của reviewer.
+4. **11, 8:** khi cần chặn câu hỏi của reviewer.
 
 ## 6a. Giả thuyết làm việc: RA khử phép trộn kênh nhưng để lại phép quay
 
