@@ -128,8 +128,8 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 | 10 | **Bảng RA × DA:** source-only không RA / RA cố định / RA theo session trên 2b, Zhou, OpenBMI (ghép với `ssm_dan` và `ssm_dan-no_ra` để có 2×2) | Có (3 run × mỗi bộ) | ⏳ Notebook đã push: nhánh `feature/ssm-dan-source-only-ra`, `notebooks/source_only_ra_{bcic2b,zhou2016,openbmi}.ipynb` (variant `with_ra`) |
 | 11 | Ô "chỉ DA, không IM-TTA" của 2a: đọc `no_tta_acc` từ output của run `ssm_dan-no_ra` đã có | Không | ❌ Cần output cũ của run đó |
 | 12 | **Giả thuyết phép quay (proxy):** sau RA, đo độ lệch quay giữa subject theo số kênh (3 / 8 / 14 / 22); thêm căn chỉnh quay kiểu Procrustes (bước cuối của RPA, nhãn giả cho đích) sau RA, xem Δ_RA của MDM/TS-LR có tăng không | Không | ✅ Xong 2026-11-19 (mục 6d): rotation_share tăng theo số kênh; căn chỉnh quay không nhãn làm giảm accuracy trên 2a |
-| 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (3 run: không RA / RA / RA + quay) | ✅ Đã chạy (mục 6d): RA + quay ≈ 50 < RA ≈ 63 < ... ; chờ `test_acc` theo subject. Run không RA cũng là mục 9 |
-| 15 | **Phép quay oracle (proxy):** fit phép quay của đích bằng nhãn thật của session huấn luyện (chỉ để chẩn đoán, không phải phương pháp) rồi áp cho session đánh giá. Nếu lợi ích lớn và tăng theo số kênh thì phép quay là cơ chế, thất bại ở mục 12–13 là do nhãn giả | Không | ❌ |
+| 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (3 run: không RA / RA / RA + quay) | ✅ Đã chạy (mục 6d): RA + quay ≈ 50, RA 63.31, không RA 62.27 (RA so với không RA: +1.04, 6/9 subject, p = 0.73) |
+| 15 | **Phép quay oracle (proxy):** fit phép quay của đích bằng nhãn thật của session huấn luyện (chỉ để chẩn đoán, không phải phương pháp) rồi áp cho session đánh giá. Nếu lợi ích lớn và tăng theo số kênh thì phép quay là cơ chế, thất bại ở mục 12–13 là do nhãn giả | Không | ⏳ Notebook: `analysis/ra_rotation_oracle.ipynb` (đã thử trên dữ liệu giả lập) |
 
 **Thứ tự ưu tiên (cập nhật 2026-11-18):**
 1. **9:** vừa sửa số 2a trong bài vừa cho phép so source-only ± RA sạch.
