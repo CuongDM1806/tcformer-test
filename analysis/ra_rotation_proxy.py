@@ -28,6 +28,9 @@ import ra_interventions as rai
 import ra_rotation as rr
 
 SETTINGS = ("none", "frozen", "frozen+rot", "per_session", "per_session+rot")
+# Diagnostic only (item 15): the target rotation is fitted with the TRUE labels of its fit sessions
+# (session T on BCI IV-2a), then applied to its later sessions. Not a valid method.
+ORACLE_SETTINGS = ("frozen+oracle", "per_session+oracle")
 
 
 def tangent_from_logs(logs: np.ndarray) -> np.ndarray:
@@ -51,7 +54,9 @@ def aligned_logs(sc: rai.SubjectCovs, base: str):
 
 
 def loso(subjects: list[rai.SubjectCovs], setting: str) -> pd.DataFrame:
-    base, rotate = setting.replace("+rot", ""), setting.endswith("+rot")
+    oracle = setting.endswith("+oracle")
+    base = setting.replace("+rot", "").replace("+oracle", "")
+    rotate = setting.endswith("+rot") or oracle
     parts = {sc.subject: aligned_logs(sc, base) for sc in subjects}
     classes = np.unique(np.concatenate([p[1] for p in parts.values()]))
     rows = []
@@ -59,11 +64,16 @@ def loso(subjects: list[rai.SubjectCovs], setting: str) -> pd.DataFrame:
         sources = [s for s in parts if s != target]
         src_logs = [parts[s][0] for s in sources]
         src_y = [parts[s][1] for s in sources]
-        tgt_fit, _, tgt_test, y_test = parts[target]
+        tgt_fit, y_fit, tgt_test, y_test = parts[target]
         if rotate:
             template, rotations = rr.source_template(src_logs, src_y, classes)
             src_logs = [rr.rotate_logs(L, u) for L, u in zip(src_logs, rotations)]
-            tgt_test = rr.rotate_logs(tgt_test, rr.target_rotation(tgt_fit, template))
+            if oracle:
+                means = rr.class_means(tgt_fit, y_fit, classes)
+                u_target = rr.fit_rotation([(means[k], template[k], 1.0) for k in means])
+            else:
+                u_target = rr.target_rotation(tgt_fit, template)
+            tgt_test = rr.rotate_logs(tgt_test, u_target)
         x_tr = tangent_from_logs(np.concatenate(src_logs))
         y_tr = np.concatenate(src_y)
         x_te = tangent_from_logs(tgt_test)
@@ -73,15 +83,18 @@ def loso(subjects: list[rai.SubjectCovs], setting: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def rotation_table(dataset: str, view: str, subjects: list[rai.SubjectCovs], log=print) -> pd.DataFrame:
+def rotation_table(dataset: str, view: str, subjects: list[rai.SubjectCovs], log=print,
+                   oracle: bool = False) -> pd.DataFrame:
     table = None
-    for setting in SETTINGS:
+    for setting in SETTINGS + (ORACLE_SETTINGS if oracle else ()):
         t = loso(subjects, setting).rename(columns={"acc": f"acc_{setting}"})
         table = t if table is None else table.merge(t, on=["subject", "classifier"])
     for base in ("frozen", "per_session"):
         table[f"gain_{base}"] = table[f"acc_{base}"] - table["acc_none"]
         table[f"gain_{base}+rot"] = table[f"acc_{base}+rot"] - table["acc_none"]
         table[f"extra_rot_{base}"] = table[f"acc_{base}+rot"] - table[f"acc_{base}"]
+        if f"acc_{base}+oracle" in table:
+            table[f"extra_oracle_{base}"] = table[f"acc_{base}+oracle"] - table[f"acc_{base}"]
     table.insert(0, "n_channels", subjects[0].sessions[0][0].shape[1])
     table.insert(0, "view", view)
     table.insert(0, "dataset", dataset)
@@ -89,7 +102,9 @@ def rotation_table(dataset: str, view: str, subjects: list[rai.SubjectCovs], log
         log(f"  {dataset} | {view:<18} | {name:<5}: none {g.acc_none.mean():5.2f} | "
             f"frozen {g['acc_frozen'].mean():5.2f} +rot {g['acc_frozen+rot'].mean():5.2f} "
             f"({g.extra_rot_frozen.mean():+5.2f}) | per-session {g['acc_per_session'].mean():5.2f} "
-            f"+rot {g['acc_per_session+rot'].mean():5.2f} ({g.extra_rot_per_session.mean():+5.2f})")
+            f"+rot {g['acc_per_session+rot'].mean():5.2f} ({g.extra_rot_per_session.mean():+5.2f})"
+            + (f" | oracle: frozen {g.extra_oracle_frozen.mean():+5.2f}, per-session "
+               f"{g.extra_oracle_per_session.mean():+5.2f}" if "extra_oracle_frozen" in g else ""))
     return table
 
 
@@ -121,12 +136,16 @@ def summarise(results: pd.DataFrame) -> pd.DataFrame:
         # Random channel subsets: average the draws per subject first.
         g = g.groupby("subject").mean(numeric_only=True)
         row = dict(zip(keys, key), n=len(g))
-        for setting in SETTINGS:
-            row[f"acc_{setting}"] = g[f"acc_{setting}"].mean()
+        for setting in SETTINGS + ORACLE_SETTINGS:
+            if f"acc_{setting}" in g:
+                row[f"acc_{setting}"] = g[f"acc_{setting}"].mean()
         for base in ("frozen", "per_session"):
             row[f"gain_{base}"] = g[f"gain_{base}"].mean()
             row[f"gain_{base}+rot"] = g[f"gain_{base}+rot"].mean()
             row[f"extra_rot_{base}"] = g[f"extra_rot_{base}"].mean()
             row[f"p_extra_rot_{base}"] = _p(g[f"extra_rot_{base}"])
+            if f"extra_oracle_{base}" in g:
+                row[f"extra_oracle_{base}"] = g[f"extra_oracle_{base}"].mean()
+                row[f"p_extra_oracle_{base}"] = _p(g[f"extra_oracle_{base}"])
         rows.append(row)
     return pd.DataFrame(rows)

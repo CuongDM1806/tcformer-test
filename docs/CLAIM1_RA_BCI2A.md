@@ -127,8 +127,9 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 | 9 | **2a source-only, hoisted scan, không RA, có số theo subject** (thay số 64.35 sequential trong bài; ghép với RA on 63.31 hoisted để so sạch) | Có (1 run × 9 subject) | ⏳ Notebook: nhánh `feature/full-mamba-source-only`, `kaggle_train_full_mamba_source_only_bcic2a_loso.ipynb`. Hiện chỉ có trung bình 62.27, không có số theo subject |
 | 10 | **Bảng RA × DA:** source-only không RA / RA cố định / RA theo session trên 2b, Zhou, OpenBMI (ghép với `ssm_dan` và `ssm_dan-no_ra` để có 2×2) | Có (3 run × mỗi bộ) | ⏳ Notebook đã push: nhánh `feature/ssm-dan-source-only-ra`, `notebooks/source_only_ra_{bcic2b,zhou2016,openbmi}.ipynb` (variant `with_ra`) |
 | 11 | Ô "chỉ DA, không IM-TTA" của 2a: đọc `no_tta_acc` từ output của run `ssm_dan-no_ra` đã có | Không | ❌ Cần output cũ của run đó |
-| 12 | **Giả thuyết phép quay (proxy):** sau RA, đo độ lệch quay giữa subject theo số kênh (3 / 8 / 14 / 22); thêm căn chỉnh quay kiểu Procrustes (bước cuối của RPA, nhãn giả cho đích) sau RA, xem Δ_RA của MDM/TS-LR có tăng không | Không | ⏳ Notebook: `analysis/ra_rotation.ipynb` (2a 3/8/14/22 kênh, 2b, Zhou; code `analysis/ra_rotation.py`, `ra_rotation_proxy.py`). Đã thử trên dữ liệu giả lập: khôi phục đúng phép quay |
-| 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (3 run: không RA / RA / RA + quay) | ⏳ Notebook: nhánh `feature/ssm-dan-ra-rotation`, `notebooks/ra_rotation_bcic2a.ipynb` (variant `ra_rotation`). Run không RA trong đó cũng là mục 9 |
+| 12 | **Giả thuyết phép quay (proxy):** sau RA, đo độ lệch quay giữa subject theo số kênh (3 / 8 / 14 / 22); thêm căn chỉnh quay kiểu Procrustes (bước cuối của RPA, nhãn giả cho đích) sau RA, xem Δ_RA của MDM/TS-LR có tăng không | Không | ✅ Xong 2026-11-19 (mục 6d): rotation_share tăng theo số kênh; căn chỉnh quay không nhãn làm giảm accuracy trên 2a |
+| 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (3 run: không RA / RA / RA + quay) | ✅ Đã chạy (mục 6d): RA + quay ≈ 50 < RA ≈ 63 < ... ; chờ `test_acc` theo subject. Run không RA cũng là mục 9 |
+| 15 | **Phép quay oracle (proxy):** fit phép quay của đích bằng nhãn thật của session huấn luyện (chỉ để chẩn đoán, không phải phương pháp) rồi áp cho session đánh giá. Nếu lợi ích lớn và tăng theo số kênh thì phép quay là cơ chế, thất bại ở mục 12–13 là do nhãn giả | Không | ❌ |
 
 **Thứ tự ưu tiên (cập nhật 2026-11-18):**
 1. **9:** vừa sửa số 2a trong bài vừa cho phép so source-only ± RA sạch.
@@ -201,6 +202,40 @@ Phân rã phương sai tangent space (η²):
 - **H4 bị bác:** dự đoán là 2a có tỉ lệ subject / tương tác cao nhất, nhưng 2b cao hơn (63.0 so với 42.5), Zhou xấp xỉ (37.9).
 - **Điểm khác lạ nhất của 2a: RA khử phần khác biệt giữa subject kém nhất.** Sau RA cố định, η² subject của 2a còn 0.190, trong khi 2b và Zhou chỉ còn khoảng 0.04. Nghĩa là trên 2a, RA chỉ khử được một phần khác biệt giữa subject, còn trên các bộ khác RA khử gần hết. Điều này **không giải thích được** vì sao RA giúp mạng nhiều nhất trên 2a.
 - **Kết luận chung của mục 4 + 5:** không đặc trưng dữ liệu nào trong H1–H4 vừa riêng có ở 2a vừa điều khiển được Δ_RA. Ngoài ra, ở mức proxy RA giúp rõ cả trên Zhou (MDM +15.50) và 2b (RA theo session, MDM +5.95), trong khi mạng chỉ được lợi trên 2a. Như vậy **sự khác biệt nằm ở mức mạng**, không nằm ở dữ liệu: nhiều khả năng các lớp chuẩn hóa của mạng (z-score, AutoDIAL) đã tự làm phần việc của RA trên 2b và Zhou.
+
+## 6d. Kết quả mục 12 và 13 (2026-11-19)
+
+**Mục 12 (proxy, `ra_rotation.ipynb`).** `rotation_share` = phần lệch tâm lớp giữa subject sau RA cố định mà một phép quay khử được (đo bằng nhãn của mọi subject, chỉ để mô tả dữ liệu):
+
+| Bộ / tập kênh | Số kênh | rotation_share |
+|---|---|---|
+| 2a C3 Cz C4 | 3 | 0.12 |
+| 2a 8 kênh ngẫu nhiên | 8 | 0.34 |
+| 2a 14 kênh ngẫu nhiên | 14 | 0.42 |
+| 2a đủ | 22 | **0.52** |
+| 2b | 3 | 0.30 |
+| Zhou | 14 | 0.50 |
+
+Lợi ích thêm của căn chỉnh quay **không nhãn** (`extra_rot` = RA + quay − RA, RA cố định; MDM / TS-LR):
+
+| 2a 3 kênh | 2a 8 kênh | 2a 14 kênh | 2a 22 kênh | 2b | Zhou |
+|---|---|---|---|---|---|
+| +0.62 / −1.47 | −2.46 / **−4.32** (p=0.01) | −2.07 / −4.00 | −3.12 / −5.56 | +4.74 / +3.86 (n.s.) | −6.17 / −4.67 (n = 4) |
+
+**Mục 13 (mạng, source-only 2a 22 kênh, `ra_rotation_bcic2a.ipynb`).** Chỉ có hình ma trận nhầm lẫn; trung bình đường chéo (độ nhạy trung bình, ≈ accuracy vì 2a cân bằng lớp) và macro-F1:
+
+| Run | Trung bình đường chéo | macro-F1 |
+|---|---|---|
+| không RA (`source_only`, hoisted) | ≈ 61.3 | 58.72 |
+| RA (`source_only-with_ra`) | ≈ 63.3 | 61.43 |
+| RA + quay (`source_only-with_ra-ra_rotation`) | ≈ 50.0 | 47.91 |
+
+Cần `test_acc` theo subject từ output của run để có số chính xác và kiểm định.
+
+**Đọc kết quả:**
+- **Phần 1 của giả thuyết được ủng hộ:** sau RA vẫn còn một phép quay giữa các subject, và phần lệch do quay tăng đều theo số kênh của 2a (0.12 → 0.52).
+- **Phần 2 thất bại ở bước ước lượng:** căn chỉnh quay *không nhãn* làm giảm độ chính xác, giảm nhiều hơn khi nhiều kênh, ở cả proxy và mạng (−13 điểm). Lý do: phép quay của đích được fit theo nhãn giả, mà proxy chỉ đúng ~40% trên 2a 4 lớp, nên phép quay xoay theo nhãn sai. Trên 2b (2 lớp, nhãn giả tốt hơn) căn chỉnh quay lại giúp (+4–5, chưa có ý nghĩa).
+- **Chưa phân biệt được:** "phép quay không phải nguyên nhân" với "phép quay là nguyên nhân nhưng không ước lượng được khi thiếu nhãn". Cần mục 15 (phép quay oracle).
 
 ## 7. Câu kết luận dự kiến (điền khi có kết quả)
 
