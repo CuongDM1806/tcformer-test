@@ -125,7 +125,7 @@ Bằng chứng gợi ý đã có: trên 2a, RA đầy đủ tốt hơn RA chỉ 
 | 7 | ~~Xác nhận bằng mạng: SSM-DAN trên 2a lọc 8–30 Hz, có RA và không RA~~ | Có | ⏸ **Hoãn**: mục 5 cho thấy lọc 8–30 Hz không làm Δ_RA giảm. Notebook vẫn có: nhánh `feature/ssm-dan-claim1-bandpass`, `notebooks/claim1_bandpass_bcic2a.ipynb` |
 | 8 | *(Nên có)* H5: OpenBMI với 8 subject source, có RA và không RA | Có | ❌ |
 | 9 | **2a source-only, hoisted scan, không RA, có số theo subject** (thay số 64.35 sequential trong bài; ghép với RA on 63.31 hoisted để so sạch) | Có (1 run × 9 subject) | ⏳ Notebook: nhánh `feature/full-mamba-source-only`, `kaggle_train_full_mamba_source_only_bcic2a_loso.ipynb`. Hiện chỉ có trung bình 62.27, không có số theo subject |
-| 10 | **Bảng RA × DA:** source-only không RA / RA cố định / RA theo session trên 2b, Zhou, OpenBMI (ghép với `ssm_dan` và `ssm_dan-no_ra` để có 2×2) | Có (3 run × mỗi bộ) | ⚠ 2b: có `no_da-no_ra` và `no_ra` (mục 6e), thiếu `no_da` cùng đợt; Zhou, OpenBMI chưa có. Notebook: nhánh `feature/ssm-dan-source-only-ra`, `notebooks/source_only_ra_{bcic2b,zhou2016,openbmi}.ipynb` (variant `with_ra`) |
+| 10 | **Bảng RA × DA:** source-only không RA / RA cố định / RA theo session trên 2b, Zhou, OpenBMI (ghép với `ssm_dan` và `ssm_dan-no_ra` để có 2×2) | Có (3 run × mỗi bộ) | ⚠ 2a, 2b: có `no_da-no_ra` và `no_ra` (mục 6e), thiếu `no_da` cùng đợt; Zhou, OpenBMI chưa có. Notebook: nhánh `feature/ssm-dan-source-only-ra`, `notebooks/source_only_ra_{bcic2b,zhou2016,openbmi}.ipynb` (variant `with_ra`) |
 | 11 | Ô "chỉ DA, không IM-TTA" của 2a: đọc `no_tta_acc` từ output của run `ssm_dan-no_ra` đã có | Không | ❌ Cần output cũ của run đó |
 | 12 | **Giả thuyết phép quay (proxy):** sau RA, đo độ lệch quay giữa subject theo số kênh (3 / 8 / 14 / 22); thêm căn chỉnh quay kiểu Procrustes (bước cuối của RPA, nhãn giả cho đích) sau RA, xem Δ_RA của MDM/TS-LR có tăng không | Không | ✅ Xong 2026-11-19 (mục 6d): rotation_share tăng theo số kênh; căn chỉnh quay không nhãn làm giảm accuracy trên 2a |
 | 13 | **Giả thuyết phép quay (mạng):** source-only 2a 22 kênh với RA + căn chỉnh quay, không DA | Có (3 run: không RA / RA / RA + quay) | ✅ Đã chạy (mục 6d): RA + quay ≈ 50, RA 63.31, không RA 62.27 (RA so với không RA: +1.04, 6/9 subject, p = 0.73) |
@@ -262,6 +262,28 @@ Bảng 2×2 trên 2b (accuracy %):
 - **Δ_RA khi không DA** ≈ 83.35 − 80.01 = **+3.34**. **Δ_RA khi có DA** = +0.51 (bài) hoặc +0.99 (với run mới). Hai số đầu khác đợt chạy, chỉ dùng tham khảo.
 - **Đọc sơ bộ:** trên 2b, RA và DA **thay thế nhau**. Bỏ một trong hai chỉ mất khoảng 0.5–1 điểm, bỏ cả hai mất khoảng 3–4 điểm. Điều này khớp với kết luận ở mục 6c: trên 2b, mạng (DA/AutoDIAL) đã tự làm phần việc của RA, nên Δ_RA của mạng đầy đủ gần 0.
 - **Còn thiếu:** `no_da` (có RA) chạy cùng đợt để có Δ_RA sạch khi không DA; bảng tương tự cho Zhou và OpenBMI.
+
+### BCI IV-2a (9 subject)
+
+| Run | S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9 | Acc | κ | ITR (bit/phút) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `ssm_dan-no_da-no_ra` | 67.01 | 46.53 | 85.76 | 52.43 | 64.58 | 39.58 | 68.40 | 67.71 | 66.32 | 62.04 ± 13.01 | 0.494 ± 0.173 | 7.42 ± 4.62 |
+| `ssm_dan-no_ra` | 68.75 | 55.90 | 90.97 | 64.58 | 51.39 | 57.99 | 76.74 | 78.47 | 54.86 | 66.63 ± 12.49 | 0.555 ± 0.167 | 9.12 ± 5.51 |
+| Hiệu (DA khi không RA) | +1.74 | +9.37 | +5.21 | +12.15 | −13.19 | +18.41 | +8.34 | +10.76 | −11.46 | **+4.59** | | |
+
+DA khi không có RA: +4.59 điểm, 7/9 subject tăng, Wilcoxon p = 0.36 (n.s.; S5 và S9 giảm mạnh, khoảng −12 điểm).
+
+Bảng 2×2 trên 2a (accuracy %):
+
+| | Có DA | Không DA (giữ IM-TTA) |
+|---|---|---|
+| **Có RA (cố định)** | 76.12 (bài) | 71.37 (bài) |
+| **Không RA** | 66.63 (run mới) / 70.29 (bài) | 62.04 (run mới) |
+
+- **Lệch lớn:** `ssm_dan-no_ra` lần này ra 66.63, thấp hơn số 70.29 trong bài **3.66 điểm**. Mức lệch này lớn hơn nhiều so với 2b (0.48). Cần kiểm tra run mới dùng cách quét Mamba nào, sequential hay hoisted (xem ghi chú về khả năng tái lập theo scan mode). Nếu run mới là hoisted, các ô trong bài (sequential) và run mới không so trực tiếp được.
+- **Δ_RA khi không DA** ≈ 71.37 − 62.04 = **+9.33** (khác đợt chạy). **Δ_RA khi có DA** = +5.83 (bài) hoặc +9.49 (76.12 − 66.63, khác đợt chạy).
+- **Đọc sơ bộ:** khác 2b, trên 2a RA và DA **cộng dồn**. Bỏ RA mất nhiều điểm dù có DA hay không, và DA vẫn giúp khi không có RA. Vậy trên 2a, DA không thay được RA. Điều này khớp với việc 2a là bộ duy nhất có Δ_RA lớn.
+- **Chưa khớp:** mục 13 có 2a source-only (không DA, không IM-TTA) với RA 63.31 và không RA 62.27, chỉ +1.04. Còn ở đây, nếu ghép ô `no_da` của bài thì Δ_RA khoảng +9. Khác biệt có thể do IM-TTA (có ở `no_da`, không có ở source-only) hoặc do khác scan mode. Cần run `no_da` (có RA) cùng đợt để chốt.
 
 ## 7. Câu kết luận dự kiến (điền khi có kết quả)
 
