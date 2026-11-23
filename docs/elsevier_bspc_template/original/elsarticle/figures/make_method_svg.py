@@ -16,6 +16,37 @@ from PIL import ImageFont
 
 FONT = 'Arial'
 FONT_FILES = {False: 'C:/Windows/Fonts/arial.ttf', True: 'C:/Windows/Fonts/arialbd.ttf'}
+if not Path(FONT_FILES[False]).exists():         # Linux: Liberation Sans has Arial's metrics
+    FONT_FILES = {False: '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+                  True: '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'}
+
+# Vietnamese labels (python make_method_svg.py OUT.svg --vi); layer names stay in English.
+VI = '--vi' in sys.argv
+VI_TEXT = {
+    'Aligned EEG  X̃': 'EEG đã căn chỉnh  X̃', 'Group attention': 'Chú ý theo nhóm',
+    'Selective scan': 'Quét chọn lọc', '⊙ SiLU gate': '⊙ Cổng SiLU',
+    'Batch moments: source, target': 'Mô-men lô: nguồn, đích',
+    'Mix: α · target + (1 − α) · source': 'Trộn: α · đích + (1 − α) · nguồn',
+    'Standardize per domain': 'Chuẩn hóa theo miền', 'Shared affine  w, b': 'Affine dùng chung  w, b',
+    '× s  (learned scale)': '× s  (hệ số học được)', 'Classifier': 'Bộ phân loại',
+    'Grouped 1×1 conv (4 × K)': 'Grouped conv 1×1 (4 × K)', 'Weighted group sum': 'Tổng có trọng số',
+    'Discriminator': 'Phân biệt miền', 'Riemannian alignment': 'Căn chỉnh Riemann',
+    'Backbone (a)': 'Xương sống (a)', 'Adaptation head (b)': 'Đầu thích ứng (b)',
+    'Stage 1 · training': 'Giai đoạn 1 · huấn luyện', 'Stage 2 · IM-TTA': 'Giai đoạn 2 · IM-TTA',
+    'all weights trained': 'học mọi trọng số', 'all weights and α': 'mọi trọng số và α',
+    'only BN γ, β updated': 'chỉ cập nhật BN γ, β', 'AutoDIAL stats re-estimated': 'ước lượng lại AutoDIAL',
+    'update': 'cập nhật', '×5 steps': '×5 bước', 'weights': 'trọng số',
+    'source': 'nguồn', 'target': 'đích', 'loss': 'mất mát', 'TTA update': 'cập nhật TTA',
+    'Two-stage adaptation': 'Thích ứng hai giai đoạn', '(a) SSM backbone': '(a) Mạng xương sống SSM',
+    '(b) Adaptation head': '(b) Đầu thích ứng', 'Stage-1 objective': 'Hàm mục tiêu Giai đoạn 1',
+    '64-dim feature': 'đặc trưng 64 chiều', '64 = 4 groups': '64 = 4 nhóm', '× 16 channels': '× 16 kênh',
+}
+VI_SIDE = {
+    ('Multi-scale', 'temporal'): ['Thời gian', 'đa thang đo'], ('Spatial', 'filtering'): ['Lọc', 'không gian'],
+    ('Grouped', 'temporal'): ['Thời gian', 'theo nhóm'], ('Selective', 'SSM', 'encoder'): ['Bộ mã hóa', 'SSM', 'chọn lọc'],
+    ('Temporal', 'head'): ['Đầu', 'thời gian'], ('AutoDIAL', 'normalization'): ['Chuẩn hóa', 'AutoDIAL'],
+    ('Residual', 'aligner'): ['Bộ căn chỉnh', 'dư'],
+}
 _fonts = {}
 
 INK, MUTE = '#1F2933', '#6B7684'
@@ -74,6 +105,8 @@ def segments(line):
 
 def text(x, y, line, size=12, bold=False, color=INK, anchor='middle', italic=False, rotate=False):
     """Rich text; rotate=True writes it bottom-to-top centred on (x, y)."""
+    if VI:
+        line = VI_TEXT.get(line, line)
     runs = segments(line)
     small = round(size * 0.68, 1)
     widths = [text_width(t, small if k in ('sub', 'sup') else size, bold) + (1.0 if k == 'L' else 0.0)
@@ -188,6 +221,8 @@ def shape_label(x, y, label, anchor='start'):
 
 
 def side_label(x_right, y_mid, lines, color):
+    if VI:
+        lines = VI_SIDE.get(tuple(lines), lines)
     n = len(lines)
     for i, line in enumerate(lines):
         text(x_right, y_mid + 8 + (i - (n - 1) / 2) * 27, line, FS_NAME, True, color, anchor='end')
@@ -522,13 +557,14 @@ OBJ_H = 160
 OBJ_TOP = max(tap_y - OBJ_H / 2, B_BOTTOM + 70)
 TOP_BOTTOM = max(A_BOTTOM, OBJ_TOP + OBJ_H)
 obj_mid = OBJ_TOP + OBJ_H / 2
+OBJ_X0, OBJ_X1 = PB[0] + 44, PB[1] - 14       # objective box inset from the panel edges
 for xx in (MMD_X, CE_X, IM_X, ADV_X):
     big_arrow([(xx, LOSS_Y + 23), (xx, OBJ_TOP - 3)], COL['loss'][0], dashed=True)
 if abs(obj_mid - tap_y) < 1:
-    tmmd_route = [(TMMD_X + 64, tap_y), (PB[0] - 3, tap_y)]
+    tmmd_route = [(TMMD_X + 64, tap_y), (OBJ_X0 - 8, tap_y)]
 else:
     gx = (PA[1] + PB[0]) / 2
-    tmmd_route = [(TMMD_X + 64, tap_y), (gx, tap_y), (gx, obj_mid), (PB[0] - 3, obj_mid)]
+    tmmd_route = [(TMMD_X + 64, tap_y), (gx, tap_y), (gx, obj_mid), (OBJ_X0 - 8, obj_mid)]
 big_arrow(tmmd_route, COL['loss'][0], dashed=True)
 
 # ============================ (c) two stages, horizontal ============================
@@ -632,6 +668,8 @@ frame(CX0, C_TOP, CX1, C_BOTTOM, PANEL_TINT['panel_c'], 'Two-stage adaptation', 
 for top_, bottom_, kind, tag in ((S1_TOP, S1_BOTTOM, 'loss', 'Stage 1 · training'),
                                  (S2_TOP, S2_BOTTOM, 'tta', 'Stage 2 · IM-TTA')):
     stroke = COL[kind][0]
+    if VI:
+        tag = VI_TEXT.get(tag, tag)
     rect(40, top_, CX1 - CX0 - 48, bottom_ - top_, stroke, stroke, rx=18, width=2.2, dashed=True, opacity=0.05)
     tw = text_width(tag, 22, True) + 28
     rect(64, top_ - 17, tw, 34, stroke, '#FFFFFF', rx=17, width=2.2)
@@ -655,11 +693,11 @@ out.clear()
 frame(PA[0], TOP, PA[1], TOP_BOTTOM, PANEL_TINT['panel_a'], '(a) SSM backbone', 'panel_a')
 frame(PB[0], TOP, PB[1], B_BOTTOM, PANEL_TINT['panel_b'], '(b) Adaptation head', 'panel_b')
 group('stage1_objective')
-rect(PB[0], OBJ_TOP, PB[1] - PB[0], OBJ_H, '#1A1A1A', '#FBF0EF', rx=26, width=3.2, dashed=True)
-text(PB[0] + 26, OBJ_TOP + 42, 'Stage-1 objective', 28, True, COL['loss'][0], anchor='start')
-text((PB[0] + PB[1]) / 2, OBJ_TOP + 96,
+rect(OBJ_X0, OBJ_TOP, OBJ_X1 - OBJ_X0, OBJ_H, '#B7791F', '#FFF4DC', rx=26, width=3.2, dashed=True)
+text(OBJ_X0 + 26, OBJ_TOP + 42, 'Stage-1 objective', 28, True, COL['loss'][0], anchor='start')
+text((OBJ_X0 + OBJ_X1) / 2, OBJ_TOP + 96,
      'ℒ = ℒ_{CE} + λ_{IM}ℒ_{IM} + λ_{adv}ℒ_{adv} + λ_{MMD}ℒ_{MMD} + λ_{t}ℒ_{tMMD}', 26, True, INK)
-text((PB[0] + PB[1]) / 2, OBJ_TOP + 136, 'λ_{IM} = 0.1,  λ_{adv} = 1,  λ_{MMD} = 0.5,  λ_{t} = 0.1', 21, True, MUTE)
+text((OBJ_X0 + OBJ_X1) / 2, OBJ_TOP + 136, 'λ_{IM} = 0.1,  λ_{adv} = 1,  λ_{MMD} = 0.5,  λ_{t} = 0.1', 21, True, MUTE)
 end()
 backgrounds = out[:]
 out.clear()

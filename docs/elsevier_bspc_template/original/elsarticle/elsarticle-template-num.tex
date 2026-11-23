@@ -55,7 +55,7 @@
                    country={[Country]}}
 
 \begin{abstract}
-Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. This study proposes SSM-DAN, a domain-adaptive selective state-space network that couples a multi-scale convolutional front-end with bidirectional selective state-space blocks to capture both local and long-range temporal patterns, and reduces subject shift through hierarchical alignment, including a learned source--target normalization layer and label-free test-time adaptation. The framework was evaluated on three public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. The proposed SSM-DAN achieved mean accuracies of 76.12\% on BCI Competition IV-2a, 84.09\% on BCI Competition IV-2b, and 84.33\% on Zhou2016. Ablation studies, which also covered a 54-subject OpenBMI cohort, showed that the contribution of each adaptation component depends on the dataset and that the Riemannian reference should be re-estimated when the signal energy changes between sessions. These results indicate that combining selective state-space modeling with learned, hierarchical alignment improves cross-subject MI decoding without target labels.
+Cross-subject motor-imagery electroencephalography (MI-EEG) decoding is hindered by low signal-to-noise ratios, scarce labeled data, and strong distribution shifts between subjects and sessions. To address these challenges, this study proposes SSM-DAN, which builds on a multi-scale convolutional front-end and adds bidirectional selective state-space blocks to model long-range temporal dependencies at a cost that grows linearly with trial length. Subject shift is then reduced step by step: Riemannian alignment first re-centers the EEG covariance of each subject, a learned source--target normalization and distribution matching then align the features, and a test-time adaptation that updates only batch-normalization parameters finally adjusts the decisions on the unlabeled target session. The framework was evaluated on four public MI-EEG datasets using leave-one-subject-out validation with chronologically separated training, adaptation, and test sessions. With a session-specific Riemannian reference, SSM-DAN achieved mean accuracies of 77.74\%, 84.10\%, and 85.33\% on BCI Competition IV-2a, BCI Competition IV-2b, and Zhou2016, the highest of all compared methods. On the 54-subject OpenBMI dataset, it reached a mean accuracy of 84.00\% ($\kappa=0.680$). Ablation studies showed that alignment at the signal, feature, and decision levels plays complementary roles, with relative contributions that vary across datasets.
 \end{abstract}
 
 \begin{keyword}
@@ -73,13 +73,13 @@ Early MI decoders followed a classical machine-learning pipeline. Common spatial
 
 A complementary line of work reduces this dependence on the training population and on per-user labeled calibration. EEG foundation models, pretrained on large and diverse corpora such as the roughly 2,500 hours of EEG used by LaBraM \cite{jiang2024labram,wang2024eegpt}, are a promising direction, but they require collecting and harmonizing large heterogeneous datasets and are usually fine-tuned with labeled data of the target task. Transfer across subjects of the same task is a lighter alternative. Domain generalization learns, from several source subjects, features intended to remain valid for unseen subjects, so that a new user can be served without any calibration \cite{liu2023stdg,zhong2025eegdg,zheng2025crosssubject}; because the target subject is never observed, however, its specific shift cannot be compensated. Domain adaptation removes this limitation by also using unlabeled EEG of the new subject. Such data require no trial labels, which makes domain adaptation a practical route to tailoring the decoder to each user without a labeled calibration session. To align source and target features, the maximum mean discrepancy (MMD), introduced into deep networks in its multi-kernel form by DAN \cite{long2015dan}, is among the most widely used criteria owing to its non-parametric form and stable optimization, and is also adopted by EEG models such as RMETNet \cite{zhao2026rmetnet}. Adversarial training with a domain discriminator \cite{ganin2016dann,tang2020cdan} and prototype-based alignment \cite{zhang2024prototypeda} provide complementary objectives. Alignment can also be performed inside the network through its normalization layers: in visual domain adaptation, AutoDIAL \cite{carlucci2017autodial} introduced domain alignment layers that learn how strongly source and target statistics are mixed during normalization, an idea that motivates the feature-level normalization used in the present work.
 
-Beyond the feature level, subject differences are already present in the raw signals: the covariance between EEG channels, which reflects head anatomy and electrode placement, differs markedly across individuals. This suggests aligning the signals themselves before they enter the network. Riemannian geometry, which treats trial covariances as points on the manifold of symmetric positive-definite matrices, has proved effective for MI decoding \cite{barachant2012multiclass}. Building on it, Zanini et al. proposed Riemannian alignment (RA), which re-centers each subject's covariances at the identity using that subject's label-free Riemannian mean \cite{zanini2018riemannian}. The resulting accuracy gain, however, can vary across datasets and tends to be more pronounced when the alignment also increases the separation between classes.
+Beyond the feature level, subject differences are already present in the raw signals: the covariance between EEG channels, which reflects head anatomy and electrode placement, differs markedly across individuals. This suggests aligning the signals themselves before they enter the network. Riemannian geometry, which treats trial covariances as points on the manifold of symmetric positive-definite matrices, has proved effective for MI decoding \cite{barachant2012multiclass}. Building on it, Zanini et al. proposed Riemannian alignment (RA), which re-centers each subject's covariances at the identity using that subject's label-free Riemannian mean \cite{zanini2018riemannian}. The resulting accuracy gain, however, varies across datasets. Moreover, if the reference is computed from a single session, it may no longer fit when the same subject's signals change in later sessions.
 
 We therefore propose SSM-DAN, a selective state-space network with hierarchical, label-free adaptation for cross-subject MI decoding, designed to model the temporal dynamics of MI-EEG efficiently while adapting to each new user without labeled calibration. The main contributions are:
 \begin{itemize}
     \item a decoder that captures both local spectral--spatial patterns and long-range temporal dependencies of MI-EEG at a cost that grows linearly with trial length;
     \item a hierarchical adaptation strategy that reduces subject shift at the signal, feature, and decision levels using only unlabeled EEG of the new user; and
-    \item a chronological leave-one-subject-out evaluation on three public datasets, in which target labels are excluded from training, adaptation, and model selection and all competing methods are re-trained under identical conditions.
+    \item a chronological leave-one-subject-out evaluation on four public datasets, in which target labels are excluded from training, adaptation, and model selection, and all competing methods are re-trained under identical conditions on BCI IV-2a, BCI IV-2b, and Zhou2016.
 \end{itemize}
 
 \section{Method}
@@ -88,21 +88,21 @@ We therefore propose SSM-DAN, a selective state-space network with hierarchical,
 \begin{figure*}[p]
     \centering
     \includegraphics[width=\textwidth,height=0.80\textheight,keepaspectratio]{figures/method_overview_ab.pdf}
-    \caption{Architecture of SSM-DAN. (a) SSM backbone; tensor sizes are channels $\times$ time, $\|$ denotes channel concatenation, $\oplus$ addition, and $\times N$ the $N=5$ selective SSM blocks with alternating scan direction. (b) Adaptation head: AutoDIAL normalization and a residual aligner feed three parallel branches (MMD, classifier, and GRL with a domain discriminator); their losses and the temporal MMD on the TCN output in (a) form the Stage~1 objective.}
+    \caption{Architecture of SSM-DAN: (a) SSM backbone and (b) adaptation head. Sizes are channels $\times$ time; $\|$: concatenation; $\oplus$: addition; $\times N$: stacked SSM blocks with alternating scan direction.}
     \label{fig:architecture_overview}
 \end{figure*}
 
-SSM-DAN has two parts (Fig.~\ref{fig:architecture_overview}) and is trained in two stages (Fig.~\ref{fig:two_stage}). An EEG encoder combines multi-scale convolutions for local spectral--spatial features, bidirectional selective state-space blocks for long-range dynamics, and a temporal convolutional fusion head (Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). A hierarchical adaptation scheme reduces subject shift at three levels: Riemannian whitening of the input, AutoDIAL normalization with adversarial and discrepancy losses on the features, and test-time adaptation of the predictions (Sections~\ref{subsec:ra}--\ref{subsec:imtta}). The model is trained on labeled source-subject trials and unlabeled target-subject trials (Stage~1), adapted to the unlabeled evaluation trials (Stage~2), and then used for prediction (Stage~3).
+The design of SSM-DAN follows the two difficulties raised in Section~\ref{sec:introduction}. The first concerns the decoder itself: it must relate information across the whole trial without a cost that grows quickly with trial length. SSM-DAN therefore starts from TCFormer \cite{altaheri2025tcformer}, keeps its convolutional front-end, and replaces its Transformer with selective state-space blocks (Fig.~\ref{fig:architecture_overview}a; Sections~\ref{subsec:conv_frontend}--\ref{subsec:tcn}). The second concerns the new user: however the decoder is built, it learns only from source subjects, and a new subject can differ from them in the recorded signals, in the features the network extracts, and in the resulting predictions. Rather than correcting this shift at a single point, SSM-DAN reduces it step by step, from the signals to the features and then to the decisions (Fig.~\ref{fig:architecture_overview}b; Sections~\ref{subsec:ra}--\ref{subsec:imtta}). Because the unlabeled data of the target subject arrive over time, this adaptation takes place in two stages (Fig.~\ref{fig:two_stage}): the model first learns from labeled source trials and the earlier unlabeled sessions of the target subject, and then adjusts to the unlabeled evaluation session itself before predicting.
 
 \subsection{Multi-scale convolutional encoder}
 \label{subsec:conv_frontend}
 
-Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes through three temporal convolutions with kernels of 20, 32, and 64 samples, as in TCFormer \cite{altaheri2025tcformer}, followed by depthwise spatial filtering, pooling, and grouped refinement to 16 channels per scale. A residual channel-group attention assigns one sigmoid weight to each scale, and a second pooling yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$.
+The front-end keeps the multi-scale convolutional design of TCFormer \cite{altaheri2025tcformer}, in which temporal kernels of different lengths extract local spectral--spatial features at several time scales. Each trial $X\in\mathbb{R}^{C\times T}$ ($C$ electrodes, $T$ samples) passes through three temporal convolutions with kernels of 20, 32, and 64 samples, followed by depthwise spatial filtering, pooling, and grouped refinement to 16 channels per scale. A residual channel-group attention assigns one sigmoid weight to each scale, and a second pooling yields the local feature sequence $H_c\in\mathbb{R}^{48\times L}$.
 
 \subsection{Bidirectional selective state-space encoder}
 \label{subsec:ssm}
 
-To capture trial-wide dependencies, $H_c$ passes through five selective state-space blocks \cite{gu2022s4,gu2024mamba}, each driving a diagonal recurrence with its projected input $u_t$:
+Because each convolution covers only a limited receptive field, dependencies that span the trial are usually modeled by a Transformer encoder placed after the convolutional front-end \cite{song2023eegconformer,altaheri2025tcformer}. Self-attention, however, compares every pair of time steps, and its cost therefore grows quadratically with sequence length \cite{vaswani2017attention}. SSM-DAN replaces this encoder with a stack of selective state-space blocks \cite{gu2022s4,gu2024mamba}, which compress the sequence history into a fixed-size latent state through a linear recurrence and therefore run in linear time. Their input-dependent parameterization acts as a content-aware gate that decides, at each time step, whether to retain the state or incorporate the current input \cite{gu2024mamba}, thereby emphasizing task-relevant time steps. Within each block, the multi-head self-attention and feed-forward sublayers are replaced by a linear projection, a depthwise convolution with kernel three, the selective scan, a SiLU gate, and an output projection, preceded by layer normalization and wrapped in a residual connection (Fig.~\ref{fig:architecture_overview}a). The selective scan drives a diagonal recurrence with the projected input $u_t$:
 \begin{align}
     h_t &= \exp(\Delta_t A)\odot h_{t-1} + \Delta_t B_t\odot u_t, \\
     z_t &= C_t^\top h_t + d\odot u_t ,
@@ -112,21 +112,21 @@ where $A=-\exp(A_{\log})$ is a learned stable decay and $\Delta_t$, $B_t$, and $
 \subsection{Local--global fusion and classification}
 \label{subsec:tcn}
 
-The state-space output is reduced to 16 channels and concatenated with the 48-channel local sequence $H_c$, so that the head sees both local and global evidence. Two residual grouped temporal convolutional network (TCN) blocks with kernel length four and dilations one and two refine the resulting 64-channel sequence. The average of its last time step and its temporal mean forms the trial representation $q\in\mathbb{R}^{64}$, made of four 16-channel groups (three convolutional scales and the state-space branch). A norm-constrained grouped classifier produces one set of class scores per group, combined with learned softmax weights.
+To keep the local evidence of the front-end alongside this global context, the state-space output is reduced to 16 channels and concatenated with the 48-channel local sequence $H_c$. The resulting 64-channel sequence consists of four 16-channel groups, one for each convolutional scale and one for the state-space branch, and is refined by a temporal convolutional network (TCN) \cite{altaheri2023atcnet}. A TCN applies causal convolutions, in which each output depends only on the current and earlier time steps, and increases the dilation from one block to the next so that later blocks cover a wider time window. SSM-DAN uses two residual TCN blocks with kernel length four and dilations one and two; each block contains two causal convolutions, grouped so that the four feature groups are processed separately. The trial representation $q\in\mathbb{R}^{64}$ is the average of the last time step of the TCN output, which summarizes the preceding steps under causal convolution, and its temporal mean. A norm-constrained grouped classifier produces one set of class scores per group, combined with learned softmax weights.
 
 \subsection{Riemannian signal alignment}
 \label{subsec:ra}
 
-Because EEG covariance structures are shifted between subjects, Riemannian alignment (RA) whitens each subject's trials by the inverse square root of that subject's mean covariance $\bar{R}$, the affine-invariant Riemannian mean of the OAS-shrunk trial covariances \cite{zanini2018riemannian,he2020euclidean}:
+The encoder above is trained only on source subjects and receives the signals of a new subject as they are. Because the covariance between channels, which depends on head anatomy and electrode placement, differs across subjects (Section~\ref{sec:introduction}), the first adaptation step aligns the signals before they enter the network. Riemannian alignment (RA) is used for this step because it needs no labels, has no trainable parameters, and computes its reference from the subject's own unlabeled trials. RA whitens each subject's trials by the inverse square root of that subject's mean covariance $\bar{R}$, the affine-invariant Riemannian mean of the OAS-shrunk trial covariances \cite{zanini2018riemannian,he2020euclidean}:
 \begin{equation}
     \widetilde{X}=\bar{R}^{-1/2}X.
 \end{equation}
-To avoid leakage, $\bar{R}$ is estimated only from data available before evaluation and then applied unchanged: from the training sessions for the validation sessions of each source subject, and from the unlabeled earlier sessions $\mathcal{T}_a$ for the evaluation sessions $\mathcal{T}_e$ of the target subject.
+To avoid leakage, $\bar{R}$ is estimated only from data available before evaluation and then applied unchanged: from the training sessions for the validation sessions of each source subject, and from the unlabeled earlier sessions $\mathcal{T}_a$ for the evaluation sessions $\mathcal{T}_e$ of the target subject. A session-specific variant, in which every session is whitened by the mean of its own unlabeled trials, is examined in Section~\ref{subsec:ra_reference}.
 
 \subsection{Automatic domain alignment layer}
 \label{subsec:autodial}
 
-Riemannian whitening aligns input statistics but not shifts arising inside the network. Following AutoDIAL \cite{carlucci2017autodial}, the trial representation $q$ is therefore normalized by a layer that learns how strongly target features are standardized with their own statistics: source features use the source moments $(\mu_s,\sigma_s^2)$, and target features use the moments of a mixture of the source and target $(\mu_t,\sigma_t^2)$ distributions,
+Once the signals are aligned, the next level is the features that the network extracts from them. Here SSM-DAN borrows the domain alignment layer of AutoDIAL \cite{carlucci2017autodial}, proposed for visual domain adaptation, in which normalization itself learns how far target features should be standardized with their own statistics. Standard batch normalization fixes this choice in advance: target features are standardized either with source statistics, which keeps any difference in mean and variance between the domains, or with their own statistics, which removes it entirely. Because the appropriate degree of alignment is not known beforehand and may differ between feature groups, SSM-DAN lets the network learn it. The layer adds only one parameter per feature group and needs no target labels, so it is trained jointly with the rest of the model on unlabeled target trials. Source features of the trial representation $q$ use the source moments $(\mu_s,\sigma_s^2)$, and target features use the moments of a mixture of the source and target $(\mu_t,\sigma_t^2)$ distributions,
 \begin{align}
     \mu_\alpha &= \alpha\mu_t+(1-\alpha)\mu_s, \\
     \sigma_\alpha^2 &= \alpha\sigma_t^2+(1-\alpha)\sigma_s^2+\alpha(1-\alpha)(\mu_t-\mu_s)^2,
@@ -136,18 +136,18 @@ so that
     \hat{q}^s = \gamma\odot\frac{q^s-\mu_s}{\sqrt{\sigma_s^2+\epsilon}}+\beta, \qquad
     \hat{q}^t = \gamma\odot\frac{q^t-\mu_\alpha}{\sqrt{\sigma_\alpha^2+\epsilon}}+\beta ,
 \end{equation}
-with shared affine parameters $\gamma$ and $\beta$. The mixing weight $\alpha\in(0,1)$, initialized to 0.5 and learned separately for each of the four feature groups, interpolates between source statistics ($\alpha\rightarrow0$) and target statistics ($\alpha\rightarrow1$). Moments are computed per mini-batch during training and tracked as running averages (momentum 0.1), which are mixed with the learned $\alpha$ at inference; source validation trials always use source statistics.
+with shared affine parameters $\gamma$ and $\beta$. The mixing weight $\alpha\in(0,1)$, initialized to 0.5 and learned for each of the four feature groups, moves the target normalization from source statistics ($\alpha\rightarrow0$) to target statistics ($\alpha\rightarrow1$). Moments are computed per mini-batch during training and tracked as running averages (momentum 0.1) for inference; source validation trials use source statistics.
 
 \subsection{Training objective}
 \label{subsec:uda}
 
-A residual $64\!\rightarrow\!128\!\rightarrow\!64$ aligner precedes the classifier and alignment losses. Besides the source cross-entropy $\mathcal{L}_{\mathrm{cls}}$, Stage~1 uses a gradient-reversal domain loss $\mathcal{L}_{\mathrm{adv}}$ \cite{ganin2016dann}, MK-MMD losses on trial representations ($\mathcal{L}_{\mathrm{mmd}}$) and TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$) \cite{long2015dan}, and the information-maximization loss \cite{liang2020shot}
+Matching means and variances still leaves other differences between the source and target feature distributions. To reduce them, a residual $64\!\rightarrow\!128\!\rightarrow\!64$ aligner follows the AutoDIAL layer and feeds the classifier and the distribution-level alignment losses. Besides the source cross-entropy $\mathcal{L}_{\mathrm{cls}}$, Stage~1 uses a gradient-reversal domain loss $\mathcal{L}_{\mathrm{adv}}$ \cite{ganin2016dann}, MK-MMD losses on trial representations ($\mathcal{L}_{\mathrm{mmd}}$) and TCN sequences ($\mathcal{L}_{\mathrm{tmmd}}$) \cite{long2015dan}, and the information-maximization loss \cite{liang2020shot}
 \begin{equation}
     \mathcal{L}_{\mathrm{IM}}
     =\frac{1}{N}\sum_{j=1}^{N} H(p_j)-H\!\left(\frac{1}{N}\sum_{j=1}^{N}p_j\right),
 \label{eq:im}
 \end{equation}
-where $p_j$ is the predicted class distribution of the $j$-th of $N$ unlabeled trials and $H(\cdot)$ the entropy. The objective is
+where $p_j$ is the predicted class distribution of the $j$-th of $N$ unlabeled trials and $H(\cdot)$ the entropy. The first term makes each prediction confident, and the second keeps the average prediction spread over the classes, which prevents assigning every trial to one class. The objective is
 \begin{equation}
     \mathcal{L}=\mathcal{L}_{\mathrm{cls}}+0.1\mathcal{L}_{\mathrm{IM}}^{t}+\mathcal{L}_{\mathrm{adv}}
     +0.5\mathcal{L}_{\mathrm{mmd}}+0.1\mathcal{L}_{\mathrm{tmmd}}.
@@ -158,7 +158,7 @@ where $\mathcal{L}_{\mathrm{IM}}^{t}$ is computed on target trials from $\mathca
 \subsection{Test-time adaptation}
 \label{subsec:imtta}
 
-The checkpoint with the highest source-validation accuracy is adapted to the unlabeled evaluation trials $\mathcal{T}_e$ by information-maximization test-time adaptation (IM-TTA): only the BatchNorm scales and shifts are updated, which limits overfitting to a small target set \cite{wang2021tent}, by minimizing Eq.~\eqref{eq:im} over $\mathcal{T}_e$ for five Adam passes (learning rate $10^{-4}$). The AutoDIAL target moments are then re-estimated in one pass over the same trials, with $\alpha$ and the source moments fixed. The labels of $\mathcal{T}_e$ are used only for scoring. Fig.~\ref{fig:two_stage} summarizes both stages.
+Stage~1 sees only the earlier sessions $\mathcal{T}_a$ of the target subject, whereas the evaluation session $\mathcal{T}_e$ is recorded later and can differ from them; Section~\ref{subsec:ra_reference} shows such a shift on OpenBMI. Stage~2 therefore adapts the model to $\mathcal{T}_e$ itself, using only its unlabeled trials. Because these trials are few and unlabeled, the model is changed only slightly: starting from the checkpoint with the highest source-validation accuracy, information-maximization test-time adaptation (IM-TTA) minimizes Eq.~\eqref{eq:im} over $\mathcal{T}_e$ for five Adam passes (learning rate $10^{-4}$) but updates only the BatchNorm scales and shifts of the backbone, which limits overfitting to a small target set \cite{wang2021tent}. These updates change the features that reach the AutoDIAL layer, so its target moments are then re-estimated in one pass over the same trials, with $\alpha$ and the source moments fixed. Predictions are made with the adapted model, and the labels of $\mathcal{T}_e$ are used only for scoring. Fig.~\ref{fig:two_stage} summarizes both stages.
 
 \begin{figure*}[!htbp]
     \centering
@@ -244,7 +244,27 @@ Z-score statistics are fitted on the source-training partition. For BCI IV-2a an
 \subsection{Implementation details}
 \label{subsec:training}
 
-All experiments run in Kaggle notebooks on one NVIDIA Tesla T4 GPU (16~GB). BCI IV-2a and IV-2b use a batch size of 48, at most 125 epochs, and Adam (learning rate $9\times10^{-4}$, $\beta_1=0.5$, weight decay $10^{-3}$); Zhou2016 uses a batch size of 32, 100 epochs, a learning rate of $10^{-3}$, and weight decay $10^{-4}$. A three-epoch linear warm-up is followed by cosine decay. The seed (0), data split, and initialization are shared by all methods and variants, so each comparison differs only in the evaluated component.
+All experiments run in Kaggle notebooks on one NVIDIA Tesla T4 GPU (16~GB). Table~\ref{tab:hyperparams} lists every setting of SSM-DAN. The front-end, TCN, and optimization settings are those of TCFormer \cite{altaheri2025tcformer} in our re-runs, and the number of state-space blocks and their dropout equal the depth and dropout of the TCFormer Transformer encoder, so that the two backbones differ mainly in the temporal encoder. Zhou2016 uses a smaller batch, learning rate, and weight decay, for TCFormer as well. The adaptation settings are the same for all datasets, and the gradient-reversal coefficient follows the schedule of \cite{ganin2016dann}. The seed (0), data split, and initialization are shared by all methods and variants, so each comparison differs only in the evaluated component.
+
+\begin{table}[!htbp]
+\centering
+\caption{Settings of SSM-DAN. Values in parentheses apply to Zhou2016; $p\in[0,1]$ is the training progress.}
+\label{tab:hyperparams}
+\small
+\begin{tabular}{@{}p{0.2\linewidth}p{0.76\linewidth}@{}}
+\toprule
+Component & Setting \\
+\midrule
+Front-end & 32 filters per temporal kernel (20, 32, 64 samples); depth multiplier 2; average pooling 8 and 7; dropout 0.4 \\
+State-space encoder & 5 blocks, alternating forward/backward scans; state dimension 8; depthwise kernel 3; dropout 0.4; stochastic depth rising to 0.25 \\
+TCN and classifier & 2 residual blocks, kernel 4, dilations 1 and 2, 4 groups; dropout 0.3; max-norm 0.25 on the classifier weights \\
+Adaptation head & AutoDIAL $\alpha$ initialized to 0.5, momentum 0.1; aligner $64\!\rightarrow\!128\!\rightarrow\!64$; discriminator with 128 hidden units; dropout 0.3; gradient-reversal coefficient $2/(1+e^{-10p})-1$ \\
+Stage~1 losses & weights 0.1 ($\mathcal{L}_\mathrm{IM}^{t}$), 1 ($\mathcal{L}_\mathrm{adv}$), 0.5 ($\mathcal{L}_\mathrm{mmd}$), 0.1 ($\mathcal{L}_\mathrm{tmmd}$); MK-MMD with five Gaussian kernels, bandwidths $2^{-2},\dots,2^{2}$ times the mean squared pairwise distance \\
+Optimization & Adam, learning rate $9\times10^{-4}$ ($10^{-3}$), $\beta_1=0.5$, weight decay $10^{-3}$ ($10^{-4}$); 3-epoch linear warm-up, then cosine decay; 125 (100) epochs; 48 (32) source and 48 (32) target trials per step; best source-validation checkpoint \\
+IM-TTA & 5 Adam steps, learning rate $10^{-4}$, diversity weight 1; backbone BatchNorm $\gamma,\beta$ only \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Comparison methods}
 \label{subsec:baselines}
@@ -290,7 +310,7 @@ ATCNet~\cite{altaheri2023atcnet} & 69.44 & 40.97 & 76.74 & 50.35 & 43.40 & 42.01
 TCFormer~\cite{altaheri2025tcformer} & 65.28 & 49.65 & 79.86 & 54.86 & 61.81 & 38.89 & 71.88 & 66.67 & 58.33 & $60.80\pm11.49$ & $0.477\pm0.153$ & $6.80\pm3.79$ & 0.0039 & 0.0312 \\
 EEGEncoder~\cite{liao2025eegencoder} & 64.24 & 49.31 & 78.82 & 46.18 & 54.86 & 40.97 & 74.31 & 65.97 & 47.92 & $58.06\pm12.55$ & $0.441\pm0.167$ & $6.04\pm4.17$ & 0.0039 & 0.0312 \\
 SATrans-Net~\cite{miao2025satransnet} & 68.06 & 47.92 & 73.96 & 53.47 & 61.11 & 45.14 & 73.61 & 71.53 & 63.19 & $62.00\pm10.34$ & $0.493\pm0.138$ & $7.09\pm3.41$ & 0.0039 & 0.0312 \\
-SSM-DAN (source-only) & 68.06 & 51.04 & 86.46 & 61.11 & 64.24 & 39.58 & 72.92 & 73.61 & 62.15 & $64.35\pm12.77$ & $0.525\pm0.170$ & $8.22\pm4.68$ & 0.0039 & 0.0312 \\
+SSM-DAN (source-only) & 69.10 & 48.61 & 86.11 & 56.94 & 57.64 & 39.24 & 71.53 & 72.92 & 58.33 & $62.27\pm13.32$ & $0.497\pm0.178$ & $7.54\pm4.86$ & 0.0039 & 0.0312 \\
 \midrule
 \multicolumn{15}{l}{\textit{Unsupervised domain adaptation}} \\
 RMETNet~\cite{zhao2026rmetnet} & 67.01 & 39.24 & 77.78 & 55.90 & 49.65 & 52.78 & 63.54 & 66.67 & 68.40 & $60.11\pm11.05$ & $0.468\pm0.147$ & $6.52\pm3.52$ & 0.0039 & 0.0039 \\
@@ -399,7 +419,7 @@ SSM-DAN had the most consistent performance across targets and exceeded every so
 \subsection{Information transfer rate and class-wise performance}
 \label{subsec:itr_classwise}
 
-In practical terms, the accuracy gains of SSM-DAN translate into faster communication. On BCI IV-2a, adaptation raised its ITR by about 60\% over the source-only variant ($13.3$ versus $8.2$~bits/min; Table~\ref{tab:results_2a}), so a new user could issue markedly more commands per minute without any labeled calibration. On BCI IV-2b and Zhou2016 the adaptive methods operated in a similar range, mirroring the accuracy results.
+In practical terms, the accuracy gains of SSM-DAN translate into faster communication. On BCI IV-2a, adaptation raised its ITR by about 76\% over the source-only variant ($13.3$ versus $7.5$~bits/min; Table~\ref{tab:results_2a}), so a new user could issue markedly more commands per minute without any labeled calibration. On BCI IV-2b and Zhou2016 the adaptive methods operated in a similar range, mirroring the accuracy results.
 
 
 \begin{figure*}[!htbp]
@@ -414,7 +434,7 @@ Fig.~\ref{fig:classwise} shows that these gains are spread across classes rather
 \subsection{Comparison with published results}
 \label{subsec:published}
 
-Table~\ref{tab:published} contrasts the cross-subject accuracies reported in the original articles with the re-runs of this study. The published values are not directly comparable, because the protocols differ in four respects. (i) \emph{Task}: the T-TIME and BFT articles report two-class left- versus right-hand MI, whereas BCI IV-2a and Zhou2016 are evaluated here with four and three classes. (ii) \emph{Session shift and target data}: several protocols train and test within the same recording session, and the EEGEncoder article reports no cross-subject result at all, its multi-subject figure being obtained with the test subjects' own first sessions in the training set; here every target is unseen during training and scored on a later session recorded on a different day. (iii) \emph{Model selection}: the released scripts of SATrans-Net and RMETNet report the highest, or the mean of the five highest, per-epoch accuracies on the held-out subject, i.e., the evaluation labels select the epoch; here the checkpoint is chosen on source data only. (iv) \emph{Transductive access}: RMETNet uses the held-out evaluation trials themselves as the target domain of its MMD loss and Riemannian alignment, whereas here domain adaptation sees only the earlier, unlabeled target sessions. Each of (ii)--(iv) makes a protocol easier or its estimate more optimistic, which largely explains why most re-runs are lower on BCI IV-2a. Where the split matches ours, the gaps are small: the TCFormer benchmark \cite{altaheri2025tcformer} uses the same session split and differs only in averaging the last-epoch model over five seeds and in model-specific preprocessing, and the re-runs of TCFormer and ATCNet lie within three points of it on both BCI datasets, while EEG Conformer is higher here. On BCI IV-2b, where the shift between calibration and evaluation sessions is smaller, the re-runs reach or exceed several published values (e.g., SATrans-Net, 81.76 vs.\ 79.64\%).
+Table~\ref{tab:published} sets the accuracies reported in the original articles beside our re-runs. The two are not directly comparable, because most published protocols are easier or more optimistic than ours in at least one of four respects: (i) the T-TIME and BFT articles report two-class left- versus right-hand MI, whereas BCI IV-2a and Zhou2016 are evaluated here with four and three classes; (ii) several protocols train and test within one session, and the EEGEncoder figure includes the test subjects' first sessions in training, whereas every target here is unseen and scored on a later day; (iii) the released SATrans-Net and RMETNet scripts select the epoch with the evaluation labels, whereas we select on source data only; and (iv) RMETNet adapts to the evaluation trials themselves, whereas our Stage~1 sees only earlier, unlabeled sessions. These differences largely explain why most re-runs are lower on BCI IV-2a. Where the split matches ours, the gaps are small: the TCFormer benchmark \cite{altaheri2025tcformer} uses the same session split, differing mainly in five-seed averaging, and our re-runs of TCFormer and ATCNet lie within three points of it on both BCI datasets, while EEG Conformer is higher here. On BCI IV-2b, whose sessions shift less, the re-runs reach or exceed several published values (e.g., SATrans-Net, 81.76 vs.\ 79.64\%).
 
 \begin{table*}[!htbp]
 \centering
@@ -449,51 +469,44 @@ BFT~\cite{li2026bft} & (e) & 77.47$^{\dagger}$ & -- & 84.38$^{\dagger}$ & 63.08 
 \subsection{Ablation study}
 \label{sec:ablation}
 
-Table~\ref{tab:ablation} follows the primary chronological protocol. The variant without domain adaptation removes every Stage~1 domain-adaptation component (AutoDIAL, target information maximization, and the adversarial and both MMD losses) while retaining Riemannian alignment and IM-TTA; all variants otherwise use the same folds and checkpoint rule.
-
-OpenBMI (Lee2019\_MI) \cite{lee2019openbmi} is added as a larger cohort for the ablation. It contains 54 subjects recorded with 62 EEG channels in two sessions on different days, each with one offline run of 100 left- versus right-hand MI trials. Signals are band-pass filtered at 4--38~Hz, re-referenced to the common average, downsampled to 100~Hz, and cut to the 0--4-s cue interval; S\&R augmentation is not used. The two sessions allow the chronological protocol of the other datasets: in each of the 54 LOSO folds, the 53 source subjects provide labeled session-1 trials for training and session-2 trials for checkpoint selection, while the target's unlabeled session~1 is used in Stage~1 and its session~2 for IM-TTA and evaluation. RA is fitted on session~1 of each subject, and all variants use the BCI IV-2a optimization settings. Because every evaluation session has 100 class-balanced trials, $\kappa=2P-1$ for accuracy $P$. With 54 paired targets, the OpenBMI Wilcoxon tests use the normal approximation instead of exact enumeration, with Holm correction over the four ablation comparisons.
+Table~\ref{tab:ablation} removes one component at a time under the chronological protocol. The variant without domain adaptation drops all Stage~1 alignment (AutoDIAL, target information maximization, and the adversarial and both MMD losses) but keeps RA and IM-TTA. To test the components on a larger cohort, the ablation adds OpenBMI \cite{lee2019openbmi}: 54 subjects, 62 channels, and two sessions on different days, each with 100 left- versus right-hand MI trials. Signals are band-pass filtered at 4--38~Hz, common-average referenced, downsampled to 100~Hz, and cut to 0--4~s after the cue, without S\&R. Session~1 provides the source training data and the unlabeled target data of Stage~1, session~2 the source validation and target evaluation data; RA is fitted on session~1, and the BCI IV-2a optimization settings are used. Since every evaluation session has 100 balanced trials, $\kappa=2P-1$; the OpenBMI Wilcoxon tests use the normal approximation, with Holm correction over the four ablation comparisons.
 
 \begin{table*}[!htbp]
 \centering
-\caption{Ablation results: mean $\pm$ standard deviation of accuracy (\%) and Cohen's $\kappa$ across target subjects. The best variant of each dataset is in bold. The last column replaces the fixed RA reference of SSM-DAN by a session-specific one (Section~\ref{subsec:ra_reference}). $^{a}$53 of the 54 OpenBMI targets.}
+\caption{Ablation results: mean $\pm$ SD of accuracy (\%) and $\kappa$; best per dataset in bold. All variants except the last column use the session-1 RA reference. $^{a}$53 of 54 targets. $^{b}$IM-TTA kept; later batch.}
 \label{tab:ablation}
 \footnotesize
 \setlength{\tabcolsep}{3.0pt}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{llcccccc}
+\begin{tabular}{llccccccc}
 \toprule
-Dataset & Metric & SSM-DAN & \colhead{Source-\\only} & \colhead{Without\\Riemannian\\alignment} & \colhead{Without\\domain\\adaptation} & \colhead{Without\\test-time\\adaptation} & \colhead{Session-\\specific RA\\reference} \\
+Dataset & Metric & \colhead{Source-\\only} & \colhead{Without\\Riemannian\\alignment} & \colhead{Without\\domain\\adaptation} & \colhead{Without\\RA and\\domain\\adaptation$^{b}$} & \colhead{Without\\test-time\\adaptation} & \colhead{SSM-DAN\\(session-1\\RA reference)} & \colhead{SSM-DAN\\(session-specific\\RA reference)} \\
 \midrule
 \multirow{2}{*}{BCI IV-2a}
- & Acc. & $76.12\pm11.96$ & $64.35\pm12.77$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $72.15\pm13.58$ & $\mathbf{77.74\pm11.72}$ \\
- & $\kappa$ & $0.682\pm0.159$ & $0.525\pm0.170$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.629\pm0.181$ & $\mathbf{0.703\pm0.156}$ \\
+ & Acc. & $62.27\pm13.32$ & $70.29\pm11.60$ & $71.37\pm11.78$ & $62.04\pm13.01$ & $72.15\pm13.58$ & $76.12\pm11.96$ & $\mathbf{77.74\pm11.72}$ \\
+ & $\kappa$ & $0.497\pm0.178$ & $0.604\pm0.155$ & $0.618\pm0.157$ & $0.494\pm0.173$ & $0.629\pm0.181$ & $0.682\pm0.159$ & $\mathbf{0.703\pm0.156}$ \\
 \midrule
 \multirow{2}{*}{BCI IV-2b}
- & Acc. & $84.09\pm10.42$ & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $83.97\pm10.71$ & $\mathbf{84.10\pm10.23}$ \\
- & $\kappa$ & $\mathbf{0.682\pm0.208}$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.679\pm0.214$ & $\mathbf{0.682\pm0.205}$ \\
+ & Acc. & $80.54\pm10.05$ & $83.58\pm10.46$ & $83.35\pm10.50$ & $80.01\pm10.72$ & $83.97\pm10.71$ & $84.09\pm10.42$ & $\mathbf{84.10\pm10.23}$ \\
+ & $\kappa$ & $0.611\pm0.201$ & $0.672\pm0.209$ & $0.667\pm0.210$ & $0.600\pm0.214$ & $0.679\pm0.214$ & $\mathbf{0.682\pm0.208}$ & $\mathbf{0.682\pm0.205}$ \\
 \midrule
 \multirow{2}{*}{Zhou2016}
- & Acc. & $84.33\pm0.75$ & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $82.33\pm3.82$ & $\mathbf{85.33\pm2.05}$ \\
- & $\kappa$ & $0.765\pm0.011$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.735\pm0.057$ & $\mathbf{0.780\pm0.031}$ \\
+ & Acc. & $75.17\pm3.51$ & $84.00\pm3.16$ & $82.50\pm1.85$ & $72.83\pm5.42$ & $82.33\pm3.82$ & $84.33\pm0.75$ & $\mathbf{85.33\pm2.05}$ \\
+ & $\kappa$ & $0.627\pm0.053$ & $0.760\pm0.047$ & $0.738\pm0.028$ & $0.592\pm0.081$ & $0.735\pm0.057$ & $0.765\pm0.011$ & $\mathbf{0.780\pm0.031}$ \\
 \midrule
 % OpenBMI, seed 0, 54 LOSO folds, fixed (session-1) RA reference. Source-only has 53 folds:
 % TODO: add target S37 when its source-only run is available and recompute this cell.
 \multirow{2}{*}{OpenBMI}
- & Acc. & $80.61\pm10.26$ & $79.92\pm11.04^{a}$ & $83.50\pm9.43$ & $79.85\pm10.02$ & $76.65\pm12.19$ & $\mathbf{84.00\pm9.56}$ \\
- & $\kappa$ & $0.612\pm0.205$ & $0.598\pm0.221^{a}$ & $0.670\pm0.189$ & $0.597\pm0.200$ & $0.533\pm0.244$ & $\mathbf{0.680\pm0.191}$ \\
+ & Acc. & $79.92\pm11.04^{a}$ & $83.50\pm9.43$ & $79.85\pm10.02$ & $80.22\pm11.15$ & $76.65\pm12.19$ & $80.61\pm10.26$ & $\mathbf{84.00\pm9.56}$ \\
+ & $\kappa$ & $0.598\pm0.221^{a}$ & $0.670\pm0.189$ & $0.597\pm0.200$ & $0.604\pm0.223$ & $0.533\pm0.244$ & $0.612\pm0.205$ & $\mathbf{0.680\pm0.191}$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table*}
 
-On BCI IV-2a, removing Riemannian alignment, Stage~1 domain adaptation, or test-time adaptation each significantly reduced accuracy. On BCI IV-2b and Zhou2016, the complete model remained the best variant, but its margins were small and not significant. The contribution of each component is therefore dataset dependent. On OpenBMI, IM-TTA increased accuracy by 3.96 points (higher for 38 of 54 targets, $p_\mathrm{Holm}<0.001$), whereas the gains over the variant without domain adaptation (0.76 points) and over the source-only model (0.51 points) were not significant ($p_\mathrm{Holm}=0.68$ and $0.72$). Removing RA, however, increased accuracy by 2.89 points (higher for 33 of 54 targets, $p_\mathrm{Holm}=0.002$): with a reference fixed on session~1, RA reduced accuracy on this dataset. Section~\ref{subsec:ra_reference} examines this effect.
+On BCI IV-2a, removing RA, Stage~1 domain adaptation, or IM-TTA each significantly reduced accuracy; on BCI IV-2b and Zhou2016, the complete model remained the best variant, but by small, non-significant margins. OpenBMI behaved differently: IM-TTA added 3.96 points (38 of 54 targets, $p_\mathrm{Holm}<0.001$), the gains over the variants without domain adaptation (0.76 points) and without any adaptation (0.51 points) were not significant ($p_\mathrm{Holm}=0.68$ and $0.72$), and removing RA raised accuracy by 2.89 points (33 of 54, $p_\mathrm{Holm}=0.002$).
 
-\subsection{Session-specific RA reference}
-\label{subsec:ra_reference}
-
-The fixed reference assumes that a subject's mean covariance is stable across sessions. On OpenBMI this assumption fails: after session-1 RA, the median trial energy of session~2 was 1.55 times that of session~1 across subjects, and more than twice for 20 of the 54 subjects, compared with 1.08--1.39 on BCI IV-2a. SSM-DAN was therefore re-run with a session-specific reference, in which every session of every subject, including the target evaluation session, is whitened by the Riemannian mean of its own unlabeled trials. The evaluation-session reference uses the same unlabeled evaluation trials that IM-TTA already accesses, so the target-data access is unchanged; like IM-TTA, it needs these trials as a batch. All other settings are those of the main experiments; the results are in the last column of Table~\ref{tab:ablation}.
-
-On OpenBMI, the session-specific reference added 3.39 points with IM-TTA (84.00\% vs.\ 80.61\%; higher for 43 of 54 targets, $p<0.001$) and 7.24 points without it (83.89\% vs.\ 76.65\%; 45 of 54, $p<0.001$), while the gain of IM-TTA fell from 3.96 to 0.11 points ($p=0.50$); most of the IM-TTA gain under the fixed reference therefore compensated the energy shift between sessions. With the session-specific reference, SSM-DAN also exceeded the variant without RA (84.00\% vs.\ 83.50\%), although not significantly ($p=0.61$). On BCI IV-2a, accuracy rose by 1.62 points with IM-TTA (8 of 9 targets, exact $p=0.023$), and IM-TTA still added 2.89 points (74.85\% to 77.74\%; 8 of 9, $p=0.008$). On BCI IV-2b, the two references gave the same accuracy (84.10\% vs.\ 84.09\%; higher for 3 targets, lower for 5, $p=0.97$). On Zhou2016, the session-specific reference added 1.00 point (85.33\% vs.\ 84.33\%; higher for 3 of 4 targets, exact $p=0.38$), and IM-TTA added 2.83 points (82.50\% to 85.33\%; 4 of 4, $p=0.125$, the smallest value attainable with four targets). Because this variant was examined after the main experiments, these tests are not Holm-corrected and serve as supporting evidence; all other results use the fixed reference.
+Two follow-up comparisons, made after the main experiments and not Holm-corrected, examine these effects. In the first, the variant without both RA and domain adaptation was run in a later batch together with a rerun of the variant without RA, which reached 66.63, 83.10, 81.17, and 81.54\% on BCI IV-2a, BCI IV-2b, Zhou2016, and OpenBMI. Within this batch, removing domain adaptation lowered accuracy by 4.59 points on BCI IV-2a (7 of 9 targets, exact $p=0.36$), 3.09 on BCI IV-2b (6 of 9, $p=0.098$), 8.33 on Zhou2016 (3 of 4, one tie, $p=0.25$), and 1.31 on OpenBMI (33 of 54, $p=0.038$). In the second, the RA reference was estimated for each session from its own unlabeled trials, the same trials that IM-TTA uses. Trial energy changed more between sessions on OpenBMI than on BCI IV-2a: after session-1 RA, the median trial energy of session~2 was 1.55 times that of session~1 on OpenBMI, and more than twice for 20 of the 54 subjects, against 1.08--1.39 on BCI IV-2a. The session-specific reference raised accuracy by 3.39 points on OpenBMI (43 of 54, $p<0.001$) and 1.62 points on BCI IV-2a (8 of 9, exact $p=0.023$), left BCI IV-2b unchanged, and added 1.00 point on Zhou2016 (3 of 4, $p=0.38$) (Table~\ref{tab:ablation}). With this reference, IM-TTA still added 2.89 points on BCI IV-2a ($p=0.008$) and 2.83 on Zhou2016 ($p=0.125$), but only 0.11 on OpenBMI ($p=0.50$).
 
 \subsection{Computational efficiency}
 \label{subsec:results_efficiency}
@@ -522,7 +535,7 @@ ATCNet & 113.7 & 48.58 & 13.33 & 112.8 & 60.19 & 11.35 & 113.3 & 8.09 & 11.91 \\
 TCFormer & 127.2 & 38.37 & 14.96 & 123.4 & 31.04 & 11.17 & 125.6 & 5.89 & 15.97 \\
 EEGEncoder & 197.2 & 13.49 & 26.51 & 196.2 & 14.98 & 26.88 & 196.8 & 3.64 & 25.68 \\
 SATrans-Net & 155.6 & 10.19 & 12.78 & 153.7 & 4.99 & 11.10 & 155.0 & 1.32 & 11.38 \\
-SSM-DAN (source-only) & 98.4 & 47.01 & 25.08 & 94.6 & 36.10 & 13.68 & 96.8 & 6.29 & 13.36 \\
+SSM-DAN (source-only) & 98.4 & 38.89 & 15.95 & 94.6 & 36.10 & 13.68 & 96.8 & 6.29 & 13.36 \\
 \midrule
 \multicolumn{10}{l}{\textit{Unsupervised domain adaptation}} \\
 RMETNet & 193.8 & 45.88 & 11.15 & 159.1 & 21.96 & 4.90 & 306.6 & 23.74 & 7.19 \\
@@ -543,16 +556,20 @@ SSM-DAN\newline (w/o RA) & 132.0 & 58.41 & 21.63 & 128.2 & 47.95 & 13.33 & 130.4
 \section{Discussion}
 \label{sec:discussion}
 
-The benefit of each adaptation component is dataset dependent: it was clear on BCI IV-2a but small and not significant on BCI IV-2b and Zhou2016, where repeated-seed experiments are needed to confirm the differences. The larger OpenBMI cohort confirmed the gain of IM-TTA but showed that an RA reference fixed on an earlier session can reduce accuracy when the signal energy changes between sessions. Re-estimating the reference on each session removed this loss and accounted for most of the IM-TTA gain, which suggests that a large part of the session shift handled by test-time adaptation is a change of second-order signal statistics.
+With a session-specific RA reference, SSM-DAN achieved the highest mean accuracy among the compared methods on BCI IV-2a, BCI IV-2b, and Zhou2016. Without adaptation, the state-space backbone was already competitive with the attention-based decoders while using the fewest parameters among the source-only models (Tables~\ref{tab:results_2a}--\ref{tab:results_zhou} and \ref{tab:efficiency}). The larger margins appeared once adaptation was added, so the two parts play complementary roles: the backbone provides a compact temporal representation, and the hierarchical adaptation carries it across subjects.
 
-The alternating scans exploit complete offline trials and are non-causal, so online use would require forward-only processing.
+At the signal level, the value of RA depended on the dataset: it helped most on BCI IV-2a, mattered little on BCI IV-2b and Zhou2016, and lowered accuracy on OpenBMI when its reference was fixed on the first session (Table~\ref{tab:ablation}). The OpenBMI result points to the reference rather than to the alignment itself\label{subsec:ra_reference}: signal energy changed markedly between the two sessions of many OpenBMI subjects, more than on BCI IV-2a, so a reference estimated on one session no longer whitened the next. Estimating the reference from each session's own unlabeled trials removed this mismatch, with the largest gain on OpenBMI, a smaller one on BCI IV-2a, and little change on BCI IV-2b and Zhou2016 (Section~\ref{sec:ablation}). When a user's signals drift between sessions, the RA reference is therefore better re-estimated for each session than kept fixed.
 
-Because IM-TTA, and the session-specific RA reference, use unlabeled evaluation-session signals, the method is transductive and must be compared with baselines of identical target access; online use would require running estimates of the reference and of the adapted statistics. Further limitations are the three-channel BCI IV-2b setting, the small Zhou2016 cohort, and incomplete matched baselines.
+At the feature level, removing Stage~1 domain adaptation alone mattered mainly on BCI IV-2a, but its role became clearer when RA was removed as well. On BCI IV-2b and Zhou2016, either level alone could largely stand in for the other, whereas removing both caused a much larger drop; on BCI IV-2a, the losses of the two levels added up (Table~\ref{tab:ablation}). Feature-level alignment also improved accuracy without RA on every dataset (Section~\ref{sec:ablation}), so it is useful on its own rather than only as a complement to RA. Because the variant without both levels was run in a later batch, the comparison on BCI IV-2b, which lies within the variation between reruns, is only indicative.
+
+At the decision level, the benefit of IM-TTA depended on the RA reference. With the fixed reference, it improved accuracy most clearly on BCI IV-2a and OpenBMI; with the session-specific reference, its gain on OpenBMI almost vanished, whereas it remained on BCI IV-2a and Zhou2016 (Section~\ref{sec:ablation}). On OpenBMI, IM-TTA thus mainly compensated for the change in signal energy between sessions, which the session-specific reference already removes, while on the other datasets it also corrects shifts that RA leaves.
+
+Among the baselines, T-TIME, which also adapts to unlabeled target trials at test time, was the strongest on BCI IV-2a and Zhou2016, in line with the value of target-data access seen in the ablations. Because IM-TTA and the session-specific reference use unlabeled evaluation-session signals, SSM-DAN is transductive, and its fairest comparison is with methods of the same target access. All results come from a single seed, Zhou2016 has few subjects and BCI IV-2b few channels, and no baselines were run on OpenBMI, so small differences, such as the margin over T-TIME on Zhou2016, should not be overinterpreted. The alternating scans exploit complete offline trials and are non-causal, and both IM-TTA and the session-specific reference need the evaluation trials as a batch. Online use would therefore require forward-only scanning and running estimates of the RA reference and of the adapted statistics, which remain to be developed and evaluated together with repeated-seed experiments.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented SSM-DAN, a cross-subject MI-EEG framework that combines multi-scale convolution and bidirectional selective state-space modeling with hierarchical UDA and constrained IM-TTA, evaluated under a chronological LOSO protocol that keeps target labels out of training, adaptation, and model selection. It reached mean accuracies of 76.12\% on BCI IV-2a, 84.09\% on BCI IV-2b, and 84.33\% on Zhou2016. On the 54-subject OpenBMI cohort, the ablation showed that the RA reference should be re-estimated on each session when the signal energy drifts between sessions. Matched baselines and repeated-seed experiments are still needed before drawing broader conclusions.
+We presented SSM-DAN, a cross-subject MI-EEG framework that combines multi-scale convolution and bidirectional selective state-space modeling with hierarchical UDA and constrained IM-TTA, evaluated under a chronological LOSO protocol that keeps target labels out of training, adaptation, and model selection. With a session-specific RA reference, it reached mean accuracies of 77.74\% on BCI IV-2a, 84.10\% on BCI IV-2b, 85.33\% on Zhou2016, and 84.00\% on the 54-subject OpenBMI dataset, the highest of all compared methods on the first three datasets and of all ablation variants on OpenBMI. Repeated-seed experiments and baselines on OpenBMI are still needed before drawing broader conclusions.
 
 \section*{CRediT authorship contribution statement}
 %% One line per author; keep only the CRediT roles each author actually had.

@@ -285,6 +285,65 @@ Bảng 2×2 trên 2a (accuracy %):
 - **Đọc sơ bộ:** khác 2b, trên 2a RA và DA **cộng dồn**. Bỏ RA mất nhiều điểm dù có DA hay không, và DA vẫn giúp khi không có RA. Vậy trên 2a, DA không thay được RA. Điều này khớp với việc 2a là bộ duy nhất có Δ_RA lớn.
 - **Chưa khớp:** mục 13 có 2a source-only (không DA, không IM-TTA) với RA 63.31 và không RA 62.27, chỉ +1.04. Còn ở đây, nếu ghép ô `no_da` của bài thì Δ_RA khoảng +9. Khác biệt có thể do IM-TTA (có ở `no_da`, không có ở source-only) hoặc do khác scan mode. Cần run `no_da` (có RA) cùng đợt để chốt.
 
+### OpenBMI (54 subject, 2026-11-23)
+
+| Run | Acc | κ |
+|---|---|---|
+| `ssm_dan-no_da-no_ra` | 80.22 ± 11.15 | 0.604 ± 0.223 |
+| `ssm_dan-no_ra` (chạy lại) | 81.54 ± 10.54 | 0.631 ± 0.211 |
+
+DA khi không có RA: +1.31 điểm, 33 tăng / 4 bằng / 17 giảm, Wilcoxon (xấp xỉ chuẩn) p = 0.038. `no_ra` chạy lại ra 81.54, thấp hơn 83.50 trong bài. Đã thêm cột "Without RA and domain adaptation" vào tab:ablation (EN+VI), Zhou để "--".
+
+## 6e. Kết quả mục 10: 2b (2026-11-19, nhánh `feature/ssm-dan-source-only-ra`)
+
+Source-only (không DA, không IM-TTA), seed 0. p: Wilcoxon chính xác so với không RA; p_Holm trong 2 phép so.
+
+| Run | S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9 | Acc | κ | p / p_Holm |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| không RA | 77.81 | 68.57 | 63.13 | 89.38 | 96.56 | 73.44 | 84.69 | 86.25 | 85.00 | 80.54 ± 10.05 | 0.611 | — |
+| RA cố định | 74.69 | 62.86 | 63.75 | 92.81 | 97.81 | 81.88 | 88.13 | 91.25 | 84.38 | 81.95 ± 11.78 | 0.639 | 0.36 / 0.72 |
+| RA theo session | 73.75 | 57.86 | 62.19 | 85.94 | 95.94 | 80.62 | 88.13 | 90.62 | 84.38 | 79.94 ± 12.18 | 0.599 | 0.82 / 0.82 |
+
+Bảng RA × DA (lợi ích của RA cố định, điểm %):
+
+| | Không DA (source-only) | Có DA (SSM-DAN) |
+|---|---|---|
+| 2a | +1.04 (6/9, p = 0.73) | **+5.83** |
+| 2b | +1.41 (6/9, p = 0.36) | +0.51 |
+
+**Đọc:** không có DA thì RA giúp ít và như nhau trên 2a và 2b; sự khác biệt giữa hai bộ chỉ xuất hiện khi có DA. Vậy điều khác nhau giữa các bộ không phải hiệu ứng riêng của RA mà là mức RA bổ trợ DA. Kiểm tra trực tiếp: mục 16 (khoảng lệch nguồn–đích trong đặc trưng của `ssm_dan` và `ssm_dan-no_ra`).
+Ghi chú: run RA cố định trước đây (`ra01`, nhánh cũ) cho 82.47; run này 81.95 (code nhánh mới).
+
+**Zhou2016** (n = 4):
+
+| Run | S1 | S2 | S3 | S4 | Acc | κ | p / p_Holm |
+|---|---|---|---|---|---|---|---|
+| không RA | 72.00 | 78.67 | 71.33 | 78.67 | 75.17 ± 3.51 | 0.628 | — |
+| RA cố định | 61.33 | 76.67 | 76.00 | 78.67 | 73.17 ± 6.90 | 0.597 | 0.75 / 1.00 |
+| RA theo session | 82.67 | 81.33 | 69.33 | 77.33 | 77.67 ± 5.20 | 0.665 | 0.63 / 1.00 |
+
+Bảng RA × DA đầy đủ (điểm %; có DA = `ssm_dan` − `ssm_dan-no_ra`, theo session = `per_session_ra` − `no_ra`):
+
+| | RA cố định, không DA | RA cố định, có DA | RA theo session, không DA | RA theo session, có DA |
+|---|---|---|---|---|
+| 2a | +1.04 (p = 0.73) | **+5.83** | chưa chạy | **+7.45** |
+| 2b | +1.41 (p = 0.36) | +0.51 | −0.60 | +0.52 |
+| Zhou | −2.00 (p = 0.75) | +0.33 | +2.50 (p = 0.63) | +1.33 |
+| OpenBMI | chờ | −2.89 | chờ | +0.50 |
+
+Không DA: RA không có ý nghĩa ở bộ nào (−2.0 đến +2.5). Có DA: chỉ 2a được lợi lớn. Chưa có run 2a source-only + RA theo session.
+
+**Lưu ý (2026-11-20):** cột "có DA" ở trên là `ssm_dan` − `ssm_dan-no_ra`, **cả hai đều có IM-TTA**. Vậy +5.83 là lợi ích của RA khi có DA **và** TTA; chưa tách được RA bổ trợ DA hay TTA. Bảng 2 × 2 × 2 của 2a (RA cố định):
+
+| DA | TTA | Không RA | Có RA | RA giúp |
+|---|---|---|---|---|
+| ✗ | ✗ | 62.27 | 63.31 | +1.04 |
+| ✓ | ✗ | **? (`no_ra`, `no_tta_acc`)** | 72.15 | ? |
+| ✗ | ✓ | **? (`no_da,no_ra`)** | 71.37 | ? |
+| ✓ | ✓ | 70.29 | 76.12 | +5.83 |
+
+Mục 18: lấp hai ô "?" cho 2a, 2b, Zhou. Notebook: nhánh `feature/ssm-dan-ra-da-tta`, `notebooks/ra_da_tta_{bcic2a,bcic2b,zhou2016}.ipynb` (run `no_ra` và `no_da,no_ra`, mỗi run tự chấm thêm bản không TTA). Mục 11 gộp vào đây.
+
 ## 7. Câu kết luận dự kiến (điền khi có kết quả)
 
 > RA improved accuracy substantially only on BCI IV-2a (+5.83 points with the fixed reference, +7.45 with the session-specific one), whereas its effect on the other datasets was at most 1.33 points and not significant. The difference was not explained by channel count, number of classes or the size of the inter-subject shift. Instead, BCI IV-2a is the only dataset with [đặc trưng tìm được, ví dụ: many monopolar channels sharing one reference / unfiltered broadband signals]; removing this property from BCI IV-2a reduced the RA gain from … to … points, and [chiều ngược lại] on [dataset] increased it from … to …. RA therefore helps when [cơ chế].
