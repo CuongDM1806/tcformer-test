@@ -88,6 +88,8 @@ def run_lightning_fold(config, subject_id, out_dir: Path, gpu=0):
     model_cls = get_model_cls(config["model"])
     kwargs = cfg.model_kwargs(config)
     kwargs.update(n_channels=datamodule_cls.channels, n_classes=datamodule_cls.classes)
+    if kwargs.get("osc_branch", "none") != "none":
+        kwargs.setdefault("osc_sfreq", config["preprocessing"]["sfreq"])   # states are tuned in Hz
 
     seed_everything(config["seed"])
     metrics = MetricsCallback(config.get("log_every_n_epochs", 10))
@@ -143,6 +145,9 @@ def run_lightning_fold(config, subject_id, out_dir: Path, gpu=0):
         model.adapt_to_target(test_loader)    # labels in the loader are never read
     if hasattr(model, "autodial_alpha") and model.autodial_alpha() is not None:
         record["autodial_alpha"] = model.autodial_alpha()
+    interpretation = getattr(getattr(model, "model", None), "interpretation", None)
+    if callable(interpretation) and interpretation() is not None:
+        record["oscillatory_ssm"] = interpretation()
     started = time.time()
     test = _scores(trainer.test(model, dataloaders=test_loader, verbose=False)[0])
     record["test_time_s"] = time.time() - started

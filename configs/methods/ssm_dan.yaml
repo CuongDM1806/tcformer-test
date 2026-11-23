@@ -90,6 +90,15 @@ variants:
     adaptation_kwargs: {feature_alignment: none, target_im_weight: 0.0, adversarial_weight: 0.0,
                         mmd_weight: 0.0, temporal_mmd_weight: 0.0, im_tta_steps: 0,
                         recalibrate_target_statistics: false}
+  osc:
+    description: >-
+      two-time-scale backbone: a signal-rate oscillatory selective SSM (damped oscillators with learned
+      frequency and bandwidth in Hz, input-dependent step) feeds its log band powers to the token-rate
+      selective SSM (see OscillatorySSM in ssm_dan/models/backbone.py)
+    model_kwargs: {osc_branch: feed}
+  osc_only:
+    description: the oscillatory selective SSM replaces the token-rate selective SSM
+    model_kwargs: {osc_branch: replace}
   no_car:
     description: OpenBMI without the common average reference (needs a cache built without CAR)
     datasets_only: [openbmi]

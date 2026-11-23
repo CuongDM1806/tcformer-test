@@ -6,6 +6,7 @@ license); the attention encoder of TCFormer is replaced by a stack of
 lightweight selective state-space (Mamba-style) blocks with alternating scan
 direction.
 """
+import math
 from typing import List, Sequence
 
 import torch
@@ -311,11 +312,145 @@ class SelectiveSSMBlock(nn.Module):
         return x + self.drop_path(self.dropout(mixed))
 
 
+def _complex_linear_scan(decay_re: Tensor, decay_im: Tensor, drive: Tensor):
+    """h_t = a_t h_{t-1} + x_t over the last axis, h_{-1} = 0, with complex a_t and real x_t.
+
+    Hillis-Steele parallel scan (log2 T levels of element-wise operations): element t
+    holds the affine map h -> a h + x; each level composes it with the map d steps
+    earlier. Only products of |a| <= 1 are formed, so the scan is numerically stable.
+    Complex numbers are kept as (real, imaginary) pairs. Returns (Re h, Im h).
+    """
+    pad = torch.nn.functional.pad
+    ar, ai = decay_re, decay_im
+    xr, xi = drive, torch.zeros_like(drive)
+    length, step = drive.size(-1), 1
+    while step < length:
+        sxr, sxi = pad(xr[..., :-step], (step, 0)), pad(xi[..., :-step], (step, 0))
+        xr, xi = xr + ar * sxr - ai * sxi, xi + ar * sxi + ai * sxr
+        if step * 2 < length:                                   # the last level needs no new a
+            sar = pad(ar[..., :-step], (step, 0), value=1.0)
+            sai = pad(ai[..., :-step], (step, 0))
+            ar, ai = ar * sar - ai * sai, ar * sai + ai * sar
+        step *= 2
+    return xr, xi
+
+
+class OscillatorySSM(nn.Module):
+    """Selective oscillatory state-space branch that runs at the sampling rate of the signal.
+
+    Spatial filters W project the C electrodes onto S virtual channels u_t = W x_t.
+    Each virtual channel drives K complex states, damped oscillators with a learned
+    frequency f_k and bandwidth b_k (in Hz):
+
+        h_t = r_t exp(i 2 pi f_k / fs) h_{t-1} + (1 - r_t) u_t,   r_t = exp(-Delta_t pi b_k / fs).
+
+    The rotation, i.e. the frequency of a state, never depends on the input; only the
+    step Delta_t does (selection, as in Mamba): Delta_t > 1 forgets faster and widens the
+    band, Delta_t < 1 integrates longer. Delta_t is computed from the virtual channel's own
+    recent signal and starts at exactly 1 (a fixed resonator bank). The gain 1 - r_t gives
+    a complex exponential at the centre frequency a unit response, so |h_t|^2 tracks the
+    instantaneous power of u in band k. Window means of this power (the windows of the convolutional stem) are
+    log-compressed and read out to ``d_out`` features per time step.
+
+    Every parameter that shapes the features can be read in physical units
+    (``interpretation``): spatial filters per virtual channel, centre frequency and
+    bandwidth per state, and the weight of each state in the readout.
+    """
+
+    def __init__(self, n_channels: int, d_out: int, sfreq: float, n_virtual: int = 16, n_modes: int = 8,
+                 f_min: float = 4.0, f_max: float = 40.0, bandwidth_ratio: float = 0.4,
+                 delta_kernel: int = 32, pool_lengths: Sequence[int] = (8, 7), dropout: float = 0.4):
+        super().__init__()
+        if sfreq is None or sfreq <= 0:
+            raise ValueError("OscillatorySSM needs the sampling rate (osc_sfreq).")
+        nyquist = sfreq / 2
+        self.sfreq = float(sfreq)
+        self.n_virtual, self.n_modes = n_virtual, n_modes
+        self.f_low, self.f_high = 1.0, min(45.0, 0.9 * nyquist)     # frequency range of a state
+        self.b_low, self.b_high = 0.5, 0.5 * nyquist                  # bandwidth range
+        f_max = min(f_max, 0.95 * self.f_high)
+        self.spatial = nn.Conv1d(n_channels, n_virtual, 1, bias=False)
+        # Centre frequencies log-spaced in [f_min, f_max], the same grid for every virtual channel.
+        freqs = torch.logspace(math.log10(f_min), math.log10(f_max), n_modes).repeat(n_virtual, 1)
+        self.freq_logit = nn.Parameter(self._logit((freqs - self.f_low) / (self.f_high - self.f_low)))
+        bandwidths = (bandwidth_ratio * freqs).clamp(min=1.0)
+        self.bandwidth_logit = nn.Parameter(self._logit((bandwidths - self.b_low) / (self.b_high - self.b_low)))
+        # Selection: Delta_t from the virtual channel's own causal neighbourhood; zero-initialized
+        # read-out weights and a bias of softplus^-1(1) give Delta_t = 1 at the start.
+        self.delta_kernel = delta_kernel
+        self.delta_conv = nn.Conv1d(n_virtual, n_virtual, delta_kernel, groups=n_virtual)
+        self.delta_proj = nn.Conv1d(n_virtual, n_virtual * n_modes, 1, groups=n_virtual)
+        nn.init.zeros_(self.delta_proj.weight)
+        nn.init.constant_(self.delta_proj.bias, math.log(math.e - 1.0))
+        self.pool = nn.Sequential(*[nn.AvgPool1d(p) for p in pool_lengths])
+        self.power_norm = nn.BatchNorm1d(n_virtual * n_modes)
+        self.readout = nn.Sequential(
+            nn.Conv1d(n_virtual * n_modes, d_out, 1, bias=False),
+            nn.BatchNorm1d(d_out),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+        )
+
+    @staticmethod
+    def _logit(p: Tensor) -> Tensor:
+        p = p.clamp(1e-4, 1 - 1e-4)
+        return torch.log(p) - torch.log1p(-p)
+
+    def frequencies(self) -> Tensor:                            # [S, K] in Hz
+        return self.f_low + (self.f_high - self.f_low) * torch.sigmoid(self.freq_logit)
+
+    def bandwidths(self) -> Tensor:                             # [S, K] in Hz
+        return self.b_low + (self.b_high - self.b_low) * torch.sigmoid(self.bandwidth_logit)
+
+    def delta(self, u: Tensor) -> Tensor:                       # u: [B, S, T] -> [B, S*K, T]
+        context = torch.nn.functional.pad(u, (self.delta_kernel - 1, 0))     # causal
+        z = self.delta_proj(torch.nn.functional.silu(self.delta_conv(context)))
+        return torch.nn.functional.softplus(z).clamp(0.05, 4.0)
+
+    def band_power(self, x: Tensor) -> Tensor:
+        """Instantaneous power |h_t|^2 of every state: [B, S*K, T]."""
+        u = self.spatial(x)                                     # [B, S, T]
+        batch, _, length = u.shape
+        omega = (2 * math.pi / self.sfreq) * self.frequencies().reshape(1, -1, 1)
+        damping = (math.pi / self.sfreq) * self.bandwidths().reshape(1, -1, 1)
+        radius = torch.exp(-self.delta(u) * damping)            # r_t in (0, 1)
+        drive = (1 - radius) * u.repeat_interleave(self.n_modes, dim=1)
+        h_re, h_im = _complex_linear_scan(radius * torch.cos(omega), radius * torch.sin(omega), drive)
+        return h_re ** 2 + h_im ** 2
+
+    def forward(self, x: Tensor) -> Tensor:                     # x: [B, C, T] -> [B, d_out, T']
+        log_power = torch.log(self.pool(self.band_power(x)) + 1e-6)
+        return self.readout(self.power_norm(log_power))
+
+    @torch.no_grad()
+    def interpretation(self) -> dict:
+        """Physical read-out of the branch (lists, for the run's JSON record)."""
+        conv, out_norm = self.readout[0], self.power_norm
+        # Weight of each state in the readout, through the batch normalization before it.
+        scale = out_norm.weight.abs() / torch.sqrt(out_norm.running_var + out_norm.eps)
+        weight = conv.weight[:, :, 0].norm(dim=0) * scale
+        shape = (self.n_virtual, self.n_modes)
+        return {
+            "sfreq": self.sfreq,
+            "frequency_hz": self.frequencies().cpu().tolist(),
+            "bandwidth_hz": self.bandwidths().cpu().tolist(),
+            "readout_weight": weight.reshape(shape).cpu().tolist(),
+            "spatial_filters": self.spatial.weight[:, :, 0].cpu().tolist(),       # [S, C]
+        }
+
+
 class SSMBackbone(nn.Module):
     """Convolutional stem -> selective SSM encoder -> grouped TCN head.
 
     ``extract_features`` returns the pooled feature vector of dimension
     ``d_group * (n_kernel_groups + 1)`` used by the adaptation head.
+
+    ``osc_branch`` adds the signal-rate ``OscillatorySSM`` (default ``"none"``: the paper's backbone,
+    built exactly as before):
+
+    * ``"feed"``: two time scales. The oscillatory band powers join the convolutional tokens at the
+      input of the token-rate selective SSM, whose output forms the last feature group as before.
+    * ``"replace"``: the oscillatory branch forms the last feature group itself; no token SSM.
     """
 
     def __init__(
@@ -339,8 +474,20 @@ class SSMBackbone(nn.Module):
         ssm_d_state: int = 8,
         ssm_d_conv: int = 3,
         ssm_scan: str = "hoisted",
+        osc_branch: str = "none",
+        osc_sfreq: float = None,
+        osc_virtual_channels: int = 16,
+        osc_modes: int = 8,
+        osc_f_min: float = 4.0,
+        osc_f_max: float = 40.0,
+        osc_bandwidth_ratio: float = 0.4,
+        osc_delta_kernel: int = 32,
+        osc_dropout: float = 0.4,
     ):
         super().__init__()
+        if osc_branch not in ("none", "feed", "replace"):
+            raise ValueError(f"osc_branch must be none | feed | replace, got {osc_branch!r}")
+        self.osc_branch = osc_branch
         unknown = set(ssm_directions) - {"forward", "backward"}
         if unknown or not ssm_directions:
             raise ValueError(f"ssm_directions must be a non-empty list of forward/backward, got {ssm_directions}")
@@ -352,36 +499,54 @@ class SSMBackbone(nn.Module):
         self.rearrange = Rearrange("b c seq -> b seq c")
         self.conv_block = MultiKernelConvBlock(n_channels, temp_kernel_lengths, F1, D, pool_length_1,
                                                pool_length_2, dropout_conv, d_group, use_group_attn)
-        self.mix = nn.Sequential(
-            nn.Conv1d(self.d_model, self.d_model, kernel_size=1, groups=1, bias=False),
-            nn.BatchNorm1d(self.d_model),
-            nn.SiLU(),
-        )
-        # Drop-path rate grows quadratically from 0 to drop_path_max with depth.
-        drop_rates = torch.linspace(0, 1, len(ssm_directions)) ** 2 * drop_path_max
-        self.ssm_blocks = nn.ModuleList(
-            SelectiveSSMBlock(self.d_model, d_state=ssm_d_state, d_conv=ssm_d_conv, scan=ssm_scan,
-                              dropout=ssm_dropout, drop_path_rate=drop_rates[i].item(),
-                              reverse=direction == "backward")
-            for i, direction in enumerate(ssm_directions)
-        )
-        self.reduce = nn.Sequential(
-            Rearrange("b t c -> b c t"),
-            nn.Conv1d(self.d_model, d_group, kernel_size=1, groups=1, bias=False),
-            nn.BatchNorm1d(d_group),
-            nn.SiLU(),
-        )
+        if osc_branch != "replace":
+            mix_in = self.d_model + (d_group if osc_branch == "feed" else 0)
+            self.mix = nn.Sequential(
+                nn.Conv1d(mix_in, self.d_model, kernel_size=1, groups=1, bias=False),
+                nn.BatchNorm1d(self.d_model),
+                nn.SiLU(),
+            )
+            # Drop-path rate grows quadratically from 0 to drop_path_max with depth.
+            drop_rates = torch.linspace(0, 1, len(ssm_directions)) ** 2 * drop_path_max
+            self.ssm_blocks = nn.ModuleList(
+                SelectiveSSMBlock(self.d_model, d_state=ssm_d_state, d_conv=ssm_d_conv, scan=ssm_scan,
+                                  dropout=ssm_dropout, drop_path_rate=drop_rates[i].item(),
+                                  reverse=direction == "backward")
+                for i, direction in enumerate(ssm_directions)
+            )
+            self.reduce = nn.Sequential(
+                Rearrange("b t c -> b c t"),
+                nn.Conv1d(self.d_model, d_group, kernel_size=1, groups=1, bias=False),
+                nn.BatchNorm1d(d_group),
+                nn.SiLU(),
+            )
         self.tcn_head = TCNHead(self.feature_dim, self.n_groups + 1, tcn_depth,
                                 kernel_length_tcn, dropout_tcn, n_classes)
+        if osc_branch != "none":
+            self.osc = OscillatorySSM(n_channels, d_group, osc_sfreq, n_virtual=osc_virtual_channels,
+                                      n_modes=osc_modes, f_min=osc_f_min, f_max=osc_f_max,
+                                      bandwidth_ratio=osc_bandwidth_ratio, delta_kernel=osc_delta_kernel,
+                                      pool_lengths=(pool_length_1, pool_length_2), dropout=osc_dropout)
 
     def extract_temporal_features(self, x):                     # x: [B, C, T]
         conv_features = self.conv_block(x)
-        tokens = self.rearrange(self.mix(conv_features))
-        for block in self.ssm_blocks:
-            tokens = block(tokens)
-        ssm_features = self.reduce(tokens)
+        if self.osc_branch == "replace":
+            ssm_features = self.osc(x)
+        else:
+            tokens = conv_features
+            if self.osc_branch == "feed":
+                tokens = torch.cat((tokens, self.osc(x)), dim=1)
+            tokens = self.rearrange(self.mix(tokens))
+            for block in self.ssm_blocks:
+                tokens = block(tokens)
+            ssm_features = self.reduce(tokens)
         features = torch.cat((conv_features, ssm_features), dim=1)
         return self.tcn_head.extract_temporal_features(features)
+
+    def interpretation(self):
+        """Learned frequencies, bandwidths, readout weights and spatial filters of the
+        oscillatory branch (None without it)."""
+        return self.osc.interpretation() if self.osc_branch != "none" else None
 
     def extract_features(self, x):
         return self.tcn_head.pool_temporal_features(self.extract_temporal_features(x))
@@ -397,6 +562,8 @@ BACKBONE_KWARGS = (
     "F1", "temp_kernel_lengths", "pool_length_1", "pool_length_2", "D", "dropout_conv", "d_group",
     "tcn_depth", "kernel_length_tcn", "dropout_tcn", "use_group_attn", "ssm_directions",
     "ssm_dropout", "drop_path_max", "ssm_d_state", "ssm_d_conv", "ssm_scan",
+    "osc_branch", "osc_sfreq", "osc_virtual_channels", "osc_modes", "osc_f_min", "osc_f_max",
+    "osc_bandwidth_ratio", "osc_delta_kernel", "osc_dropout",
 )
 
 
