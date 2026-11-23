@@ -171,6 +171,11 @@ def download(dataset, retries=10):
                 moabb_dataset.data_path(subject)
                 break
             except Exception as error:       # servers drop connections now and then
+                status = getattr(getattr(error, "response", None), "status_code", None)
+                if status in (401, 403, 404):  # refused, not flaky: retrying only wastes time
+                    raise RuntimeError(
+                        f"{dataset}: the server refused the download (HTTP {status}). Attach the files as a "
+                        f"Kaggle Dataset or input directory instead (see data/README.md).") from error
                 if attempt == retries:
                     raise
                 print(f"{dataset} subject {subject}: {type(error).__name__}; retry {attempt}/{retries - 1} "
