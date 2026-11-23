@@ -83,6 +83,24 @@ def _scores(result):
             "kappa": float(result["test_kappa"])}
 
 
+def _channel_sides(datamodule):
+    """-1/0/+1 per electrode of the loaded recordings (standard_1020 x coordinate)."""
+    from .models.backbone import channel_sides
+
+    datamodule.prepare_data()                 # loads once; Lightning's own call then returns at once
+    dataset = datamodule.dataset
+    while hasattr(dataset, "datasets"):
+        dataset = dataset.datasets[0]
+    if not hasattr(dataset, "windows"):
+        raise ValueError("osc_channel_side='auto' needs channel names (Braindecode windows); "
+                         "give the sides as a list instead.")
+    names = list(dataset.windows.ch_names)
+    sides = channel_sides(names)
+    print("Hemispheric spatial mask:", " ".join(f"{n}:{'L0R'[s + 1]}" for n, s in zip(names, sides)),
+          flush=True)
+    return sides
+
+
 def run_lightning_fold(config, subject_id, out_dir: Path, gpu=0):
     datamodule_cls = get_datamodule_cls(config["dataset"])
     model_cls = get_model_cls(config["model"])
@@ -100,6 +118,8 @@ def run_lightning_fold(config, subject_id, out_dir: Path, gpu=0):
                            mode="max", save_top_k=1, save_last=False, auto_insert_metric_name=False)
     trainer = _trainer(config, gpu, [metrics, best])
     datamodule = datamodule_cls(config["preprocessing"], subject_id=subject_id)
+    if kwargs.get("osc_channel_side") == "auto":
+        kwargs["osc_channel_side"] = _channel_sides(datamodule)
     model = model_cls(**kwargs)
     param_count = sum(p.numel() for p in model.parameters())
 

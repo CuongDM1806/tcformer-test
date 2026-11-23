@@ -99,6 +99,20 @@ variants:
   osc_only:
     description: the oscillatory selective SSM replaces the token-rate selective SSM
     model_kwargs: {osc_branch: replace}
+  sync:
+    description: >-
+      oscillatory branch reads phase synchrony between virtual channels per band (SyncProbes) next to
+      log band power; frequencies shared by all virtual channels (use after osc or osc_only)
+    model_kwargs: {osc_sync: concat}
+  sync_only:
+    description: oscillatory branch reads phase synchrony only (no band power; use after osc or osc_only)
+    model_kwargs: {osc_sync: only}
+  hemi:
+    description: >-
+      hemispheric spatial mask: half of the virtual channels see left + midline electrodes, the
+      other half midline + right (sides from the standard_1020 montage); synchrony probes start
+      as left, right and global probes
+    model_kwargs: {osc_channel_side: auto}
   no_car:
     description: OpenBMI without the common average reference (needs a cache built without CAR)
     datasets_only: [openbmi]

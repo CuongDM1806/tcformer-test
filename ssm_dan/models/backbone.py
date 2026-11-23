@@ -335,6 +335,65 @@ def _complex_linear_scan(decay_re: Tensor, decay_im: Tensor, drive: Tensor):
     return xr, xi
 
 
+class SyncProbes(nn.Module):
+    """Phase synchrony between virtual channels within each band.
+
+    For band k and probe j, with unit phasors p_{s,k}(t) = h_{s,k}(t) / sqrt(|h_{s,k}(t)|^2 + eps):
+
+        R_{j,k}(t) = |sum_s w_{j,s,k} p_{s,k}(t)| / (sum_s |w_{j,s,k}| + eps)  in [0, 1],
+        w_{j,s,k} = softplus(a_{j,s,k}) exp(i phi_{j,s,k}).
+
+    R ignores amplitudes. The learned phases phi absorb the arbitrary sign of a spatial filter
+    and fixed phase lags between sources, so R measures how stable the phase relation is,
+    not whether the phases coincide. Complex numbers are (real, imaginary) pairs.
+    """
+
+    def __init__(self, n_virtual: int, n_modes: int, n_probes: int = 3, hemi_split: bool = False,
+                 eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        if hemi_split and n_probes >= 2:
+            a = torch.full((n_probes, n_virtual, n_modes), -3.0)
+            half = n_virtual // 2
+            a[0, :half] = 2.0                                   # left-hemisphere virtual channels
+            a[1, half:] = 2.0                                   # right-hemisphere virtual channels
+            if n_probes >= 3:
+                a[2:] = 2.0                                     # global probes
+        else:
+            a = 0.5 * torch.randn(n_probes, n_virtual, n_modes)
+        self.amp_logit = nn.Parameter(a)
+        self.phase = nn.Parameter(torch.zeros(n_probes, n_virtual, n_modes))
+
+    def amplitudes(self) -> Tensor:                             # [J, S, K]
+        return torch.nn.functional.softplus(self.amp_logit)
+
+    def forward(self, h_re: Tensor, h_im: Tensor) -> Tensor:    # [B, S, K, T] -> [B, J*K, T]
+        mag = torch.sqrt(h_re ** 2 + h_im ** 2 + self.eps)
+        pr, pi = h_re / mag, h_im / mag
+        amp = self.amplitudes()
+        wr, wi = amp * torch.cos(self.phase), amp * torch.sin(self.phase)
+        sr = torch.einsum('jsk,bskt->bjkt', wr, pr) - torch.einsum('jsk,bskt->bjkt', wi, pi)
+        si = torch.einsum('jsk,bskt->bjkt', wr, pi) + torch.einsum('jsk,bskt->bjkt', wi, pr)
+        R = torch.sqrt(sr ** 2 + si ** 2 + self.eps) / (amp.sum(dim=1)[None, :, :, None] + self.eps)
+        return R.flatten(1, 2)                                  # channel order j*K + k
+
+
+def channel_sides(names: Sequence[str], midline_m: float = 0.005) -> List[int]:
+    """-1 (left), 0 (midline), +1 (right) for each channel, from the x coordinate of the
+    standard_1020 montage (case-insensitive names)."""
+    import mne
+    positions = mne.channels.make_standard_montage("standard_1020").get_positions()["ch_pos"]
+    by_name = {name.lower(): xyz for name, xyz in positions.items()}
+    missing = [n for n in names if n.lower() not in by_name]
+    if missing:
+        raise KeyError(f"Channels without a standard_1020 position: {missing}")
+    sides = []
+    for name in names:
+        x = float(by_name[name.lower()][0])
+        sides.append(0 if abs(x) < midline_m else (-1 if x < 0 else 1))
+    return sides
+
+
 class OscillatorySSM(nn.Module):
     """Selective oscillatory state-space branch that runs at the sampling rate of the signal.
 
@@ -348,32 +407,46 @@ class OscillatorySSM(nn.Module):
     step Delta_t does (selection, as in Mamba): Delta_t > 1 forgets faster and widens the
     band, Delta_t < 1 integrates longer. Delta_t is computed from the virtual channel's own
     recent signal and starts at exactly 1 (a fixed resonator bank). The gain 1 - r_t gives
-    a complex exponential at the centre frequency a unit response, so |h_t|^2 tracks the
-    instantaneous power of u in band k. Window means of this power (the windows of the convolutional stem) are
-    log-compressed and read out to ``d_out`` features per time step.
+    a complex exponential at the centre frequency a unit response (no phase shift, whatever
+    the bandwidth), so |h_t|^2 tracks the instantaneous power of u in band k.
+
+    Readout (``sync_mode``): ``"none"`` window means of log power (S*K features); ``"concat"``
+    adds window means of the phase synchrony R of ``SyncProbes`` (J*K features); ``"only"``
+    keeps R alone. With synchrony the centre frequencies are shared by all virtual channels
+    (``tie_freq``, automatic), since synchrony compares states of the same frequency.
+    ``channel_side`` (-1/0/+1 per electrode) restricts the first S/2 virtual channels to the
+    left and midline electrodes and the others to the midline and right ones; the probes then
+    start as left, right and global probes.
 
     Every parameter that shapes the features can be read in physical units
-    (``interpretation``): spatial filters per virtual channel, centre frequency and
-    bandwidth per state, and the weight of each state in the readout.
+    (``interpretation``).
     """
 
     def __init__(self, n_channels: int, d_out: int, sfreq: float, n_virtual: int = 16, n_modes: int = 8,
                  f_min: float = 4.0, f_max: float = 40.0, bandwidth_ratio: float = 0.4,
-                 delta_kernel: int = 32, pool_lengths: Sequence[int] = (8, 7), dropout: float = 0.4):
+                 delta_kernel: int = 32, pool_lengths: Sequence[int] = (8, 7), dropout: float = 0.4,
+                 sync_mode: str = "none", n_probes: int = 3, tie_freq: bool = None,
+                 channel_side: Sequence[int] = None):
         super().__init__()
         if sfreq is None or sfreq <= 0:
             raise ValueError("OscillatorySSM needs the sampling rate (osc_sfreq).")
+        if sync_mode not in ("none", "concat", "only"):
+            raise ValueError(f"osc_sync must be none | concat | only, got {sync_mode!r}")
         nyquist = sfreq / 2
         self.sfreq = float(sfreq)
         self.n_virtual, self.n_modes = n_virtual, n_modes
+        self.sync_mode = sync_mode
+        self.tie_freq = (sync_mode != "none") if tie_freq is None else bool(tie_freq)
         self.f_low, self.f_high = 1.0, min(45.0, 0.9 * nyquist)     # frequency range of a state
         self.b_low, self.b_high = 0.5, 0.5 * nyquist                  # bandwidth range
         f_max = min(f_max, 0.95 * self.f_high)
         self.spatial = nn.Conv1d(n_channels, n_virtual, 1, bias=False)
-        # Centre frequencies log-spaced in [f_min, f_max], the same grid for every virtual channel.
-        freqs = torch.logspace(math.log10(f_min), math.log10(f_max), n_modes).repeat(n_virtual, 1)
+        # Centre frequencies log-spaced in [f_min, f_max]: one grid shared by every virtual channel
+        # (tie_freq) or one copy of it per virtual channel.
+        grid = torch.logspace(math.log10(f_min), math.log10(f_max), n_modes)
+        freqs = grid.unsqueeze(0) if self.tie_freq else grid.repeat(n_virtual, 1)
         self.freq_logit = nn.Parameter(self._logit((freqs - self.f_low) / (self.f_high - self.f_low)))
-        bandwidths = (bandwidth_ratio * freqs).clamp(min=1.0)
+        bandwidths = (bandwidth_ratio * grid.repeat(n_virtual, 1)).clamp(min=1.0)
         self.bandwidth_logit = nn.Parameter(self._logit((bandwidths - self.b_low) / (self.b_high - self.b_low)))
         # Selection: Delta_t from the virtual channel's own causal neighbourhood; zero-initialized
         # read-out weights and a bias of softplus^-1(1) give Delta_t = 1 at the start.
@@ -383,13 +456,28 @@ class OscillatorySSM(nn.Module):
         nn.init.zeros_(self.delta_proj.weight)
         nn.init.constant_(self.delta_proj.bias, math.log(math.e - 1.0))
         self.pool = nn.Sequential(*[nn.AvgPool1d(p) for p in pool_lengths])
-        self.power_norm = nn.BatchNorm1d(n_virtual * n_modes)
+        self.n_power = 0 if sync_mode == "only" else n_virtual * n_modes
+        self.n_sync = 0 if sync_mode == "none" else n_probes * n_modes
+        n_features = self.n_power + self.n_sync
+        self.power_norm = nn.BatchNorm1d(n_features)
         self.readout = nn.Sequential(
-            nn.Conv1d(n_virtual * n_modes, d_out, 1, bias=False),
+            nn.Conv1d(n_features, d_out, 1, bias=False),
             nn.BatchNorm1d(d_out),
             nn.SiLU(),
             nn.Dropout(dropout),
         )
+        self.hemispheric = channel_side is not None
+        if self.hemispheric:
+            side = torch.as_tensor(list(channel_side), dtype=torch.float32)
+            if side.numel() != n_channels or not set(side.tolist()) <= {-1.0, 0.0, 1.0}:
+                raise ValueError("osc_channel_side needs one value -1, 0 or +1 per channel.")
+            half = n_virtual // 2
+            mask = torch.zeros(n_virtual, n_channels)
+            mask[:half] = (side <= 0).float()                   # left + midline
+            mask[half:] = (side >= 0).float()                   # midline + right
+            self.register_buffer("spatial_mask", mask)
+        if sync_mode != "none":                                 # absent otherwise: old state_dict kept
+            self.sync = SyncProbes(n_virtual, n_modes, n_probes, hemi_split=self.hemispheric)
 
     @staticmethod
     def _logit(p: Tensor) -> Tensor:
@@ -397,46 +485,74 @@ class OscillatorySSM(nn.Module):
         return torch.log(p) - torch.log1p(-p)
 
     def frequencies(self) -> Tensor:                            # [S, K] in Hz
-        return self.f_low + (self.f_high - self.f_low) * torch.sigmoid(self.freq_logit)
+        freqs = self.f_low + (self.f_high - self.f_low) * torch.sigmoid(self.freq_logit)
+        return freqs.expand(self.n_virtual, self.n_modes)
 
     def bandwidths(self) -> Tensor:                             # [S, K] in Hz
         return self.b_low + (self.b_high - self.b_low) * torch.sigmoid(self.bandwidth_logit)
+
+    def spatial_weight(self) -> Tensor:                         # [S, C, 1], masked if hemispheric
+        weight = self.spatial.weight
+        return weight * self.spatial_mask[:, :, None] if self.hemispheric else weight
 
     def delta(self, u: Tensor) -> Tensor:                       # u: [B, S, T] -> [B, S*K, T]
         context = torch.nn.functional.pad(u, (self.delta_kernel - 1, 0))     # causal
         z = self.delta_proj(torch.nn.functional.silu(self.delta_conv(context)))
         return torch.nn.functional.softplus(z).clamp(0.05, 4.0)
 
-    def band_power(self, x: Tensor) -> Tensor:
-        """Instantaneous power |h_t|^2 of every state: [B, S*K, T]."""
-        u = self.spatial(x)                                     # [B, S, T]
-        batch, _, length = u.shape
+    def band_state(self, x: Tensor):
+        """(Re h, Im h), each [B, S*K, T]; channel order s*K + k (as repeat_interleave and
+        frequencies().reshape)."""
+        u = torch.nn.functional.conv1d(x, self.spatial_weight()) if self.hemispheric else self.spatial(x)
         omega = (2 * math.pi / self.sfreq) * self.frequencies().reshape(1, -1, 1)
         damping = (math.pi / self.sfreq) * self.bandwidths().reshape(1, -1, 1)
         radius = torch.exp(-self.delta(u) * damping)            # r_t in (0, 1)
         drive = (1 - radius) * u.repeat_interleave(self.n_modes, dim=1)
-        h_re, h_im = _complex_linear_scan(radius * torch.cos(omega), radius * torch.sin(omega), drive)
+        return _complex_linear_scan(radius * torch.cos(omega), radius * torch.sin(omega), drive)
+
+    def band_power(self, x: Tensor) -> Tensor:
+        """Instantaneous power |h_t|^2 of every state: [B, S*K, T]."""
+        h_re, h_im = self.band_state(x)
         return h_re ** 2 + h_im ** 2
 
+    def synchrony(self, h_re: Tensor, h_im: Tensor) -> Tensor:  # [B, S*K, T] -> [B, J*K, T]
+        shape = (h_re.size(0), self.n_virtual, self.n_modes, h_re.size(-1))
+        return self.sync(h_re.reshape(shape), h_im.reshape(shape))
+
     def forward(self, x: Tensor) -> Tensor:                     # x: [B, C, T] -> [B, d_out, T']
-        log_power = torch.log(self.pool(self.band_power(x)) + 1e-6)
-        return self.readout(self.power_norm(log_power))
+        h_re, h_im = self.band_state(x)
+        features = []
+        if self.sync_mode != "only":
+            features.append(torch.log(self.pool(h_re ** 2 + h_im ** 2) + 1e-6))   # [B, S*K, T']
+        if self.sync_mode != "none":
+            features.append(self.pool(self.synchrony(h_re, h_im)))               # [B, J*K, T'], linear mean
+        return self.readout(self.power_norm(torch.cat(features, dim=1)))
 
     @torch.no_grad()
     def interpretation(self) -> dict:
         """Physical read-out of the branch (lists, for the run's JSON record)."""
         conv, out_norm = self.readout[0], self.power_norm
-        # Weight of each state in the readout, through the batch normalization before it.
+        # Weight of each feature in the readout, through the batch normalization before it.
         scale = out_norm.weight.abs() / torch.sqrt(out_norm.running_var + out_norm.eps)
         weight = conv.weight[:, :, 0].norm(dim=0) * scale
-        shape = (self.n_virtual, self.n_modes)
-        return {
+        result = {
             "sfreq": self.sfreq,
+            "sync_mode": self.sync_mode,
+            "tie_freq": self.tie_freq,
             "frequency_hz": self.frequencies().cpu().tolist(),
             "bandwidth_hz": self.bandwidths().cpu().tolist(),
-            "readout_weight": weight.reshape(shape).cpu().tolist(),
-            "spatial_filters": self.spatial.weight[:, :, 0].cpu().tolist(),       # [S, C]
+            "spatial_filters": self.spatial_weight()[:, :, 0].cpu().tolist(),     # [S, C]
         }
+        if self.n_power:
+            result["readout_weight"] = weight[:self.n_power].reshape(self.n_virtual, self.n_modes).cpu().tolist()
+        if self.n_sync:
+            n_probes = self.n_sync // self.n_modes
+            result["sync_readout_weight"] = weight[self.n_power:].reshape(n_probes, self.n_modes).cpu().tolist()
+            result["sync_probe_amplitude"] = self.sync.amplitudes().cpu().tolist()          # [J, S, K]
+            result["sync_probe_phase_rad"] = self.sync.phase.cpu().tolist()                 # [J, S, K]
+        if self.hemispheric:
+            result["spatial_mask"] = self.spatial_mask.cpu().tolist()
+        return result
 
 
 class SSMBackbone(nn.Module):
@@ -483,6 +599,10 @@ class SSMBackbone(nn.Module):
         osc_bandwidth_ratio: float = 0.4,
         osc_delta_kernel: int = 32,
         osc_dropout: float = 0.4,
+        osc_sync: str = "none",
+        osc_sync_probes: int = 3,
+        osc_tie_freq: bool = None,
+        osc_channel_side: Sequence[int] = None,
     ):
         super().__init__()
         if osc_branch not in ("none", "feed", "replace"):
@@ -526,7 +646,9 @@ class SSMBackbone(nn.Module):
             self.osc = OscillatorySSM(n_channels, d_group, osc_sfreq, n_virtual=osc_virtual_channels,
                                       n_modes=osc_modes, f_min=osc_f_min, f_max=osc_f_max,
                                       bandwidth_ratio=osc_bandwidth_ratio, delta_kernel=osc_delta_kernel,
-                                      pool_lengths=(pool_length_1, pool_length_2), dropout=osc_dropout)
+                                      pool_lengths=(pool_length_1, pool_length_2), dropout=osc_dropout,
+                                      sync_mode=osc_sync, n_probes=osc_sync_probes, tie_freq=osc_tie_freq,
+                                      channel_side=osc_channel_side)
 
     def extract_temporal_features(self, x):                     # x: [B, C, T]
         conv_features = self.conv_block(x)
@@ -564,6 +686,7 @@ BACKBONE_KWARGS = (
     "ssm_dropout", "drop_path_max", "ssm_d_state", "ssm_d_conv", "ssm_scan",
     "osc_branch", "osc_sfreq", "osc_virtual_channels", "osc_modes", "osc_f_min", "osc_f_max",
     "osc_bandwidth_ratio", "osc_delta_kernel", "osc_dropout",
+    "osc_sync", "osc_sync_probes", "osc_tie_freq", "osc_channel_side",
 )
 
 
