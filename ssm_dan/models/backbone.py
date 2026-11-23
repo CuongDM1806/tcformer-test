@@ -312,8 +312,9 @@ class SelectiveSSMBlock(nn.Module):
         return x + self.drop_path(self.dropout(mixed))
 
 
-def _complex_linear_scan(decay_re: Tensor, decay_im: Tensor, drive: Tensor):
-    """h_t = a_t h_{t-1} + x_t over the last axis, h_{-1} = 0, with complex a_t and real x_t.
+def _complex_linear_scan(decay_re: Tensor, decay_im: Tensor, drive: Tensor, drive_im: Tensor = None):
+    """h_t = a_t h_{t-1} + x_t over the last axis, h_{-1} = 0, with complex a_t and x_t
+    (x_t real unless ``drive_im`` is given).
 
     Hillis-Steele parallel scan (log2 T levels of element-wise operations): element t
     holds the affine map h -> a h + x; each level composes it with the map d steps
@@ -322,7 +323,7 @@ def _complex_linear_scan(decay_re: Tensor, decay_im: Tensor, drive: Tensor):
     """
     pad = torch.nn.functional.pad
     ar, ai = decay_re, decay_im
-    xr, xi = drive, torch.zeros_like(drive)
+    xr, xi = drive, (torch.zeros_like(drive) if drive_im is None else drive_im)
     length, step = drive.size(-1), 1
     while step < length:
         sxr, sxi = pad(xr[..., :-step], (step, 0)), pad(xi[..., :-step], (step, 0))
@@ -333,6 +334,48 @@ def _complex_linear_scan(decay_re: Tensor, decay_im: Tensor, drive: Tensor):
             ar, ai = ar * sar - ai * sai, ar * sai + ai * sar
         step *= 2
     return xr, xi
+
+
+def _oscillator_scan(log_decay: Tensor, omega: Tensor, drive: Tensor, chunk: int = 16):
+    """Same recurrence as ``_complex_linear_scan`` for a_t = exp(-z_t + i omega), i.e. a fixed
+    rotation per state and an input-dependent decay z_t >= 0 (``log_decay``), in O(T) work.
+
+    Within a chunk of length K starting at c, with l_t = sum_{c<=tau<=t} z_tau and k_t = t - c + 1,
+        h_t = exp(-l_t + i omega k_t) [h_{c-1} + sum_{c<=s<=t} exp(l_s - i omega k_s) x_s],
+    i.e. one cumulative sum per chunk. exp(l_s) stays below exp(K max z), finite in float32 for
+    K * max z < 88 (K = 16 and z <= 4 * pi / 4 here). The chunk-end states are then linked by the
+    Hillis-Steele scan over T / K chunks.
+
+    log_decay, drive: [B, N, T]; omega: [1, N, 1] (rad/sample). Returns (Re h, Im h), [B, N, T].
+    """
+    batch, states, length = drive.shape
+    pad = (-length) % chunk
+    if pad:                                                     # trailing padding never reaches earlier steps
+        log_decay = torch.nn.functional.pad(log_decay, (0, pad))
+        drive = torch.nn.functional.pad(drive, (0, pad))
+    n_chunks = (length + pad) // chunk
+    z = log_decay.reshape(batch, states, n_chunks, chunk)
+    x = drive.reshape(batch, states, n_chunks, chunk)
+    ell = z.cumsum(dim=-1)                                      # l_t
+    k = torch.arange(1, chunk + 1, device=drive.device, dtype=drive.dtype)
+    angle = omega.unsqueeze(-1) * k                             # [1, N, 1, K]
+    cos_k, sin_k = torch.cos(angle), torch.sin(angle)
+    grow = torch.exp(ell) * x
+    sum_re, sum_im = (grow * cos_k).cumsum(dim=-1), (-grow * sin_k).cumsum(dim=-1)
+    shrink = torch.exp(-ell)
+    prop_re, prop_im = shrink * cos_k, shrink * sin_k           # exp(-l_t + i omega k_t)
+    local_re = prop_re * sum_re - prop_im * sum_im              # state with h_{c-1} = 0
+    local_im = prop_re * sum_im + prop_im * sum_re
+    # Chunk-end states: H_c = A_c H_{c-1} + Y_c.
+    carry_re, carry_im = _complex_linear_scan(prop_re[..., -1], prop_im[..., -1],
+                                              local_re[..., -1], local_im[..., -1])
+    pad1 = torch.nn.functional.pad
+    prev_re = pad1(carry_re[..., :-1], (1, 0)).unsqueeze(-1)    # h_{c-1}
+    prev_im = pad1(carry_im[..., :-1], (1, 0)).unsqueeze(-1)
+    h_re = local_re + prop_re * prev_re - prop_im * prev_im
+    h_im = local_im + prop_re * prev_im + prop_im * prev_re
+    return (h_re.reshape(batch, states, -1)[..., :length],
+            h_im.reshape(batch, states, -1)[..., :length])
 
 
 class OscillatorySSM(nn.Module):
@@ -359,10 +402,14 @@ class OscillatorySSM(nn.Module):
 
     def __init__(self, n_channels: int, d_out: int, sfreq: float, n_virtual: int = 16, n_modes: int = 8,
                  f_min: float = 4.0, f_max: float = 40.0, bandwidth_ratio: float = 0.4,
-                 delta_kernel: int = 32, pool_lengths: Sequence[int] = (8, 7), dropout: float = 0.4):
+                 delta_kernel: int = 32, pool_lengths: Sequence[int] = (8, 7), dropout: float = 0.4,
+                 scan: str = "parallel", chunk: int = 16):
         super().__init__()
         if sfreq is None or sfreq <= 0:
             raise ValueError("OscillatorySSM needs the sampling rate (osc_sfreq).")
+        if scan not in ("parallel", "chunked"):
+            raise ValueError(f"osc_scan must be parallel | chunked, got {scan!r}")
+        self.scan, self.chunk = scan, int(chunk)
         nyquist = sfreq / 2
         self.sfreq = float(sfreq)
         self.n_virtual, self.n_modes = n_virtual, n_modes
@@ -413,9 +460,13 @@ class OscillatorySSM(nn.Module):
         batch, _, length = u.shape
         omega = (2 * math.pi / self.sfreq) * self.frequencies().reshape(1, -1, 1)
         damping = (math.pi / self.sfreq) * self.bandwidths().reshape(1, -1, 1)
-        radius = torch.exp(-self.delta(u) * damping)            # r_t in (0, 1)
+        log_decay = self.delta(u) * damping                     # -log r_t >= 0
+        radius = torch.exp(-log_decay)                          # r_t in (0, 1)
         drive = (1 - radius) * u.repeat_interleave(self.n_modes, dim=1)
-        h_re, h_im = _complex_linear_scan(radius * torch.cos(omega), radius * torch.sin(omega), drive)
+        if self.scan == "chunked":
+            h_re, h_im = _oscillator_scan(log_decay, omega, drive, self.chunk)
+        else:
+            h_re, h_im = _complex_linear_scan(radius * torch.cos(omega), radius * torch.sin(omega), drive)
         return h_re ** 2 + h_im ** 2
 
     def forward(self, x: Tensor) -> Tensor:                     # x: [B, C, T] -> [B, d_out, T']
@@ -483,6 +534,8 @@ class SSMBackbone(nn.Module):
         osc_bandwidth_ratio: float = 0.4,
         osc_delta_kernel: int = 32,
         osc_dropout: float = 0.4,
+        osc_scan: str = "parallel",
+        osc_chunk: int = 16,
     ):
         super().__init__()
         if osc_branch not in ("none", "feed", "replace"):
@@ -526,7 +579,8 @@ class SSMBackbone(nn.Module):
             self.osc = OscillatorySSM(n_channels, d_group, osc_sfreq, n_virtual=osc_virtual_channels,
                                       n_modes=osc_modes, f_min=osc_f_min, f_max=osc_f_max,
                                       bandwidth_ratio=osc_bandwidth_ratio, delta_kernel=osc_delta_kernel,
-                                      pool_lengths=(pool_length_1, pool_length_2), dropout=osc_dropout)
+                                      pool_lengths=(pool_length_1, pool_length_2), dropout=osc_dropout,
+                                      scan=osc_scan, chunk=osc_chunk)
 
     def extract_temporal_features(self, x):                     # x: [B, C, T]
         conv_features = self.conv_block(x)
@@ -563,7 +617,7 @@ BACKBONE_KWARGS = (
     "tcn_depth", "kernel_length_tcn", "dropout_tcn", "use_group_attn", "ssm_directions",
     "ssm_dropout", "drop_path_max", "ssm_d_state", "ssm_d_conv", "ssm_scan",
     "osc_branch", "osc_sfreq", "osc_virtual_channels", "osc_modes", "osc_f_min", "osc_f_max",
-    "osc_bandwidth_ratio", "osc_delta_kernel", "osc_dropout",
+    "osc_bandwidth_ratio", "osc_delta_kernel", "osc_dropout", "osc_scan", "osc_chunk",
 )
 
 

@@ -99,6 +99,12 @@ variants:
   osc_only:
     description: the oscillatory selective SSM replaces the token-rate selective SSM
     model_kwargs: {osc_branch: replace}
+  fast_scan:
+    description: >-
+      oscillatory branch scanned in chunks with the closed form of its fixed-frequency recurrence
+      (O(T) work) instead of the Hillis-Steele scan; same parameters and, up to float rounding,
+      same outputs (use after osc or osc_only)
+    model_kwargs: {osc_scan: chunked}
   no_car:
     description: OpenBMI without the common average reference (needs a cache built without CAR)
     datasets_only: [openbmi]
