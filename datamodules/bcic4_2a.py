@@ -175,6 +175,17 @@ class BCICIV2aLOSO(BCICIV2a):
         X_test, y_test = BaseDataModule._dataset_to_arrays(test_dataset)
         X_target, y_target = BaseDataModule._dataset_to_arrays(target_dataset)
 
+        if self.preprocessing_dict.get("channel_alignment"):
+            # Fused-GW channel mapping (utils/gw_alignment.py); runs before RA,
+            # which it either replaces (gw_chnorm) or precedes (gw_ra).
+            from utils.gw_alignment import BCIC2A_CHANNELS, align_loso
+            train_arrays, val_arrays, X_target, X_test = align_loso(
+                self.preprocessing_dict, BCIC2A_CHANNELS, train_subjects,
+                train_arrays, val_arrays, X_target, X_test,
+                per_session=BaseDataModule._ra_per_session(self.preprocessing_dict),
+                log=lambda message: print(message, flush=True),
+            )
+
         if (self.preprocessing_dict.get("riemannian_alignment", False)
                 and BaseDataModule._ra_per_session(self.preprocessing_dict)):
             # Per-session RA: sessions T and E of every subject are whitened by
