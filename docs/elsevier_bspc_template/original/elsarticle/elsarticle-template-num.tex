@@ -244,7 +244,7 @@ Z-score statistics are fitted on the source-training partition. For BCI IV-2a an
 \subsection{Implementation details}
 \label{subsec:training}
 
-All experiments run in Kaggle notebooks on one NVIDIA Tesla T4 GPU (16~GB). Table~\ref{tab:hyperparams} lists every setting of SSM-DAN. The front-end, TCN, and optimization settings are those of TCFormer \cite{altaheri2025tcformer} in our re-runs, and the number of state-space blocks and their dropout equal the depth and dropout of the TCFormer Transformer encoder, so that the two backbones differ mainly in the temporal encoder. Zhou2016 uses a smaller batch, learning rate, and weight decay, for TCFormer as well. The adaptation settings are the same for all datasets, and the gradient-reversal coefficient follows the schedule of \cite{ganin2016dann}. The seed (0), data split, and initialization are shared by all methods and variants, so each comparison differs only in the evaluated component.
+Experiments run on one NVIDIA Tesla T4 GPU (16~GB); Table~\ref{tab:hyperparams} lists all settings. The front-end, TCN, and optimizer follow TCFormer \cite{altaheri2025tcformer}, and the state-space encoder takes the depth and dropout of its Transformer encoder, so the two backbones differ mainly in the temporal encoder. Zhou2016 uses a smaller batch, learning rate, and weight decay for both. All methods and variants share the seed (0), data split, and initialization.
 
 \begin{table}[!htbp]
 \centering
@@ -258,9 +258,9 @@ Component & Setting \\
 Front-end & 32 filters per temporal kernel (20, 32, 64 samples); depth multiplier 2; average pooling 8 and 7; dropout 0.4 \\
 State-space encoder & 5 blocks, alternating forward/backward scans; state dimension 8; depthwise kernel 3; dropout 0.4; stochastic depth rising to 0.25 \\
 TCN and classifier & 2 residual blocks, kernel 4, dilations 1 and 2, 4 groups; dropout 0.3; max-norm 0.25 on the classifier weights \\
-Adaptation head & AutoDIAL $\alpha$ initialized to 0.5, momentum 0.1; aligner $64\!\rightarrow\!128\!\rightarrow\!64$; discriminator with 128 hidden units; dropout 0.3; gradient-reversal coefficient $2/(1+e^{-10p})-1$ \\
+Adaptation head & AutoDIAL $\alpha$ initialized to 0.5, momentum 0.1; aligner $64\!\rightarrow\!128\!\rightarrow\!64$; discriminator with 128 hidden units; dropout 0.3; gradient-reversal coefficient $2/(1+e^{-10p})-1$ \cite{ganin2016dann} \\
 Stage~1 losses & weights 0.1 ($\mathcal{L}_\mathrm{IM}^{t}$), 1 ($\mathcal{L}_\mathrm{adv}$), 0.5 ($\mathcal{L}_\mathrm{mmd}$), 0.1 ($\mathcal{L}_\mathrm{tmmd}$); MK-MMD with five Gaussian kernels, bandwidths $2^{-2},\dots,2^{2}$ times the mean squared pairwise distance \\
-Optimization & Adam, learning rate $9\times10^{-4}$ ($10^{-3}$), $\beta_1=0.5$, weight decay $10^{-3}$ ($10^{-4}$); 3-epoch linear warm-up, then cosine decay; 125 (100) epochs; 48 (32) source and 48 (32) target trials per step; best source-validation checkpoint \\
+Optimization & Adam, learning rate $9\times10^{-4}$ ($10^{-3}$), $\beta_1=0.5$, weight decay $10^{-3}$ ($10^{-4}$); 3-epoch linear warm-up, then cosine decay; 125 (100) epochs; 48 (32) source and 48 (32) target trials per step \\
 IM-TTA & 5 Adam steps, learning rate $10^{-4}$, diversity weight 1; backbone BatchNorm $\gamma,\beta$ only \\
 \bottomrule
 \end{tabular}
@@ -269,7 +269,7 @@ IM-TTA & 5 Adam steps, learning rate $10^{-4}$, diversity weight 1; backbone Bat
 \subsection{Comparison methods}
 \label{subsec:baselines}
 
-Baselines are grouped by target-data access: source-only EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, and SATrans-Net \cite{miao2025satransnet}; UDA-based RMETNet \cite{zhao2026rmetnet}; and test-time methods T-TIME \cite{li2024ttime} and BFT \cite{li2026bft}. Each is compared with the SSM-DAN variant having the same target-data access. All methods are re-trained from released implementations with identical LOSO folds, chronological splits, preprocessing, seed, and source-only checkpoint selection; evaluation labels never enter training or model selection. Model-specific optimization follows the original recommendations. Published results under different protocols are reported separately in Section~\ref{subsec:published}. For numerical stability, RMETNet covariances on Zhou2016 receive a ridge of $10^{-3}$ times their mean eigenvalue.
+Baselines are grouped by target-data access and compared with the SSM-DAN variant of the same access: source-only (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, SATrans-Net \cite{miao2025satransnet}), UDA (RMETNet \cite{zhao2026rmetnet}), and test-time adaptation (T-TIME \cite{li2024ttime}, BFT \cite{li2026bft}). All are re-trained from their released code with their recommended optimizer settings, under the same folds, preprocessing, seed, and source-validation checkpoint selection. On Zhou2016, a ridge of $10^{-3}$ times the mean eigenvalue keeps the RMETNet covariances invertible. Published results under other protocols are listed in Section~\ref{subsec:published}.
 
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}

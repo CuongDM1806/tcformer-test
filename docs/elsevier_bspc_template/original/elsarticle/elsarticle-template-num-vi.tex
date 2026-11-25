@@ -250,7 +250,7 @@ Thống kê chuẩn hóa z-score được khớp trên phần huấn luyện ngu
 \subsection{Chi tiết cài đặt}
 \label{subsec:training}
 
-Mọi thí nghiệm chạy trên Kaggle notebook với một GPU NVIDIA Tesla T4 (16~GB). Bảng~\ref{tab:hyperparams} liệt kê toàn bộ thiết lập của SSM-DAN. Các thiết lập của khối tích chập đầu vào, TCN và tối ưu hóa là của TCFormer \cite{altaheri2025tcformer} trong các lần chạy lại của nghiên cứu này, và số khối không gian trạng thái cùng dropout của chúng bằng độ sâu và dropout của bộ mã hóa Transformer trong TCFormer, để hai backbone chủ yếu chỉ khác nhau ở bộ mã hóa thời gian. Zhou2016 dùng batch, tốc độ học và suy giảm trọng số nhỏ hơn, áp dụng cả cho TCFormer. Các thiết lập thích ứng giống nhau cho mọi bộ dữ liệu, và hệ số đảo gradient theo lịch của \cite{ganin2016dann}. Hạt giống ngẫu nhiên (0), cách chia dữ liệu và khởi tạo là chung cho mọi phương pháp và biến thể, nên mỗi phép so sánh chỉ khác nhau ở thành phần được đánh giá.
+Thí nghiệm chạy trên một GPU NVIDIA Tesla T4 (16~GB); Bảng~\ref{tab:hyperparams} liệt kê toàn bộ thiết lập. Khối tích chập đầu vào, TCN và bộ tối ưu theo TCFormer \cite{altaheri2025tcformer}, còn bộ mã hóa không gian trạng thái lấy độ sâu và dropout của bộ mã hóa Transformer trong TCFormer, nên hai backbone chủ yếu chỉ khác nhau ở bộ mã hóa thời gian. Zhou2016 dùng batch, tốc độ học và suy giảm trọng số nhỏ hơn cho cả hai. Mọi phương pháp và biến thể dùng chung hạt giống ngẫu nhiên (0), cách chia dữ liệu và khởi tạo.
 
 \begin{table}[!htbp]
 \centering
@@ -264,9 +264,9 @@ Thành phần & Thiết lập \\
 Khối tích chập đầu vào & 32 bộ lọc cho mỗi kernel thời gian (20, 32, 64 mẫu); hệ số nhân độ sâu 2; average pooling 8 và 7; dropout 0,4 \\
 Bộ mã hóa không gian trạng thái & 5 khối, quét xuôi/ngược xen kẽ; số chiều trạng thái 8; kernel depthwise 3; dropout 0,4; stochastic depth tăng tới 0,25 \\
 TCN và bộ phân loại & 2 khối dư, kernel 4, dilation 1 và 2, 4 nhóm; dropout 0,3; max-norm 0,25 cho trọng số bộ phân loại \\
-Đầu thích ứng & $\alpha$ của AutoDIAL khởi tạo 0,5, momentum 0,1; bộ căn chỉnh $64\!\rightarrow\!128\!\rightarrow\!64$; bộ phân biệt miền 128 nơ-ron ẩn; dropout 0,3; hệ số đảo gradient $2/(1+e^{-10p})-1$ \\
+Đầu thích ứng & $\alpha$ của AutoDIAL khởi tạo 0,5, momentum 0,1; bộ căn chỉnh $64\!\rightarrow\!128\!\rightarrow\!64$; bộ phân biệt miền 128 nơ-ron ẩn; dropout 0,3; hệ số đảo gradient $2/(1+e^{-10p})-1$ \cite{ganin2016dann} \\
 Hàm mất mát Giai đoạn~1 & trọng số 0,1 ($\mathcal{L}_\mathrm{IM}^{t}$), 1 ($\mathcal{L}_\mathrm{adv}$), 0,5 ($\mathcal{L}_\mathrm{mmd}$), 0,1 ($\mathcal{L}_\mathrm{tmmd}$); MK-MMD với năm kernel Gauss, độ rộng bằng $2^{-2},\dots,2^{2}$ lần trung bình bình phương khoảng cách từng cặp \\
-Tối ưu hóa & Adam, tốc độ học $9\times10^{-4}$ ($10^{-3}$), $\beta_1=0{,}5$, suy giảm trọng số $10^{-3}$ ($10^{-4}$); khởi động tuyến tính 3 epoch rồi suy giảm cosin; 125 (100) epoch; mỗi bước 48 (32) lần thử nguồn và 48 (32) lần thử đích; chọn checkpoint tốt nhất trên tập kiểm định nguồn \\
+Tối ưu hóa & Adam, tốc độ học $9\times10^{-4}$ ($10^{-3}$), $\beta_1=0{,}5$, suy giảm trọng số $10^{-3}$ ($10^{-4}$); khởi động tuyến tính 3 epoch rồi suy giảm cosin; 125 (100) epoch; mỗi bước 48 (32) lần thử nguồn và 48 (32) lần thử đích \\
 IM-TTA & 5 bước Adam, tốc độ học $10^{-4}$, trọng số đa dạng 1; chỉ cập nhật $\gamma,\beta$ của BatchNorm trong backbone \\
 \bottomrule
 \end{tabular}
@@ -275,7 +275,7 @@ IM-TTA & 5 bước Adam, tốc độ học $10^{-4}$, trọng số đa dạng 1;
 \subsection{Các phương pháp so sánh}
 \label{subsec:baselines}
 
-Các phương pháp cơ sở được nhóm theo mức truy cập dữ liệu đích: chỉ dùng nguồn gồm EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder} và SATrans-Net \cite{miao2025satransnet}; dựa trên UDA là RMETNet \cite{zhao2026rmetnet}; và thích ứng tại thời điểm kiểm thử gồm T-TIME \cite{li2024ttime} và BFT \cite{li2026bft}. Mỗi phương pháp được so sánh với biến thể SSM-DAN có cùng mức truy cập dữ liệu đích. Tất cả các phương pháp được huấn luyện lại từ mã nguồn công bố với cùng các lượt LOSO, cách chia theo thời gian, tiền xử lý, hạt giống ngẫu nhiên và cách chọn checkpoint chỉ dựa trên nguồn; nhãn đánh giá không bao giờ tham gia huấn luyện hay chọn mô hình. Tối ưu hóa riêng của từng mô hình theo khuyến nghị gốc. Kết quả công bố theo các giao thức khác được báo cáo riêng ở Mục~\ref{subsec:published}. Để ổn định số, hiệp phương sai của RMETNet trên Zhou2016 được cộng thêm một hệ số ridge bằng $10^{-3}$ lần trị riêng trung bình.
+Các phương pháp cơ sở được nhóm theo mức truy cập dữ liệu đích và so sánh với biến thể SSM-DAN có cùng mức truy cập: chỉ dùng nguồn (EEG Conformer \cite{song2023eegconformer}, ATCNet \cite{altaheri2023atcnet}, TCFormer \cite{altaheri2025tcformer}, EEGEncoder \cite{liao2025eegencoder}, SATrans-Net \cite{miao2025satransnet}), UDA (RMETNet \cite{zhao2026rmetnet}) và thích ứng tại thời điểm kiểm thử (T-TIME \cite{li2024ttime}, BFT \cite{li2026bft}). Tất cả được huấn luyện lại từ mã nguồn công bố với thiết lập tối ưu do tác giả khuyến nghị, trên cùng các lượt LOSO, tiền xử lý, hạt giống ngẫu nhiên và cách chọn checkpoint theo tập kiểm định nguồn. Trên Zhou2016, hiệp phương sai của RMETNet được cộng một hệ số ridge bằng $10^{-3}$ lần trị riêng trung bình để luôn khả nghịch. Kết quả công bố theo các giao thức khác được liệt kê ở Mục~\ref{subsec:published}.
 
 \subsection{Thước đo đánh giá và cách báo cáo}
 \label{subsec:metrics}
