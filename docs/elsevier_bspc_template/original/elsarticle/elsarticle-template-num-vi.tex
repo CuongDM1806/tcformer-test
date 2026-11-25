@@ -284,12 +284,12 @@ Các phương pháp cơ sở được nhóm theo mức truy cập dữ liệu đ
 \subsection{Thước đo đánh giá và cách báo cáo}
 \label{subsec:metrics}
 
-Độ chính xác và $\kappa$ của Cohen được báo cáo dưới dạng trung bình $\pm$ độ lệch chuẩn trên các chủ thể đích. Tốc độ truyền thông tin (ITR) \cite{wolpaw2002bci} biểu diễn độ chính xác $P$ trên $N$ lớp là
+Độ chính xác và $\kappa$ của Cohen được báo cáo dưới dạng trung bình $\pm$ độ lệch chuẩn trên các chủ thể đích, cùng với độ nhạy theo lớp, macro-F1 và tốc độ truyền thông tin (ITR) \cite{wolpaw2002bci}
 \begin{equation}
 \mathrm{ITR}=\frac{60}{T}\left[\log_2 N+P\log_2 P+(1-P)\log_2\frac{1-P}{N-1}\right]\ \text{bit/phút},
 \label{eq:itr}
 \end{equation}
-trong đó $T$ là cửa sổ giải mã (4~s cho BCI IV-2a/2b; 4,5~s cho Zhou2016); các giá trị bằng hoặc thấp hơn mức ngẫu nhiên được đặt bằng không trước khi lấy trung bình. Độ nhạy (recall) theo lớp và macro-F1 đánh giá sự cân bằng giữa các lớp. Hiệu độ chính xác theo cặp được kiểm định bằng phép Wilcoxon hai phía chính xác, có hiệu chỉnh Holm trong mỗi nhóm truy cập dữ liệu đích (Mục~\ref{subsec:baselines}); $p_\mathrm{Holm}<0,05$ biểu thị có ý nghĩa thống kê. Hiệu năng tính toán được báo cáo bằng số tham số, thời gian huấn luyện Giai đoạn~1 và độ trễ CPU với batch bằng một.
+trong đó $P$ là độ chính xác, $N$ là số lớp và $T$ là cửa sổ giải mã (4~s cho BCI IV-2a/2b, 4,5~s cho Zhou2016); ITR bằng hoặc thấp hơn mức ngẫu nhiên được đặt bằng không. Hiệu theo cặp được kiểm định bằng phép Wilcoxon hai phía chính xác, hiệu chỉnh Holm trong mỗi nhóm truy cập dữ liệu đích ($p_\mathrm{Holm}<0,05$). Hiệu năng tính toán được đo bằng số tham số, thời gian huấn luyện Giai đoạn~1 và độ trễ CPU cho một lần thử.
 
 \section{Kết quả}
 \label{sec:results}

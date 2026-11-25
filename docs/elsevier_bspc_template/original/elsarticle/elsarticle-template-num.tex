@@ -278,12 +278,12 @@ Baselines are grouped by target-data access and compared with the SSM-DAN varian
 \subsection{Evaluation measures and reporting}
 \label{subsec:metrics}
 
-Accuracy and Cohen's $\kappa$ are reported as mean $\pm$ standard deviation across target subjects. Information transfer rate (ITR) \cite{wolpaw2002bci} expresses accuracy $P$ over $N$ classes as
+Accuracy and Cohen's $\kappa$ are reported as mean $\pm$ standard deviation over target subjects, together with per-class recall, macro-F1, and the information transfer rate (ITR) \cite{wolpaw2002bci}
 \begin{equation}
 \mathrm{ITR}=\frac{60}{T}\left[\log_2 N+P\log_2 P+(1-P)\log_2\frac{1-P}{N-1}\right]\ \text{bits/min},
 \label{eq:itr}
 \end{equation}
-where $T$ is the decoded window (4~s for BCI IV-2a/2b; 4.5~s for Zhou2016); values at or below chance are set to zero before averaging. Per-class recall and macro-F1 assess class balance. Paired accuracy differences use exact two-sided Wilcoxon tests, with Holm correction within each target-access group (Section~\ref{subsec:baselines}); $p_\mathrm{Holm}<0.05$ denotes significance. Efficiency is reported by parameter count, Stage~1 training time, and batch-one CPU latency.
+where $P$ is the accuracy, $N$ the number of classes, and $T$ the decoded window (4~s for BCI IV-2a/2b, 4.5~s for Zhou2016); ITR at or below chance is set to zero. Paired differences are tested with exact two-sided Wilcoxon tests, Holm-corrected within each target-access group ($p_\mathrm{Holm}<0.05$). Efficiency is measured by parameter count, Stage~1 training time, and single-trial CPU latency.
 
 \section{Results}
 \label{sec:results}
