@@ -14,6 +14,8 @@
 \usepackage{rotating}
 \usepackage{etoolbox}
 \usepackage[section]{placeins}
+\usepackage[colorinlistoftodos]{todonotes} % notes; use [disable] before submission
+\usepackage{soulutf8}\sethlcolor{yellow} % \hl{...} = yellow highlight; remove before submission
 \usepackage[hidelinks]{hyperref}
 \usepackage[expansion=false]{microtype}
 % Let lines with long hyphenated compounds stretch instead of overflowing.
@@ -72,7 +74,7 @@ Motor-imagery brain--computer interfaces (MI-BCIs) decode movement intentions fr
 
 Early MI decoders followed a classical machine-learning pipeline. Common spatial pattern (CSP) filtering \cite{ramoser2000optimal} and its filter-bank extension FBCSP \cite{ang2012filterbank}, which won BCI Competition~IV, extract band-power features through hand-designed, subject-specific stages and pass them to a linear classifier. Deep learning later replaced these stages with end-to-end feature learning: ShallowConvNet and DeepConvNet \cite{schirrmeister2017deep} and the compact EEGNet \cite{lawhern2018eegnet} learn spectral and spatial filters directly from raw EEG. Later models extended the temporal context: EEG Conformer adds self-attention to a convolutional front-end \cite{song2023eegconformer}, ATCNet combines attention with dilated temporal convolutional networks (TCNs) \cite{altaheri2023atcnet}, and TCFormer joins multi-scale convolution, a Transformer, and a TCN \cite{altaheri2025tcformer}. Self-attention, however, has quadratic cost in sequence length \cite{vaswani2017attention} and needs more data than EEG datasets usually provide. More recently, state-space models (SSMs), from the structured S4 \cite{gu2022s4} to the selective Mamba \cite{gu2024mamba}, have emerged as an alternative that scales linearly with sequence length; in language modeling, Mamba matched or exceeded Transformers of comparable size while providing several times higher generation throughput \cite{gu2024mamba}. MI-Mamba and a spatial--temporal Mamba network have since combined SSMs with convolution for MI decoding \cite{guo2025mimamba,yang2025stmamba}. Despite their architectural diversity, these approaches are trained on source data and applied unchanged to new users, so their performance depends on how well the training set represents each new user.
 
-A complementary line of work reduces this dependence on the training population and on per-user labeled calibration. EEG foundation models, pretrained on large and diverse corpora such as the roughly 2,500 hours of EEG used by LaBraM \cite{jiang2024labram,wang2024eegpt}, are a promising direction, but they require collecting and harmonizing large heterogeneous datasets and are usually fine-tuned with labeled data of the target task. Transfer across subjects of the same task is a lighter alternative. Domain generalization learns, from several source subjects, features intended to remain valid for unseen subjects, so that a new user can be served without any calibration \cite{liu2023stdg,zhong2025eegdg,zheng2025crosssubject}; because the target subject is never observed, however, its specific shift cannot be compensated. Domain adaptation removes this limitation by also using unlabeled EEG of the new subject. Such data require no trial labels, which makes domain adaptation a practical route to tailoring the decoder to each user without a labeled calibration session. To align source and target features, the maximum mean discrepancy (MMD), introduced into deep networks in its multi-kernel form by DAN \cite{long2015dan}, is among the most widely used criteria owing to its non-parametric form and stable optimization, and is also adopted by EEG models such as RMETNet \cite{zhao2026rmetnet}. Adversarial training with a domain discriminator \cite{ganin2016dann,tang2020cdan} and prototype-based alignment \cite{zhang2024prototypeda} provide complementary objectives. Alignment can also be performed inside the network through its normalization layers: in visual domain adaptation, AutoDIAL \cite{carlucci2017autodial} introduced domain alignment layers that learn how strongly source and target statistics are mixed during normalization, an idea that motivates the feature-level normalization used in the present work.
+A complementary line of work reduces this dependence on the training population and on per-user labeled calibration. EEG foundation models such as LaBraM \cite{jiang2024labram}, pretrained on large and diverse EEG corpora, are a promising direction, but they require collecting and harmonizing large heterogeneous datasets and are usually fine-tuned with labeled data of the target task. Transfer across subjects of the same task is a lighter alternative. Domain generalization learns, from several source subjects, features intended to remain valid for unseen subjects, so that a new user can be served without any calibration \cite{zhong2025eegdg,zheng2025crosssubject}; because the target subject is never observed, however, its specific shift cannot be compensated. Domain adaptation removes this limitation by also using unlabeled EEG of the new subject. Such data require no trial labels, which makes domain adaptation a practical route to tailoring the decoder to each user without a labeled calibration session. To align source and target features, the maximum mean discrepancy (MMD), introduced into deep networks in its multi-kernel form by DAN \cite{long2015dan}, is among the most widely used criteria owing to its non-parametric form and stable optimization, and is also adopted by EEG models such as RMETNet \cite{zhao2026rmetnet}. Adversarial training with a domain discriminator \cite{ganin2016dann,tang2020cdan} provides a complementary objective. Alignment can also be performed inside the network through its normalization layers: in visual domain adaptation, AutoDIAL \cite{carlucci2017autodial} introduced domain alignment layers that learn how strongly source and target statistics are mixed during normalization, an idea that motivates the feature-level normalization used in the present work.
 
 Beyond the feature level, subject differences are already present in the raw signals: the covariance between EEG channels, which reflects head anatomy and electrode placement, differs markedly across individuals. This suggests aligning the signals themselves before they enter the network. Treating trial covariances as points on the manifold of symmetric positive-definite matrices, Zanini et al. proposed what is now called Riemannian alignment (RA), which re-centers the covariances of every session at the identity using the Riemannian mean of its resting-state trials \cite{zanini2018riemannian}. The resulting accuracy gain, however, varies across datasets. Moreover, if the reference is computed from a single session, it may no longer fit when the same subject's signals change in later sessions.
 
@@ -178,7 +180,7 @@ This stage combines two test-time adaptation methods: the information-maximizati
 \subsection{Datasets}
 \label{sec:datasets}
 
-Three public MI-EEG datasets, accessed through MOABB/Braindecode \cite{jayaram2018moabb}, are used (Table~\ref{tab:datasets}).
+Three public MI-EEG datasets, accessed through MOABB/Braindecode \cite{jayaram2018moabb}, are used for the main comparison, and OpenBMI for the ablation study (Table~\ref{tab:datasets}).
 
 \begin{table*}[!htbp]
 \centering
@@ -193,6 +195,7 @@ Dataset & Subjects & Channels & Sessions & Classes \\
 BCI IV-2a & 9 & 22 & 2 & left hand, right hand, feet, tongue \\
 BCI IV-2b & 9 & 3  & 5 & left hand, right hand \\
 Zhou2016  & 4 & 14 & 3 & left hand, right hand, feet \\
+OpenBMI   & 54 & 62 & 2 & left hand, right hand \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -211,6 +214,11 @@ Nine right-handed participants, drawn from a study of ten ($24.7\pm3.3$ years) \
 \label{subsec:zhou2016}
 
 Four healthy participants (22--28 years) were each recorded in three sessions separated by days to months \cite{zhou2016trialselection}. Each session has two runs of 75 trials (25 per class: left hand, right hand, feet) from 14 electrodes at 250~Hz; each trial has a 5-s imagery cue followed by a 4-s rest.
+
+\subsubsection{OpenBMI}
+\label{subsec:openbmi}
+
+Fifty-four participants were recorded in two sessions on different days, each with 100 trials of left- versus right-hand imagery from 62 electrodes \cite{lee2019openbmi}. The dataset is used only in the ablation study (Section~\ref{sec:ablation}).
 
 \subsection{Chronological LOSO protocol with test-time adaptation}
 \label{subsec:clean_protocol}
@@ -232,24 +240,25 @@ Each leave-one-subject-out (LOSO) fold holds out one target subject and uses the
 BCI IV-2a & session 1      & session 2      & session 1      & session 2 \\
 BCI IV-2b & sessions 1--3  & sessions 4--5  & sessions 1--3  & sessions 4--5 \\
 Zhou2016  & sessions 1--2  & session 3      & sessions 1--2  & session 3 \\
+OpenBMI   & session 1      & session 2      & session 1      & session 2 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-This gives nine folds for BCI IV-2a and IV-2b and four for Zhou2016, with identical hyperparameters in every fold; the checkpoint with the highest source-validation accuracy is used. For Zhou2016, an all-session target score is reported as an auxiliary diagnostic.
+This gives nine folds for BCI IV-2a and IV-2b, four for Zhou2016, and 54 for OpenBMI, with identical hyperparameters in every fold; the checkpoint with the highest source-validation accuracy is used. For Zhou2016, an all-session target score is reported as an auxiliary diagnostic.
 
 
 \subsection{Preprocessing and augmentation}
 \label{subsec:preprocessing}
 
-EEG channels are resampled to 250~Hz and converted to microvolts. BCI IV-2a uses the full MOABB event window and BCI IV-2b drops its last 0.5~s, both unfiltered; Zhou2016 is band-pass filtered at 8--30~Hz and cropped to 0.5--5.0~s after cue onset.
+EEG channels are resampled to 250~Hz and converted to microvolts. BCI IV-2a uses the full MOABB event window and BCI IV-2b drops its last 0.5~s, both unfiltered; Zhou2016 is band-pass filtered at 8--30~Hz and cropped to 0.5--5.0~s after cue onset. OpenBMI is instead band-pass filtered at 4--38~Hz, common-average referenced, downsampled to 100~Hz, and cropped to 0--4~s after the cue.
 
-Z-score statistics are fitted on the source-training partition. For BCI IV-2a and IV-2b, labeled source mini-batches are doubled with the segmentation and reconstruction (S\&R) augmentation \cite{lotte2015signal} used by TCFormer \cite{altaheri2025tcformer}, which recombines eight-segment pieces of same-class trials; Zhou2016 uses no augmentation.
+Z-score statistics are fitted on the source-training partition. For BCI IV-2a and IV-2b, labeled source mini-batches are doubled with the segmentation and reconstruction (S\&R) augmentation \cite{lotte2015signal} used by TCFormer \cite{altaheri2025tcformer}, which recombines eight-segment pieces of same-class trials; Zhou2016 and OpenBMI use no augmentation.
 
 \subsection{Implementation details}
 \label{subsec:training}
 
-Experiments run on one NVIDIA Tesla T4 GPU (16~GB); Table~\ref{tab:hyperparams} lists all settings. The front-end, TCN, and optimizer follow TCFormer \cite{altaheri2025tcformer}, and the state-space encoder takes the depth and dropout of its Transformer encoder, so the two backbones differ mainly in the temporal encoder. Zhou2016 uses a smaller batch, learning rate, and weight decay for both. All methods and variants share the seed (0), data split, and initialization.
+Experiments run on one NVIDIA Tesla T4 GPU (16~GB); Table~\ref{tab:hyperparams} lists all settings. The front-end, TCN, and optimizer follow TCFormer \cite{altaheri2025tcformer}, and the state-space encoder takes the depth and dropout of its Transformer encoder, so the two backbones differ mainly in the temporal encoder. Zhou2016 uses a smaller batch, learning rate, and weight decay for both, and OpenBMI uses the BCI IV-2a settings. All methods and variants share the seed (0), data split, and initialization.
 
 \begin{table}[!htbp]
 \centering
@@ -284,7 +293,7 @@ Accuracy and Cohen's $\kappa$ are reported as mean $\pm$ standard deviation over
 \mathrm{ITR}=\frac{60}{T}\left[\log_2 N+P\log_2 P+(1-P)\log_2\frac{1-P}{N-1}\right]\ \text{bits/min},
 \label{eq:itr}
 \end{equation}
-where $P$ is the accuracy, $N$ the number of classes, and $T$ the decoded window (4~s for BCI IV-2a/2b, 4.5~s for Zhou2016); ITR at or below chance is set to zero. Paired differences are tested with exact two-sided Wilcoxon tests, Holm-corrected within each target-access group ($p_\mathrm{Holm}<0.05$). Efficiency is measured by parameter count, Stage~1 training time, and single-trial CPU latency.
+where $P$ is the accuracy, $N$ the number of classes, and $T$ the decoded window (4~s for BCI IV-2a/2b, 4.5~s for Zhou2016); ITR at or below chance is set to zero. Paired differences are tested with exact two-sided Wilcoxon tests, Holm-corrected within each target-access group ($p_\mathrm{Holm}<0.05$); for the 54 OpenBMI targets, the normal approximation is used, with Holm correction over the four ablation comparisons. Efficiency is measured by parameter count, Stage~1 training time, and single-trial CPU latency.
 
 \section{Results}
 \label{sec:results}
@@ -303,30 +312,38 @@ Table~\ref{tab:results_2a} reports the four-class results for the nine BCI IV-2a
 \small
 \setlength{\tabcolsep}{3pt}
 \begin{adjustbox}{max width=\dimexpr\textheight+80pt\relax}
-\begin{tabular}{l*{9}{c}@{\hspace{8pt}}ccccc@{\hspace{8pt}}ccc}
+\begin{tabular}{l@{\hspace{6pt}}cccccc@{\hspace{6pt}}cc@{\hspace{6pt}}ccc@{\hspace{6pt}}c}
 \toprule
-\multirow{2}{*}{Method} & \multicolumn{9}{c}{Target subject accuracy (\%)} & \multicolumn{3}{c}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} & \multirow{2}{*}{$p_\mathrm{Holm}$} & \multicolumn{3}{c}{Cost} \\
-\cmidrule(lr){2-10}\cmidrule(lr){11-13}\cmidrule(lr){16-18}
- & S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8 & S9 & Acc. (\%) & $\kappa$ & ITR (bits/min) & & & Params & Train & CPU \\
+ & \multicolumn{6}{c}{\textit{\colhead{Source-only\\training}}} & \multicolumn{2}{c}{\textit{\colhead{Unsupervised\\domain adaptation}}} & \multicolumn{3}{c}{\textit{\colhead{Test-time\\adaptation}}} &  \\
+\cmidrule(lr){2-7}\cmidrule(lr){8-9}\cmidrule(lr){10-12}
+ & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{EEGEncoder\\\cite{liao2025eegencoder}} & \colhead{SATrans-Net\\\cite{miao2025satransnet}} & \colhead{SSM-DAN\\(source-only)} & \colhead{RMETNet\\\cite{zhao2026rmetnet}} & \colhead{SSM-DAN\\(Stage~1 UDA)} & \colhead{T-TIME\\\cite{li2024ttime}} & \colhead{BFT\\\cite{li2026bft}} & \colhead{SSM-DAN\\(IM-TTA)} & \textbf{SSM-DAN} \\
 \midrule
-\multicolumn{18}{l}{\textit{Source-only training}} \\
-Conformer~\cite{song2023eegconformer} & 58.68 & 43.06 & 78.82 & 43.06 & 44.44 & 41.67 & 72.92 & 65.28 & 49.31 & $55.25\pm13.39$ & $0.403\pm0.179$ & $5.29\pm4.32$ & 0.0039 & 0.0312 & 789.6 & 11.14 & 11.45 \\
-ATCNet~\cite{altaheri2023atcnet} & 69.44 & 40.97 & 76.74 & 50.35 & 43.40 & 42.01 & 61.81 & 70.49 & 57.99 & $57.02\pm12.74$ & $0.427\pm0.170$ & $5.73\pm3.95$ & 0.0039 & 0.0312 & 113.7 & 48.58 & 13.33 \\
-TCFormer~\cite{altaheri2025tcformer} & 65.28 & 49.65 & 79.86 & 54.86 & 61.81 & 38.89 & 71.88 & 66.67 & 58.33 & $60.80\pm11.49$ & $0.477\pm0.153$ & $6.80\pm3.79$ & 0.0039 & 0.0312 & 127.2 & 38.37 & 14.96 \\
-EEGEncoder~\cite{liao2025eegencoder} & 64.24 & 49.31 & 78.82 & 46.18 & 54.86 & 40.97 & 74.31 & 65.97 & 47.92 & $58.06\pm12.55$ & $0.441\pm0.167$ & $6.04\pm4.17$ & 0.0039 & 0.0312 & 197.2 & 13.49 & 26.51 \\
-SATrans-Net~\cite{miao2025satransnet} & 68.06 & 47.92 & 73.96 & 53.47 & 61.11 & 45.14 & 73.61 & 71.53 & 63.19 & $62.00\pm10.34$ & $0.493\pm0.138$ & $7.09\pm3.41$ & 0.0039 & 0.0312 & 155.6 & 10.19 & 12.78 \\
-SSM-DAN (source-only) & 69.10 & 48.61 & 86.11 & 56.94 & 57.64 & 39.24 & 71.53 & 72.92 & 58.33 & $62.27\pm13.32$ & $0.497\pm0.178$ & $7.54\pm4.86$ & 0.0039 & 0.0312 & 98.4 & 38.89 & 15.95 \\
+\multicolumn{13}{l}{\textit{Target subject accuracy (\%)}} \\
+S1 & 58.68 & 69.44 & 65.28 & 64.24 & 68.06 & 69.10 & 67.01 & 79.17 & 67.01 & 64.24 & 77.43 & \textbf{79.51} \\
+S2 & 43.06 & 40.97 & 49.65 & 49.31 & 47.92 & 48.61 & 39.24 & 47.57 & 53.47 & 44.44 & 47.92 & \textbf{52.43} \\
+S3 & 78.82 & 76.74 & 79.86 & 78.82 & 73.96 & 86.11 & 77.78 & 92.71 & 78.47 & 76.74 & 88.19 & \textbf{93.40} \\
+S4 & 43.06 & 50.35 & 54.86 & 46.18 & 53.47 & 56.94 & 55.90 & 73.61 & 64.58 & 65.62 & 66.32 & \textbf{73.96} \\
+S5 & 44.44 & 43.40 & 61.81 & 54.86 & 61.11 & 57.64 & 49.65 & 57.64 & 68.75 & 61.81 & 64.24 & \textbf{69.44} \\
+S6 & 41.67 & 42.01 & 38.89 & 40.97 & 45.14 & 39.24 & 52.78 & 59.72 & 49.65 & 51.39 & 61.81 & \textbf{65.97} \\
+S7 & 72.92 & 61.81 & 71.88 & 74.31 & 73.61 & 71.53 & 63.54 & 82.29 & 79.51 & 73.61 & 79.86 & \textbf{88.89} \\
+S8 & 65.28 & 70.49 & 66.67 & 65.97 & 71.53 & 72.92 & 66.67 & 82.64 & 69.44 & 70.49 & 82.99 & \textbf{86.11} \\
+S9 & 49.31 & 57.99 & 58.33 & 47.92 & 63.19 & 58.33 & 68.40 & 73.96 & 65.28 & 59.38 & 73.61 & \textbf{75.35} \\
 \midrule
-\multicolumn{18}{l}{\textit{Unsupervised domain adaptation}} \\
-RMETNet~\cite{zhao2026rmetnet} & 67.01 & 39.24 & 77.78 & 55.90 & 49.65 & 52.78 & 63.54 & 66.67 & 68.40 & $60.11\pm11.05$ & $0.468\pm0.147$ & $6.52\pm3.52$ & 0.0039 & 0.0039 & 193.8 & 45.88 & 11.15 \\
-SSM-DAN (Stage~1 UDA) & 79.17 & 47.57 & 92.71 & 73.61 & 57.64 & 59.72 & 82.29 & 82.64 & 73.96 & $72.15\pm13.58$ & $0.629\pm0.181$ & $11.60\pm5.95$ & 0.0039 & 0.0312 & 132.0 & 58.45 & 18.44 \\
+\multicolumn{13}{l}{\textit{Mean $\pm$ SD}} \\
+Acc. (\%) & 55.25 & 57.02 & 60.80 & 58.06 & 62.00 & 62.27 & 60.11 & 72.15 & 66.24 & 63.08 & 71.37 & \textbf{76.12} \\
+ & $\pm$13.39 & $\pm$12.74 & $\pm$11.49 & $\pm$12.55 & $\pm$10.34 & $\pm$13.32 & $\pm$11.05 & $\pm$13.58 & $\pm$9.34 & $\pm$9.77 & $\pm$11.78 & \textbf{$\pm$11.96} \\
+$\kappa$ & 0.403 & 0.427 & 0.477 & 0.441 & 0.493 & 0.497 & 0.468 & 0.629 & 0.550 & 0.508 & 0.618 & \textbf{0.682} \\
+ & $\pm$0.179 & $\pm$0.170 & $\pm$0.153 & $\pm$0.167 & $\pm$0.138 & $\pm$0.178 & $\pm$0.147 & $\pm$0.181 & $\pm$0.125 & $\pm$0.130 & $\pm$0.157 & \textbf{$\pm$0.159} \\
+ITR (bits/min) & 5.29 & 5.73 & 6.80 & 6.04 & 7.09 & 7.54 & 6.52 & 11.60 & 8.56 & 7.42 & 10.98 & \textbf{13.30} \\
+ & $\pm$4.32 & $\pm$3.95 & $\pm$3.79 & $\pm$4.17 & $\pm$3.41 & $\pm$4.86 & $\pm$3.52 & $\pm$5.95 & $\pm$3.51 & $\pm$3.31 & $\pm$4.96 & \textbf{$\pm$5.80} \\
 \midrule
-\multicolumn{18}{l}{\textit{Test-time adaptation}} \\
-T-TIME~\cite{li2024ttime} & 67.01 & 53.47 & 78.47 & 64.58 & 68.75 & 49.65 & 79.51 & 69.44 & 65.28 & $66.24\pm9.34$ & $0.550\pm0.125$ & $8.56\pm3.51$ & 0.0742 & 0.0742 & 9.5 & 5.85 & 7.71 \\
-BFT~\cite{li2026bft} & 64.24 & 44.44 & 76.74 & 65.62 & 61.81 & 51.39 & 73.61 & 70.49 & 59.38 & $63.08\pm9.77$ & $0.508\pm0.130$ & $7.42\pm3.31$ & 0.0039 & 0.0078 & 40.6 & 1.47 & 3.08 \\
-SSM-DAN (IM-TTA) & 77.43 & 47.92 & 88.19 & 66.32 & 64.24 & 61.81 & 79.86 & 82.99 & 73.61 & $71.37\pm11.78$ & $0.618\pm0.157$ & $10.98\pm4.96$ & 0.0039 & 0.0312 & 131.9 & 40.73 & 22.12 \\
+$p$ & 0.0039 & 0.0039 & 0.0039 & 0.0039 & 0.0039 & 0.0039 & 0.0039 & 0.0039 & 0.0742 & 0.0039 & 0.0039 & -- \\
+$p_\mathrm{Holm}$ & 0.0312 & 0.0312 & 0.0312 & 0.0312 & 0.0312 & 0.0312 & 0.0039 & 0.0312 & 0.0742 & 0.0078 & 0.0312 & -- \\
 \midrule
-\textbf{SSM-DAN} & \textbf{79.51} & \textbf{52.43} & \textbf{93.40} & \textbf{73.96} & \textbf{69.44} & \textbf{65.97} & \textbf{88.89} & \textbf{86.11} & \textbf{75.35} & $\mathbf{76.12\pm11.96}$ & $\mathbf{0.682\pm0.159}$ & $\mathbf{13.30\pm5.80}$ & -- & -- & 132.0 & 59.82 & 22.20 \\
+\multicolumn{13}{l}{\textit{Cost}} \\
+Params (K) & 789.6 & 113.7 & 127.2 & 197.2 & 155.6 & 98.4 & 193.8 & 132.0 & 9.5 & 40.6 & 131.9 & 132.0 \\
+Train (min) & 11.14 & 48.58 & 38.37 & 13.49 & 10.19 & 38.89 & 45.88 & 58.45 & 5.85 & 1.47 & 40.73 & 59.82 \\
+CPU (ms) & 11.45 & 13.33 & 14.96 & 26.51 & 12.78 & 15.95 & 11.15 & 18.44 & 7.71 & 3.08 & 22.12 & 22.20 \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -347,30 +364,38 @@ Table~\ref{tab:results_2b} reports the two-class results for the nine BCI IV-2b 
 \small
 \setlength{\tabcolsep}{3pt}
 \begin{adjustbox}{max width=\dimexpr\textheight+80pt\relax}
-\begin{tabular}{l*{9}{c}@{\hspace{8pt}}ccccc@{\hspace{8pt}}ccc}
+\begin{tabular}{l@{\hspace{6pt}}cccccc@{\hspace{6pt}}cc@{\hspace{6pt}}ccc@{\hspace{6pt}}c}
 \toprule
-\multirow{2}{*}{Method} & \multicolumn{9}{c}{Target subject accuracy (\%)} & \multicolumn{3}{c}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} & \multirow{2}{*}{$p_\mathrm{Holm}$} & \multicolumn{3}{c}{Cost} \\
-\cmidrule(lr){2-10}\cmidrule(lr){11-13}\cmidrule(lr){16-18}
- & S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8 & S9 & Acc. (\%) & $\kappa$ & ITR (bits/min) & & & Params & Train & CPU \\
+ & \multicolumn{6}{c}{\textit{\colhead{Source-only\\training}}} & \multicolumn{2}{c}{\textit{\colhead{Unsupervised\\domain adaptation}}} & \multicolumn{3}{c}{\textit{\colhead{Test-time\\adaptation}}} &  \\
+\cmidrule(lr){2-7}\cmidrule(lr){8-9}\cmidrule(lr){10-12}
+ & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{EEGEncoder\\\cite{liao2025eegencoder}} & \colhead{SATrans-Net\\\cite{miao2025satransnet}} & \colhead{SSM-DAN\\(source-only)} & \colhead{RMETNet\\\cite{zhao2026rmetnet}} & \colhead{SSM-DAN\\(Stage~1 UDA)} & \colhead{T-TIME\\\cite{li2024ttime}} & \colhead{BFT\\\cite{li2026bft}} & \colhead{SSM-DAN\\(IM-TTA)} & \textbf{SSM-DAN} \\
 \midrule
-\multicolumn{18}{l}{\textit{Source-only training}} \\
-Conformer~\cite{song2023eegconformer} & 75.31 & 62.86 & 55.62 & 92.50 & 94.69 & 74.06 & 82.81 & 82.50 & 81.88 & $78.03\pm12.02$ & $0.561\pm0.240$ & $4.55\pm3.31$ & 0.0156 & 0.1094 & 759.1 & 4.93 & 9.34 \\
-ATCNet~\cite{altaheri2023atcnet} & 76.25 & 65.71 & 57.19 & 90.00 & 96.88 & 77.50 & 84.06 & 84.69 & 82.19 & $79.38\pm11.40$ & $0.588\pm0.228$ & $4.89\pm3.37$ & 0.0078 & 0.0625 & 112.8 & 60.19 & 11.35 \\
-TCFormer~\cite{altaheri2025tcformer} & 78.44 & 69.64 & 64.38 & 90.62 & 95.00 & 75.94 & 86.87 & 85.31 & 84.38 & $81.18\pm9.37$ & $0.624\pm0.187$ & $5.17\pm2.98$ & 0.0820 & 0.3281 & 123.4 & 31.04 & 11.17 \\
-EEGEncoder~\cite{liao2025eegencoder} & 73.44 & 65.71 & 59.06 & 92.50 & 97.19 & 85.00 & 85.94 & 86.56 & 83.75 & $81.02\pm11.76$ & $0.620\pm0.235$ & $5.48\pm3.59$ & 0.0547 & 0.2734 & 196.2 & 14.98 & 26.88 \\
-SATrans-Net~\cite{miao2025satransnet} & 77.50 & 69.29 & 69.69 & 90.62 & 97.50 & 79.69 & 87.50 & 84.38 & 79.69 & $81.76\pm8.78$ & $0.635\pm0.176$ & $5.36\pm3.25$ & 0.2109 & 0.6094 & 153.7 & 4.99 & 11.10 \\
-SSM-DAN (source-only) & 77.81 & 68.57 & 63.13 & 89.38 & 96.56 & 73.44 & 84.69 & 86.25 & 85.00 & $80.54\pm10.05$ & $0.611\pm0.201$ & $5.07\pm3.24$ & 0.0156 & 0.1094 & 94.6 & 36.10 & 13.68 \\
+\multicolumn{13}{l}{\textit{Target subject accuracy (\%)}} \\
+S1 & 75.31 & 76.25 & 78.44 & 73.44 & 77.50 & 77.81 & 73.12 & 78.44 & 59.69 & 75.00 & 77.81 & 77.81 \\
+S2 & 62.86 & 65.71 & 69.64 & 65.71 & 69.29 & 68.57 & 57.86 & 70.71 & 65.36 & 65.00 & 68.57 & 69.29 \\
+S3 & 55.62 & 57.19 & 64.38 & 59.06 & 69.69 & 63.13 & 55.00 & 63.44 & 85.31 & 59.69 & 66.25 & 65.94 \\
+S4 & 92.50 & 90.00 & 90.62 & 92.50 & 90.62 & 89.38 & 91.56 & 90.31 & 93.75 & 93.44 & 93.75 & 90.00 \\
+S5 & 94.69 & 96.88 & 95.00 & 97.19 & 97.50 & 96.56 & 94.06 & 97.81 & 97.19 & 94.69 & 96.25 & 97.19 \\
+S6 & 74.06 & 77.50 & 75.94 & 85.00 & 79.69 & 73.44 & 82.81 & 83.75 & 85.00 & 79.06 & 81.88 & 84.69 \\
+S7 & 82.81 & 84.06 & 86.87 & 85.94 & 87.50 & 84.69 & 85.62 & 89.69 & 74.69 & 88.12 & 89.69 & 91.56 \\
+S8 & 82.50 & 84.69 & 85.31 & 86.56 & 84.38 & 86.25 & 88.75 & 95.63 & 91.25 & 94.37 & 94.69 & 95.31 \\
+S9 & 81.88 & 82.19 & 84.38 & 83.75 & 79.69 & 85.00 & 83.13 & 85.94 & 59.06 & 81.25 & 81.25 & 85.00 \\
 \midrule
-\multicolumn{18}{l}{\textit{Unsupervised domain adaptation}} \\
-RMETNet~\cite{zhao2026rmetnet} & 73.12 & 57.86 & 55.00 & 91.56 & 94.06 & 82.81 & 85.62 & 88.75 & 83.13 & $79.10\pm13.39$ & $0.582\pm0.268$ & $5.04\pm3.34$ & 0.0117 & 0.0117 & 159.1 & 21.96 & 4.90 \\
-SSM-DAN (Stage~1 UDA) & 78.44 & 70.71 & 63.44 & 90.31 & 97.81 & 83.75 & 89.69 & 95.63 & 85.94 & $83.97\pm10.71$ & $0.679\pm0.214$ & $\mathbf{6.42\pm3.76}$ & 1.0000 & 1.0000 & 128.2 & 48.08 & 13.35 \\
+\multicolumn{13}{l}{\textit{Mean $\pm$ SD}} \\
+Acc. (\%) & 78.03 & 79.38 & 81.18 & 81.02 & 81.76 & 80.54 & 79.10 & 83.97 & 79.03 & 81.18 & 83.35 & \textbf{84.09} \\
+ & $\pm$12.02 & $\pm$11.40 & $\pm$9.37 & $\pm$11.76 & $\pm$8.78 & $\pm$10.05 & $\pm$13.39 & $\pm$10.71 & $\pm$13.94 & $\pm$12.12 & $\pm$10.50 & \textbf{$\pm$10.42} \\
+$\kappa$ & 0.561 & 0.588 & 0.624 & 0.620 & 0.635 & 0.611 & 0.582 & 0.679 & 0.581 & 0.624 & 0.667 & \textbf{0.682} \\
+ & $\pm$0.240 & $\pm$0.228 & $\pm$0.187 & $\pm$0.235 & $\pm$0.176 & $\pm$0.201 & $\pm$0.268 & $\pm$0.214 & $\pm$0.279 & $\pm$0.242 & $\pm$0.210 & \textbf{$\pm$0.208} \\
+ITR (bits/min) & 4.55 & 4.89 & 5.17 & 5.48 & 5.36 & 5.07 & 5.04 & \textbf{6.42} & 5.24 & 5.60 & 6.15 & \textbf{6.42} \\
+ & $\pm$3.31 & $\pm$3.37 & $\pm$2.98 & $\pm$3.59 & $\pm$3.25 & $\pm$3.24 & $\pm$3.34 & \textbf{$\pm$3.76} & $\pm$4.14 & $\pm$3.74 & $\pm$3.69 & \textbf{$\pm$3.67} \\
 \midrule
-\multicolumn{18}{l}{\textit{Test-time adaptation}} \\
-T-TIME~\cite{li2024ttime} & 59.69 & 65.36 & 85.31 & 93.75 & 97.19 & 85.00 & 74.69 & 91.25 & 59.06 & $79.03\pm13.94$ & $0.581\pm0.279$ & $5.24\pm4.14$ & 0.3125 & 0.3125 & 6.3 & 3.07 & 5.08 \\
-BFT~\cite{li2026bft} & 75.00 & 65.00 & 59.69 & 93.44 & 94.69 & 79.06 & 88.12 & 94.37 & 81.25 & $81.18\pm12.12$ & $0.624\pm0.242$ & $5.60\pm3.74$ & 0.0078 & 0.0156 & 39.9 & 0.96 & 2.61 \\
-SSM-DAN (IM-TTA) & 77.81 & 68.57 & 66.25 & 93.75 & 96.25 & 81.88 & 89.69 & 94.69 & 81.25 & $83.35\pm10.50$ & $0.667\pm0.210$ & $6.15\pm3.69$ & 0.2031 & 0.6094 & 128.1 & 33.21 & 14.25 \\
+$p$ & 0.0156 & 0.0078 & 0.0820 & 0.0547 & 0.2109 & 0.0156 & 0.0117 & 1.0000 & 0.3125 & 0.0078 & 0.2031 & -- \\
+$p_\mathrm{Holm}$ & 0.1094 & 0.0625 & 0.3281 & 0.2734 & 0.6094 & 0.1094 & 0.0117 & 1.0000 & 0.3125 & 0.0156 & 0.6094 & -- \\
 \midrule
-\textbf{SSM-DAN} & 77.81 & 69.29 & 65.94 & 90.00 & 97.19 & 84.69 & 91.56 & 95.31 & 85.00 & $\mathbf{84.09\pm10.42}$ & $\mathbf{0.682\pm0.208}$ & $\mathbf{6.42\pm3.67}$ & -- & -- & 128.2 & 54.21 & 17.40 \\
+\multicolumn{13}{l}{\textit{Cost}} \\
+Params (K) & 759.1 & 112.8 & 123.4 & 196.2 & 153.7 & 94.6 & 159.1 & 128.2 & 6.3 & 39.9 & 128.1 & 128.2 \\
+Train (min) & 4.93 & 60.19 & 31.04 & 14.98 & 4.99 & 36.10 & 21.96 & 48.08 & 3.07 & 0.96 & 33.21 & 54.21 \\
+CPU (ms) & 9.34 & 11.35 & 11.17 & 26.88 & 11.10 & 13.68 & 4.90 & 13.35 & 5.08 & 2.61 & 14.25 & 17.40 \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -385,41 +410,44 @@ Table~\ref{tab:results_zhou} reports the three-class results on target session~3
 
 \begin{sidewaystable}
 \centering
-\caption{Per-subject LOSO accuracy (\%), with mean Cohen's $\kappa$ and mean information transfer rate (ITR, Eq.~\eqref{eq:itr}), on session~3 of Zhou2016 (three classes). Bold: best per accuracy, $\kappa$, and ITR column. $p$: two-sided exact Wilcoxon signed-rank test against the SSM-DAN model of the same category (Section~\ref{subsec:baselines}); $p_\mathrm{Holm}$: $p$ adjusted by the Holm--Bonferroni procedure within each category (Section~\ref{subsec:metrics}). --: reference model. Cost: trainable parameters (K), mean Stage~1 training time per fold (min), and single-trial CPU response time (ms).}
+\caption{Per-subject LOSO accuracy (\%), with mean Cohen's $\kappa$ and mean information transfer rate (ITR, Eq.~\eqref{eq:itr}), on session~3 of Zhou2016 (three classes). Bold: best per accuracy, $\kappa$, and ITR row. $p$: two-sided exact Wilcoxon signed-rank test against the SSM-DAN model of the same category (Section~\ref{subsec:baselines}); $p_\mathrm{Holm}$: $p$ adjusted by the Holm--Bonferroni procedure within each category (Section~\ref{subsec:metrics}). --: reference model. Cost: trainable parameters (K), mean Stage~1 training time per fold (min), and single-trial CPU response time (ms).}
 \label{tab:results_zhou}
 \small
 \setlength{\tabcolsep}{3pt}
 \begin{adjustbox}{max width=\dimexpr\textheight+80pt\relax}
-\begin{tabular}{l*{4}{c}@{\hspace{8pt}}ccccc@{\hspace{8pt}}ccc}
+\begin{tabular}{l@{\hspace{6pt}}cccccc@{\hspace{6pt}}cc@{\hspace{6pt}}ccc@{\hspace{6pt}}c}
 \toprule
-\multirow{2}{*}{Method} & \multicolumn{4}{c}{Target subject accuracy (\%)} & \multicolumn{3}{c}{Mean $\pm$ SD} & \multirow{2}{*}{$p$} & \multirow{2}{*}{$p_\mathrm{Holm}$} & \multicolumn{3}{c}{Cost} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-8}\cmidrule(lr){11-13}
- & S1 & S2 & S3 & S4 & Acc. (\%) & $\kappa$ & ITR (bits/min) & & & Params & Train & CPU \\
+ & \multicolumn{6}{c}{\textit{\colhead{Source-only\\training}}} & \multicolumn{2}{c}{\textit{\colhead{Unsupervised\\domain adaptation}}} & \multicolumn{3}{c}{\textit{\colhead{Test-time\\adaptation}}} &  \\
+\cmidrule(lr){2-7}\cmidrule(lr){8-9}\cmidrule(lr){10-12}
+ & \colhead{Conformer\\\cite{song2023eegconformer}} & \colhead{ATCNet\\\cite{altaheri2023atcnet}} & \colhead{TCFormer\\\cite{altaheri2025tcformer}} & \colhead{EEGEncoder\\\cite{liao2025eegencoder}} & \colhead{SATrans-Net\\\cite{miao2025satransnet}} & \colhead{SSM-DAN\\(source-only)} & \colhead{RMETNet\\\cite{zhao2026rmetnet}} & \colhead{SSM-DAN\\(Stage~1 UDA)} & \colhead{T-TIME\\\cite{li2024ttime}} & \colhead{BFT\\\cite{li2026bft}} & \colhead{SSM-DAN\\(IM-TTA)} & \textbf{SSM-DAN} \\
 \midrule
-\multicolumn{13}{l}{\textit{Source-only training}} \\
-Conformer~\cite{song2023eegconformer} & 76.00 & 79.33 & 70.67 & 82.67 & $77.17\pm4.43$ & $0.657\pm0.066$ & $7.86\pm1.61$ & 0.1250 & 1.0000 & 858.7 & 1.53 & 10.34 \\
-ATCNet~\cite{altaheri2023atcnet} & 72.00 & 82.67 & 76.67 & 74.67 & $76.50\pm3.93$ & $0.648\pm0.059$ & $7.60\pm1.47$ & 0.1250 & 1.0000 & 113.3 & 8.09 & 11.91 \\
-TCFormer~\cite{altaheri2025tcformer} & 68.00 & 78.67 & 66.67 & 80.67 & $73.50\pm6.22$ & $0.603\pm0.093$ & $6.67\pm2.07$ & 0.1250 & 1.0000 & 125.6 & 5.89 & 15.97 \\
-EEGEncoder~\cite{liao2025eegencoder} & 62.00 & 84.00 & 74.67 & 76.67 & $74.33\pm7.92$ & $0.615\pm0.119$ & $7.07\pm2.58$ & 0.2500 & 1.0000 & 196.8 & 3.64 & 25.68 \\
-SATrans-Net~\cite{miao2025satransnet} & 81.33 & 80.00 & 67.33 & 70.00 & $74.67\pm6.09$ & $0.620\pm0.091$ & $7.06\pm2.08$ & 0.1250 & 1.0000 & 155.0 & 1.32 & 11.38 \\
-SSM-DAN (source-only) & 72.00 & 78.67 & 71.33 & 78.67 & $75.17\pm3.51$ & $0.627\pm0.053$ & $7.10\pm1.22$ & 0.1250 & 1.0000 & 96.8 & 6.29 & 13.36 \\
+\multicolumn{13}{l}{\textit{Target subject accuracy (\%)}} \\
+S1 & 76.00 & 72.00 & 68.00 & 62.00 & 81.33 & 72.00 & 70.00 & 79.33 & $\mathbf{88.67}$ & 84.00 & 79.33 & 84.00 \\
+S2 & 79.33 & 82.67 & 78.67 & 84.00 & 80.00 & 78.67 & $\mathbf{89.33}$ & 84.67 & 84.00 & 86.67 & 84.00 & 83.33 \\
+S3 & 70.67 & 76.67 & 66.67 & 74.67 & 67.33 & 71.33 & 80.67 & $\mathbf{87.33}$ & 81.33 & 76.00 & 83.33 & 84.67 \\
+S4 & 82.67 & 74.67 & 80.67 & 76.67 & 70.00 & 78.67 & 84.67 & 78.00 & $\mathbf{86.00}$ & 84.67 & 83.33 & 85.33 \\
 \midrule
-\multicolumn{13}{l}{\textit{Unsupervised domain adaptation}} \\
-RMETNet~\cite{zhao2026rmetnet} & 70.00 & $\mathbf{89.33}$ & 80.67 & 84.67 & $81.17\pm7.14$ & $0.718\pm0.107$ & $9.63\pm2.85$ & 0.8750 & 1.0000 & 306.6 & 23.74 & 7.19 \\
-SSM-DAN (Stage~1 UDA) & 79.33 & 84.67 & $\mathbf{87.33}$ & 78.00 & $82.33\pm3.82$ & $0.735\pm0.057$ & $9.90\pm1.66$ & 0.6250 & 1.0000 & 130.4 & 11.42 & 14.65 \\
+\multicolumn{13}{l}{\textit{Mean $\pm$ SD}} \\
+Acc. (\%) & 77.17 & 76.50 & 73.50 & 74.33 & 74.67 & 75.17 & 81.17 & 82.33 & \textbf{85.00} & 82.83 & 82.50 & 84.33 \\
+ & $\pm$4.43 & $\pm$3.93 & $\pm$6.22 & $\pm$7.92 & $\pm$6.09 & $\pm$3.51 & $\pm$7.14 & $\pm$3.82 & \textbf{$\pm$2.69} & $\pm$4.07 & $\pm$1.85 & $\pm$0.75 \\
+$\kappa$ & 0.657 & 0.648 & 0.603 & 0.615 & 0.620 & 0.627 & 0.718 & 0.735 & \textbf{0.775} & 0.743 & 0.738 & 0.765 \\
+ & $\pm$0.066 & $\pm$0.059 & $\pm$0.093 & $\pm$0.119 & $\pm$0.091 & $\pm$0.053 & $\pm$0.107 & $\pm$0.057 & \textbf{$\pm$0.040} & $\pm$0.061 & $\pm$0.028 & $\pm$0.011 \\
+ITR (bits/min) & 7.86 & 7.60 & 6.67 & 7.07 & 7.06 & 7.10 & 9.63 & 9.90 & \textbf{11.06} & 10.13 & 9.90 & 10.70 \\
+ & $\pm$1.61 & $\pm$1.47 & $\pm$2.07 & $\pm$2.58 & $\pm$2.08 & $\pm$1.22 & $\pm$2.85 & $\pm$1.66 & \textbf{$\pm$1.26} & $\pm$1.68 & $\pm$0.77 & $\pm$0.34 \\
 \midrule
-\multicolumn{13}{l}{\textit{Test-time adaptation}} \\
-T-TIME~\cite{li2024ttime} & $\mathbf{88.67}$ & 84.00 & 81.33 & $\mathbf{86.00}$ & $\mathbf{85.00\pm2.69}$ & $\mathbf{0.775\pm0.040}$ & $\mathbf{11.06\pm1.26}$ & 0.5000 & 0.8750 & 8.4 & 1.34 & 6.72 \\
-BFT~\cite{li2026bft} & 84.00 & 86.67 & 76.00 & 84.67 & $82.83\pm4.07$ & $0.743\pm0.061$ & $10.13\pm1.68$ & 0.8750 & 1.0000 & 51.0 & 0.36 & 2.84 \\
-SSM-DAN (IM-TTA) & 79.33 & 84.00 & 83.33 & 83.33 & $82.50\pm1.85$ & $0.738\pm0.028$ & $9.90\pm0.77$ & 0.2500 & 1.0000 & 130.3 & 6.46 & 18.41 \\
+$p$ & 0.1250 & 0.1250 & 0.1250 & 0.2500 & 0.1250 & 0.1250 & 0.8750 & 0.6250 & 0.5000 & 0.8750 & 0.2500 & -- \\
+$p_\mathrm{Holm}$ & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 0.8750 & 1.0000 & 1.0000 & -- \\
 \midrule
-\textbf{SSM-DAN} & 84.00 & 83.33 & 84.67 & 85.33 & $84.33\pm0.75$ & $0.765\pm0.011$ & $10.70\pm0.34$ & -- & -- & 130.4 & 11.70 & 19.14 \\
+\multicolumn{13}{l}{\textit{Cost}} \\
+Params (K) & 858.7 & 113.3 & 125.6 & 196.8 & 155.0 & 96.8 & 306.6 & 130.4 & 8.4 & 51.0 & 130.3 & 130.4 \\
+Train (min) & 1.53 & 8.09 & 5.89 & 3.64 & 1.32 & 6.29 & 23.74 & 11.42 & 1.34 & 0.36 & 6.46 & 11.70 \\
+CPU (ms) & 10.34 & 11.91 & 15.97 & 25.68 & 11.38 & 13.36 & 7.19 & 14.65 & 6.72 & 2.84 & 18.41 & 19.14 \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{sidewaystable}
 
-SSM-DAN had the most consistent performance across targets and exceeded every source-only baseline and its source-only variant on all four targets, except EEGEncoder, which it exceeded on three. In the UDA group, RMETNet was slightly below its reference SSM-DAN (Stage~1 UDA) on average and far more variable across targets, although it obtained the highest accuracy on target~2. In the test-time adaptation group, T-TIME obtained the highest mean accuracy on this dataset, above both its reference SSM-DAN (IM-TTA) and the complete SSM-DAN, while BFT was on par with the reference. SSM-DAN also remained above TCFormer in the auxiliary score pooled over all three target sessions.
+SSM-DAN was the most consistent model across targets, with the lowest standard deviation. It outperformed its own source-only variant and the source-only baselines on all four targets, except EEGEncoder, which it outperformed on three of the four. In the UDA group, RMETNet was slightly below its reference SSM-DAN (Stage~1 UDA) on average and far more variable across targets, although it obtained the highest accuracy on target~2. In the test-time adaptation group, T-TIME obtained the highest mean accuracy on this dataset, above both its reference SSM-DAN (IM-TTA) and the complete SSM-DAN, while BFT was on par with the reference. SSM-DAN also remained above TCFormer in the auxiliary score pooled over all three target sessions.
 
 \subsection{Information transfer rate and class-wise performance}
 \label{subsec:itr_classwise}
@@ -474,7 +502,7 @@ BFT~\cite{li2026bft} & (e) & 77.47$^{\dagger}$ & -- & 84.38$^{\dagger}$ & 63.08 
 \subsection{Ablation study}
 \label{sec:ablation}
 
-Table~\ref{tab:ablation} removes one component at a time under the chronological protocol. The variant without domain adaptation drops all Stage~1 alignment (AutoDIAL, target information maximization, and the adversarial and both MMD losses) but keeps RA and IM-TTA. To test the components on a larger cohort, the ablation adds OpenBMI \cite{lee2019openbmi}: 54 subjects, 62 channels, and two sessions on different days, each with 100 left- versus right-hand MI trials. Signals are band-pass filtered at 4--38~Hz, common-average referenced, downsampled to 100~Hz, and cut to 0--4~s after the cue, without S\&R. Session~1 provides the source training data and the unlabeled target data of Stage~1, session~2 the source validation and target evaluation data; RA is fitted on session~1, and the BCI IV-2a optimization settings are used. Since every evaluation session has 100 balanced trials, $\kappa=2P-1$; the OpenBMI Wilcoxon tests use the normal approximation, with Holm correction over the four ablation comparisons.
+Table~\ref{tab:ablation} removes one component at a time; OpenBMI (Section~\ref{subsec:openbmi}) is added to test the components on a larger cohort. The variant without domain adaptation removes AutoDIAL and all Stage~1 alignment losses but keeps RA and IM-TTA.
 
 \begin{table*}[!htbp]
 \centering
@@ -511,15 +539,7 @@ Dataset & Metric & \colhead{Source-\\only} & \colhead{Without\\Riemannian\\align
 
 On BCI IV-2a, removing RA, Stage~1 domain adaptation, or IM-TTA each significantly reduced accuracy; on BCI IV-2b and Zhou2016, the complete model remained the best variant, but by small, non-significant margins. OpenBMI behaved differently: IM-TTA added 3.96 points (38 of 54 targets, $p_\mathrm{Holm}<0.001$), the gains over the variants without domain adaptation (0.76 points) and without any adaptation (0.51 points) were not significant ($p_\mathrm{Holm}=0.68$ and $0.72$), and removing RA raised accuracy by 2.89 points (33 of 54, $p_\mathrm{Holm}=0.002$).
 
-Two follow-up comparisons, made after the main experiments and not Holm-corrected, examine these effects. In the first, the variant without both RA and domain adaptation was run in a later batch together with a rerun of the variant without RA, which reached 66.63, 83.10, 81.17, and 81.54\% on BCI IV-2a, BCI IV-2b, Zhou2016, and OpenBMI. Within this batch, removing domain adaptation lowered accuracy by 4.59 points on BCI IV-2a (7 of 9 targets, exact $p=0.36$), 3.09 on BCI IV-2b (6 of 9, $p=0.098$), 8.33 on Zhou2016 (3 of 4, one tie, $p=0.25$), and 1.31 on OpenBMI (33 of 54, $p=0.038$). In the second, the RA reference was estimated for each session from its own unlabeled trials, the same trials that IM-TTA uses. Trial energy changed more between sessions on OpenBMI than on BCI IV-2a: after session-1 RA, the median trial energy of session~2 was 1.55 times that of session~1 on OpenBMI, and more than twice for 20 of the 54 subjects, against 1.08--1.39 on BCI IV-2a. The session-specific reference raised accuracy by 3.39 points on OpenBMI (43 of 54, $p<0.001$) and 1.62 points on BCI IV-2a (8 of 9, exact $p=0.023$), left BCI IV-2b unchanged, and added 1.00 point on Zhou2016 (3 of 4, $p=0.38$) (Table~\ref{tab:ablation}). With this reference, IM-TTA still added 2.89 points on BCI IV-2a ($p=0.008$) and 2.83 on Zhou2016 ($p=0.125$), but only 0.11 on OpenBMI ($p=0.50$).
-
-\subsection{Computational efficiency}
-\label{subsec:results_efficiency}
-
-The cost columns of Tables~\ref{tab:results_2a}--\ref{tab:results_zhou} report trainable parameters, Stage~1 training time, and CPU response time. The source-only variant is smaller because it omits the AutoDIAL layer, aligner, and domain discriminator; RA and IM-TTA do not change parameter count.
-
-Stage~1 adaptation accounts for most of the extra training time of SSM-DAN over its source-only variant (nearly doubling it on Zhou2016), whereas IM-TTA adds little. SSM-DAN has a parameter count comparable to ATCNet and TCFormer and far below EEG Conformer, while T-TIME and BFT are the smallest and fastest methods.
-
+Two follow-up comparisons, run after the main experiments and not Holm-corrected, examine these effects. The first removes domain adaptation from the variant without RA, in a later batch that also reran this variant (66.63, 83.10, 81.17, and 81.54\% on BCI IV-2a, BCI IV-2b, Zhou2016, and OpenBMI). Relative to this rerun, accuracy fell by 4.59 points on BCI IV-2a (7 of 9 targets, $p=0.36$), 3.09 on BCI IV-2b (6 of 9, $p=0.098$), 8.33 on Zhou2016 (3 of 4, one tie, $p=0.25$), and 1.31 on OpenBMI (33 of 54, $p=0.038$). The second estimates the RA reference of each session from its own unlabeled trials, the same trials that IM-TTA uses. Trial energy drifted more between sessions on OpenBMI than on BCI IV-2a: after session-1 RA, the median trial energy of session~2 was 1.55 times that of session~1 on OpenBMI, and more than twice for 20 of the 54 subjects, against 1.08--1.39 on BCI IV-2a. The session-specific reference raised accuracy by 3.39 points on OpenBMI (43 of 54, $p<0.001$), 1.62 on BCI IV-2a (8 of 9, $p=0.023$), and 1.00 on Zhou2016 (3 of 4, $p=0.38$), and left BCI IV-2b unchanged. With this reference, IM-TTA still added 2.89 points on BCI IV-2a ($p=0.008$) and 2.83 on Zhou2016 ($p=0.125$), but only 0.11 on OpenBMI ($p=0.50$).
 
 \section{Discussion}
 \label{sec:discussion}
