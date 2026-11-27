@@ -219,6 +219,46 @@ def _hoisted_selective_scan(values: Tensor, delta: Tensor, A: Tensor,
     return readout + D * values
 
 
+@torch.jit.script
+def _segsum_selective_scan(values: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor,
+                           D: Tensor, chunk_size: int = 32) -> Tensor:
+    """Selective-scan recurrence evaluated in parallel over time (closed form per chunk).
+
+    Same recurrence as ``_hoisted_selective_scan``:
+    h_t = exp(dt_t A) h_{t-1} + dt_t B_t x_t,  y_t = C_t h_t + D x_t.
+    Unrolled inside a chunk that starts from the carried state h_0,
+    h_t = exp(S_t) h_0 + sum_{s<=t} exp(S_t - S_s) drive_s,  with S_t = cumsum_{r<=t}(dt_r A),
+    so every step of the chunk is computed at once ("segment sum", as in Mamba-2).
+    All exponents are <= 0 (dt > 0, A < 0): nothing overflows, and an entry that underflows to 0
+    is a state that has decayed away. Only the chunks run one after the other; with the
+    ~17 pooled time steps of BCI IV-2a a single chunk holds the whole sequence.
+    The sums run in a different order than the step-by-step loop, so the outputs agree
+    with the hoisted scan up to float rounding, not bit for bit.
+    """
+    dt = delta.unsqueeze(-1)                                    # [b, L, d, 1]
+    log_decay = dt * A                                          # [b, L, d, n], <= 0
+    drive = dt * B.unsqueeze(2) * values.unsqueeze(-1)          # [b, L, d, n]
+    length = values.size(1)
+    state = torch.zeros_like(drive[:, 0])                       # [b, d, n]
+    chunks = torch.jit.annotate(List[Tensor], [])
+    for start in range(0, length, chunk_size):
+        stop = min(start + chunk_size, length)
+        cum = torch.cumsum(log_decay[:, start:stop], dim=1)     # S_t, [b, l, d, n]
+        size = stop - start
+        causal = torch.ones(size, size, dtype=torch.bool, device=values.device).tril()
+        segment = cum.unsqueeze(2) - cum.unsqueeze(1)           # S_t - S_s, [b, t, s, d, n]
+        segment = segment.masked_fill(~causal.view(1, size, size, 1, 1), float("-inf"))
+        states = (torch.exp(segment) * drive[:, start:stop].unsqueeze(1)).sum(dim=2)
+        states = states + torch.exp(cum) * state.unsqueeze(1)   # carried state, decayed to t
+        state = states[:, -1]
+        chunks.append(states)
+    readout = (torch.cat(chunks, dim=1) * C.unsqueeze(2)).sum(dim=-1)
+    return readout + D * values
+
+
+SSM_SCANS = ("hoisted", "segsum", "sequential")
+
+
 class SelectiveSSMMixer(nn.Module):
     """Dependency-free Mamba-style selective state-space mixer.
 
@@ -226,15 +266,16 @@ class SelectiveSSMMixer(nn.Module):
     and read from a per-channel state; the diagonal negative A keeps the
     recurrence stable. ``scan="hoisted"`` (used for every experiment) evaluates
     the causal depth-wise convolution as shifted products and hoists the scan;
-    ``scan="sequential"`` is the step-by-step reference implementation.
+    ``scan="segsum"`` computes the same recurrence in parallel over time (closed form per chunk,
+    see ``_segsum_selective_scan``); ``scan="sequential"`` is the step-by-step reference implementation.
     """
 
     def __init__(self, d_model: int, d_state: int = 8, d_conv: int = 3, scan: str = "hoisted"):
         super().__init__()
         if d_state < 1 or d_conv < 1:
             raise ValueError("ssm_d_state and ssm_d_conv must be positive.")
-        if scan not in ("hoisted", "sequential"):
-            raise ValueError("ssm_scan must be 'hoisted' or 'sequential'.")
+        if scan not in SSM_SCANS:
+            raise ValueError(f"ssm_scan must be one of {SSM_SCANS}, got {scan!r}.")
         self.d_model = d_model
         self.d_state = d_state
         self.scan = scan
@@ -250,7 +291,7 @@ class SelectiveSSMMixer(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         length = x.size(1)
         values, gate = self.in_proj(x).chunk(2, dim=-1)
-        if self.scan == "hoisted":
+        if self.scan in ("hoisted", "segsum"):
             values = self._shifted_causal_conv(values)
         else:
             values = self.local_conv(values.transpose(1, 2))[..., :length].transpose(1, 2)
@@ -260,6 +301,8 @@ class SelectiveSSMMixer(nn.Module):
         A = -torch.exp(self.A_log).to(dtype=x.dtype)
         if self.scan == "hoisted":
             y = _hoisted_selective_scan(values, delta, A, B, C, self.D)
+        elif self.scan == "segsum":
+            y = _segsum_selective_scan(values, delta, A, B, C, self.D)
         else:
             y = self._sequential_scan(values, delta, A, B, C)
         y = y * torch.nn.functional.silu(gate)

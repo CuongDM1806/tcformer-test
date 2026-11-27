@@ -90,6 +90,11 @@ variants:
     adaptation_kwargs: {feature_alignment: none, target_im_weight: 0.0, adversarial_weight: 0.0,
                         mmd_weight: 0.0, temporal_mmd_weight: 0.0, im_tta_steps: 0,
                         recalibrate_target_statistics: false}
+  segsum_scan:
+    description: >-
+      selective scan evaluated in parallel over time (segment-sum closed form per chunk)
+      instead of the hoisted step loop; same recurrence, equal up to float rounding
+    model_kwargs: {ssm_scan: segsum}
   no_car:
     description: OpenBMI without the common average reference (needs a cache built without CAR)
     datasets_only: [openbmi]
